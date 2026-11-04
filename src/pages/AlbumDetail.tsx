@@ -8,6 +8,7 @@ import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { useCoverPickerDialogs } from "../features/covers/useCoverPickerDialogs";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import {
+  mbReleaseFacts,
   useAlbumIdentity,
   useConfirmedArtistMbid,
   useRecordFailedLookup,
@@ -213,11 +214,7 @@ export function AlbumDetail({
         lastfmMatchConfirmed: false,
         combinedGenres,
         combinedTags,
-        label: release?.label ?? null,
-        country: release?.country ?? null,
-        catalogNumber: release?.catalogNumber ?? null,
-        barcode: release?.barcode ?? null,
-        releaseDate: release?.date ?? detail.firstReleaseDate ?? null,
+        ...mbReleaseFacts(release, detail),
         autoMatched: true,
         matchScore: Math.round(score * 100),
       });

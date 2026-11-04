@@ -57,7 +57,7 @@ export async function carryPinnedArtistCase(db: Database, serverId: string): Pro
 }
 
 // Drop albums the server no longer lists, plus their tracks and derived rows, dependants
-// first. album_covers goes (pure cache); user-authored album rows stay.
+// first. album_covers and album_release_lookups go (pure caches); user-authored album rows stay.
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
   await carryPinnedAlbums(db, albumIds);
@@ -74,6 +74,7 @@ export async function pruneAlbums(db: Database, albumIds: readonly string[]): Pr
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_unresolved_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_covers WHERE album_id IN (${ph})`,
+    (ph: string) => `DELETE FROM album_release_lookups WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM albums WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -99,6 +100,7 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
     viaAlbums("album_user_genres", "album_id"),
     viaAlbums("album_identity", "album_id"),
     viaAlbums("album_covers", "album_id"),
+    "DELETE FROM album_release_lookups WHERE server_id = ?",
     "DELETE FROM album_cover_overrides WHERE server_id = ?",
     "DELETE FROM albums WHERE server_id = ?",
     "DELETE FROM playlist_resume WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",

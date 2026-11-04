@@ -134,6 +134,7 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES ('${tr}', 'T', 'Artist', 1);
     INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${tr}', 1);
     INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${al}', 'data:x', 1);
+    INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${al}', '${serverId}', 'deezer', 'A', 'none', 1);
     INSERT INTO album_identity (album_id) VALUES ('${al}');
     INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('${serverId}', '${al}', 'caa', 'https://x', 1);
     INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('${al}', 'rock', 'Rock');
@@ -166,6 +167,7 @@ const OWNED_TABLES = [
   "scrobble_queue",
   "scrobble_history",
   "album_covers",
+  "album_release_lookups",
   "album_identity",
   "album_cover_overrides",
   "album_user_genres",
@@ -424,6 +426,47 @@ describe("syncLibrary initial sync", () => {
     expect(rows.map((r) => r.mb_release_id)).toEqual([tagged, null]);
   });
 
+  it("keeps the release date the files are tagged with, to the day or month they name", async () => {
+    serveLibrary(
+      [
+        album("al-1", { releaseDate: { year: 2026, month: 10, day: 30 } }),
+        album("al-2", { releaseDate: { year: 2026, month: 3 } }),
+        album("al-3", { releaseDate: { year: 2026 } }),
+        album("al-4", { releaseDate: {} }),
+        album("al-5"),
+      ],
+      {},
+    );
+    await syncLibrary(server(), CRED);
+    const rows = await db().select<{ release_date: string | null }[]>("SELECT release_date FROM albums ORDER BY id");
+    expect(rows.map((r) => r.release_date)).toEqual(["2026-10-30", "2026-03", "2026", null, null]);
+  });
+
+  it("keeps the original release date the files are tagged with, apart from the edition's", async () => {
+    serveLibrary(
+      [
+        album("al-1", {
+          releaseDate: { year: 2026, month: 5, day: 1 },
+          originalReleaseDate: { year: 1959, month: 8, day: 17 },
+        }),
+        album("al-2", { originalReleaseDate: { year: 1959 } }),
+        album("al-3", { originalReleaseDate: {} }),
+        album("al-4"),
+      ],
+      {},
+    );
+    await syncLibrary(server(), CRED);
+    const rows = await db().select<{ release_date: string | null; original_release_date: string | null }[]>(
+      "SELECT release_date, original_release_date FROM albums ORDER BY id",
+    );
+    expect(rows).toEqual([
+      { release_date: "2026-05-01", original_release_date: "1959-08-17" },
+      { release_date: null, original_release_date: "1959" },
+      { release_date: null, original_release_date: null },
+      { release_date: null, original_release_date: null },
+    ]);
+  });
+
   it("passes a null alt_url to the fetches as undefined, not null", async () => {
     serveLibrary([album("al-1")], { "al-1": [] });
     await syncLibrary(server(), CRED);
@@ -462,6 +505,21 @@ describe("syncLibrary idempotence", () => {
     // whole-table sweeps gated on albumsChanged || tracksChanged.
     expect(db().executeCount).toBe(0);
     expect(second.changed).toEqual({ albums: false, tracks: false, artists: false, loved: false, playlists: false });
+  });
+
+  it("writes nothing on a second sync over unchanged release dates, and rewrites a changed original date", async () => {
+    const dated = (original: number) =>
+      album("al-1", { releaseDate: { year: 2026, month: 5 }, originalReleaseDate: { year: original } });
+    serveLibrary([dated(1959)], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().executeCount = 0;
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(false);
+    expect(db().executeCount).toBe(0);
+
+    serveLibrary([dated(1958)], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(true);
+    const rows = await db().select<{ original_release_date: string }[]>("SELECT original_release_date FROM albums");
+    expect(rows).toEqual([{ original_release_date: "1958" }]);
   });
 
   it("treats a SQLite integer year and an API string year as the same value", async () => {
@@ -588,6 +646,7 @@ describe("syncLibrary album prune", () => {
       INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01');
       INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t3', '[]', 1);
       INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${SRV}:al-2', 'data:x', 1);
+      INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${SRV}:al-2', '${SRV}', 'deezer', 'A', 'none', 1);
       INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_tracks (track_id, server_id, opened_at) VALUES ('${SRV}:t3', '${SRV}', 1);
@@ -605,6 +664,7 @@ describe("syncLibrary album prune", () => {
       ["album_genres", "album_id"],
       ["album_unresolved_genres", "album_id"],
       ["album_covers", "album_id"],
+      ["album_release_lookups", "album_id"],
       ["pinned_albums", "album_id"],
       ["recent_albums", "album_id"],
     ];

@@ -10,6 +10,7 @@ import { QK } from "../../../lib/queryKeys";
 import {
   ALBUM_SHAPE_COLUMNS,
   ALBUM_SHAPE_JOIN,
+  mbReleaseFacts,
   persistAlbumIdentity,
   recordFailedLookup,
 } from "../../enrichment/hooks/useAlbumIdentity";
@@ -145,11 +146,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               lastfmMatchConfirmed: false,
               combinedGenres: result.combinedGenres,
               combinedTags: result.combinedTags,
-              label: result.release?.label ?? null,
-              country: result.release?.country ?? null,
-              catalogNumber: result.release?.catalogNumber ?? null,
-              barcode: result.release?.barcode ?? null,
-              releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+              ...mbReleaseFacts(result.release, result.detail),
               autoMatched: true,
               matchScore: Math.round(result.score * 100),
               confirmedAt: now,

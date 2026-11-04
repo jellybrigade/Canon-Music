@@ -10,6 +10,7 @@ import type { AlbumRow } from "../../../types/library";
 import { RowListSkeleton } from "../../../ui/Skeleton";
 import {
   type FailedAlbumRow,
+  mbReleaseFacts,
   persistAlbumIdentity,
   recordFailedLookup,
   useFailedLookupAlbums,
@@ -57,11 +58,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
             lastfmMatchConfirmed: false,
             combinedGenres: result.combinedGenres,
             combinedTags: result.combinedTags,
-            label: result.release?.label ?? null,
-            country: result.release?.country ?? null,
-            catalogNumber: result.release?.catalogNumber ?? null,
-            barcode: result.release?.barcode ?? null,
-            releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+            ...mbReleaseFacts(result.release, result.detail),
             autoMatched: true,
             matchScore: Math.round(result.score * 100),
           });

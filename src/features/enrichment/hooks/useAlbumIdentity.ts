@@ -33,6 +33,8 @@ export interface AlbumIdentityRow {
   catalog_number: string | null;
   barcode: string | null;
   release_date: string | null;
+  /** The release group's first release, kept apart from the matched edition's own date. */
+  first_release_date: string | null;
   confirmed_at: number | null;
   /** 1 = auto-matched silently; 0 = user-confirmed via dialog */
   auto_matched: number;
@@ -268,10 +270,32 @@ export interface SaveAlbumIdentityInput {
   catalogNumber: string | null;
   barcode: string | null;
   releaseDate: string | null;
+  firstReleaseDate: string | null;
   /** True when auto-identified silently (not user-confirmed via dialog). */
   autoMatched?: boolean;
   /** Our fuzzy match score * 100 at time of auto-lookup. */
   matchScore?: number | null;
+}
+
+type MbReleaseFacts = Pick<
+  SaveAlbumIdentityInput,
+  "label" | "country" | "catalogNumber" | "barcode" | "releaseDate" | "firstReleaseDate"
+>;
+
+/** What a MusicBrainz match says about the album; the release's own date falls back to the group's first. */
+export function mbReleaseFacts(
+  release: MbReleaseDetail | null | undefined,
+  group: Pick<MbReleaseGroupDetail, "firstReleaseDate"> | null | undefined,
+): MbReleaseFacts {
+  const firstReleaseDate = group?.firstReleaseDate || null;
+  return {
+    label: release?.label ?? null,
+    country: release?.country ?? null,
+    catalogNumber: release?.catalogNumber ?? null,
+    barcode: release?.barcode ?? null,
+    releaseDate: release?.date || firstReleaseDate,
+    firstReleaseDate,
+  };
 }
 
 /** Accepts an optional confirmedAt so bulk callers can supply their own timestamp
@@ -284,8 +308,8 @@ export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { con
        (album_id, mb_release_group_id, mb_release_id, mb_artist_id,
         lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed,
         combined_genres_json, combined_tags_json, label, country, catalog_number, barcode,
-        release_date, confirmed_at, auto_matched, match_score, looked_up_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        release_date, first_release_date, confirmed_at, auto_matched, match_score, looked_up_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.albumId,
       input.mbReleaseGroupId,
@@ -301,6 +325,7 @@ export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { con
       input.catalogNumber,
       input.barcode,
       input.releaseDate,
+      input.firstReleaseDate,
       input.confirmedAt ?? now,
       input.autoMatched ? 1 : 0,
       input.matchScore ?? null,

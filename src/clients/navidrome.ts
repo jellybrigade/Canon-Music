@@ -1,5 +1,6 @@
 import { md5 } from "js-md5";
 import { noteEnvelope } from "../lib/credentialRejections";
+import type { ReleaseDateParts } from "../lib/releaseDate";
 import { apiPost, callSubsonicVoid, checkEnvelope, SubsonicError } from "./navidromeTransport";
 import { buildAuthParams, type NavidromeCredential, normalizeUrl } from "./navidromeUrls";
 
@@ -17,6 +18,10 @@ export interface NavidromeAlbum {
   played?: string;
   releaseTypes?: string[];
   releaseType?: string;
+  /** OpenSubsonic: the date the files are tagged with, as far as the tags go. */
+  releaseDate?: ReleaseDateParts;
+  /** OpenSubsonic: the first release of the music on this edition (tags like `ORIGINALDATE`). */
+  originalReleaseDate?: ReleaseDateParts;
   /** MusicBrainz release id from the files' tags; empty when untagged. */
   musicBrainzId?: string;
 }

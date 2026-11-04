@@ -9,6 +9,7 @@ import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { isMbid } from "../../lib/mbid";
+import { releaseDateText } from "../../lib/releaseDate";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { Server } from "../../types/server";
 import { scanForIssues } from "../tags/lib/tagIssues";
@@ -137,12 +138,14 @@ export async function syncLibrary(
     played_at: string | null;
     release_type: string | null;
     mb_release_id: string | null;
+    release_date: string | null;
+    original_release_date: string | null;
     tracks_read_scan: string | null;
   };
   type TrackCountRow = { album_id: string; c: number };
   const [existingAlbumRows, trackCountRows] = await Promise.all([
     db.select<ExistingAlbumRow[]>(
-      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, tracks_read_scan
+      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, release_date, original_release_date, tracks_read_scan
        FROM albums WHERE server_id = ?`,
       [server.id],
     ),
@@ -182,6 +185,8 @@ export async function syncLibrary(
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     const mbReleaseId = isMbid(album.musicBrainzId) ? album.musicBrainzId : null;
+    const releaseDate = releaseDateText(album.releaseDate);
+    const originalReleaseDate = releaseDateText(album.originalReleaseDate);
     const row = [
       albumDbId,
       server.id,
@@ -195,6 +200,8 @@ export async function syncLibrary(
       album.played ?? null,
       releaseType,
       mbReleaseId,
+      releaseDate,
+      originalReleaseDate,
     ];
 
     if (existing === undefined) {
@@ -212,7 +219,9 @@ export async function syncLibrary(
         sameValue(existing.play_count ?? 0, album.playCount ?? 0) &&
         sameValue(existing.played_at, album.played) &&
         sameValue(existing.release_type, releaseType) &&
-        sameValue(existing.mb_release_id, mbReleaseId);
+        sameValue(existing.mb_release_id, mbReleaseId) &&
+        sameValue(existing.release_date, releaseDate) &&
+        sameValue(existing.original_release_date, originalReleaseDate);
       if (!unchanged) {
         albumUpsertParams.push(row);
         if (!sameValue(existing.artist, album.artist)) artistsDirty = true;
@@ -234,11 +243,11 @@ export async function syncLibrary(
   await executeBatched(
     db,
     albumUpsertParams,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    12,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    14,
     (
       placeholders,
-    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id)
+    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, release_date, original_release_date)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -251,7 +260,9 @@ export async function syncLibrary(
          play_count = excluded.play_count,
          played_at = excluded.played_at,
          release_type = excluded.release_type,
-         mb_release_id = excluded.mb_release_id`,
+         mb_release_id = excluded.mb_release_id,
+         release_date = excluded.release_date,
+         original_release_date = excluded.original_release_date`,
   );
   // Right after the rename lands: a later failure would leave the old name indexed, and the
   // next sync sees no rename to rebuild for.

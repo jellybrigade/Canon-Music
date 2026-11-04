@@ -342,6 +342,7 @@ describe("post-migration schema", () => {
       "album_genre_exclusions",
       "album_genres",
       "album_identity",
+      "album_release_lookups",
       "album_unresolved_genres",
       "album_user_genres",
       "albums",

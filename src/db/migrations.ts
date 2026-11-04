@@ -901,6 +901,39 @@ export const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 61,
+    sql: `
+      ALTER TABLE albums ADD COLUMN release_date TEXT;
+    `,
+  },
+  {
+    version: 62,
+    sql: `
+      ALTER TABLE albums ADD COLUMN original_release_date TEXT;
+      ALTER TABLE album_identity ADD COLUMN first_release_date TEXT;
+    `,
+  },
+  {
+    version: 63,
+    sql: `
+      CREATE TABLE album_release_lookups (
+        album_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        source TEXT NOT NULL CHECK (source IN ('deezer', 'itunes')),
+        release_date TEXT,
+        label TEXT,
+        record_type TEXT,
+        is_reissue INTEGER NOT NULL DEFAULT 0,
+        looked_up_name TEXT NOT NULL,
+        looked_up_artist TEXT,
+        looked_up_year INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('found', 'none', 'failed')),
+        checked_at INTEGER NOT NULL,
+        PRIMARY KEY (album_id, server_id, source)
+      );
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

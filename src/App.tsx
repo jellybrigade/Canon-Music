@@ -47,6 +47,7 @@ import { usePlaylists } from "./features/playlists/usePlaylists";
 import { useRadio } from "./features/radio/hooks/useRadio";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
 import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
+import { useReleaseDateLookups } from "./features/releaseDates/hooks/useReleaseDateLookups";
 import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
 import { useLibrarySync } from "./features/sync/useLibrarySync";
 import { useBackgroundNormalizer } from "./features/tags/hooks/useBackgroundNormalizer";
@@ -165,6 +166,7 @@ export default function App() {
   useNowPlayingPrefetch(server?.id ?? null);
 
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
+  useReleaseDateLookups(lastSyncedAt);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   // One signal for "an overlay above the app owns the keyboard", read by the search shortcuts,

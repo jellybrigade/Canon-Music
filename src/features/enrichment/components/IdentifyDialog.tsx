@@ -11,6 +11,7 @@ import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import {
   DIALOG_AUTO_PICK_THRESHOLD,
+  mbReleaseFacts,
   useAlbumIdentity,
   useConfirmedArtistMbid,
   useIdentifyAlbum,
@@ -185,11 +186,7 @@ export function AlbumIdentifyDialog({
       lastfmMatchConfirmed: true,
       combinedGenres: lookupResult?.combinedGenres ?? [],
       combinedTags: lookupResult?.combinedTags ?? [],
-      label: releaseDetail?.label ?? null,
-      country: releaseDetail?.country ?? null,
-      catalogNumber: releaseDetail?.catalogNumber ?? null,
-      barcode: releaseDetail?.barcode ?? null,
-      releaseDate: releaseDetail?.date ?? rgDetail?.firstReleaseDate ?? null,
+      ...mbReleaseFacts(releaseDetail, rgDetail),
     });
     onClose();
   }
