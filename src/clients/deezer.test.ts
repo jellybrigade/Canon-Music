@@ -114,7 +114,7 @@ describe("fetchDeezerDiscography", () => {
   it("follows the pages Deezer lists", async () => {
     vi.mocked(tauriFetch).mockImplementation(async (url) =>
       String(url).includes("index=100")
-        ? jsonResponse(200, { data: [{ title: "Old", record_type: "album", release_date: "2010-01-01" }] })
+        ? jsonResponse(200, { data: [{ title: "Old", record_type: "album", release_date: "2010-01-01", fans: 2512 }] })
         : jsonResponse(200, {
             data: [{ title: "New", record_type: "single", release_date: "2026-09-02" }],
             next: "https://api.deezer.com/artist/5/albums?limit=100&index=100",
@@ -122,8 +122,8 @@ describe("fetchDeezerDiscography", () => {
     );
 
     await expect(fetchDeezerDiscography(5)).resolves.toEqual([
-      { title: "New", recordType: "single", releaseDate: "2026-09-02" },
-      { title: "Old", recordType: "album", releaseDate: "2010-01-01" },
+      { title: "New", recordType: "single", releaseDate: "2026-09-02", fans: null },
+      { title: "Old", recordType: "album", releaseDate: "2010-01-01", fans: 2512 },
     ]);
     expect(requestedUrls()).toHaveLength(2);
   });

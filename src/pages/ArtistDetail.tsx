@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronDown, Disc, ExternalLink, GitMerge, Mic2, MoreHorizontal, Play, Radio, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { normalizeTrackTitle, resolvePortraitUrl } from "../clients/lastfm";
+import { resolvePortraitUrl } from "../clients/lastfm";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { TourCard } from "../components/TourCard";
 import { ArtistMergeModal } from "../features/enrichment/components/ArtistMergeModal";
@@ -37,7 +37,7 @@ import {
   useAppearsOnAlbums,
   useArtistGenres,
   useArtistTopTracks,
-  useLastfmTopAlbums,
+  useEssentialAlbumOrder,
   useMatchedTracks,
   usePopularTrackRanking,
 } from "./artist/artistQueries";
@@ -95,7 +95,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
   const { data: popularRanking } = usePopularTrackRanking(artist.name, lastfmName);
-  const { data: lastfmAlbums, isLoading: lastfmAlbumsLoading } = useLastfmTopAlbums(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = useStartRadio();
@@ -132,28 +131,21 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const albumGroups = useMemo(() => (albums ? groupAlbums(albums) : []), [albums]);
   const ownedAlbumsOnly = albumGroups.find((g) => g.group === "album")?.items ?? [];
 
+  const hasEssentialSection = ownedAlbumsOnly.length > ESSENTIAL_MIN_ALBUMS;
+  const { data: essentialOrder, isPending: essentialOrderPending } = useEssentialAlbumOrder({
+    artistName: artist.name,
+    lastfmName,
+    albums: ownedAlbumsOnly,
+    enabled: hasEssentialSection,
+  });
+  // A failed ranking still shows the section, in the library's own order.
   const essentialAlbums = useMemo(() => {
-    if (ownedAlbumsOnly.length <= ESSENTIAL_MIN_ALBUMS) return [];
-    if (lastfmAlbumsLoading) return [];
+    if (!hasEssentialSection || essentialOrderPending) return [];
     const cap = Math.ceil(ownedAlbumsOnly.length * ESSENTIAL_RATIO);
-    if (lastfmAlbums && lastfmAlbums.length > 0) {
-      const localByNorm = new Map(ownedAlbumsOnly.map((a) => [normalizeTrackTitle(a.name), a]));
-      const matched: AlbumRow[] = [];
-      for (const lfmAlbum of lastfmAlbums) {
-        const local = localByNorm.get(normalizeTrackTitle(lfmAlbum.name));
-        if (local && !matched.includes(local)) matched.push(local);
-        if (matched.length >= cap) break;
-      }
-      if (matched.length < cap) {
-        for (const album of ownedAlbumsOnly) {
-          if (matched.length >= cap) break;
-          if (!matched.includes(album)) matched.push(album);
-        }
-      }
-      if (matched.length > 0) return matched;
-    }
-    return ownedAlbumsOnly.slice(0, cap);
-  }, [ownedAlbumsOnly, lastfmAlbums, lastfmAlbumsLoading]);
+    const byId = new Map(ownedAlbumsOnly.map((album) => [album.id, album]));
+    const ranked = (essentialOrder ?? []).flatMap((id) => byId.get(id) ?? []);
+    return [...new Set([...ranked, ...ownedAlbumsOnly])].slice(0, cap);
+  }, [hasEssentialSection, ownedAlbumsOnly, essentialOrder, essentialOrderPending]);
 
   const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);

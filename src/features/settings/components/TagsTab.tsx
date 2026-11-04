@@ -53,6 +53,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     onSaved: async () => {
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichmentAll() });
       await queryClient.invalidateQueries({ queryKey: QK.artistPopularTracksAll() });
+      await queryClient.invalidateQueries({ queryKey: QK.artistEssentialAlbumsAll() });
     },
   });
   const fanartKeyField = useApiKeyField({ load: getFanartApiKey, save: setFanartApiKey });

@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { fetchListenBrainzArtistPopularity, fetchListenBrainzSimilarArtists } from "./listenbrainz";
+import {
+  fetchListenBrainzArtistPopularity,
+  fetchListenBrainzReleaseGroupListens,
+  fetchListenBrainzSimilarArtists,
+} from "./listenbrainz";
 
 const RADIOHEAD = "a74b1b7f-71a5-4011-9441-d0b5e4122711";
 const UNKNOWN = "00000000-0000-0000-0000-000000000000";
@@ -103,6 +107,39 @@ describe("fetchListenBrainzArtistPopularity", () => {
     vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(503, {}));
 
     await expect(fetchListenBrainzArtistPopularity([RADIOHEAD])).rejects.toThrow("503");
+  });
+});
+
+const OK_COMPUTER = "b1392450-e666-3926-a536-22c65f834433";
+
+describe("fetchListenBrainzReleaseGroupListens", () => {
+  it("posts the ids and reads listen counts, null for a release group with none", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, [
+        { release_group_mbid: OK_COMPUTER, total_listen_count: 1781830, total_user_count: 25280 },
+        { release_group_mbid: UNKNOWN, total_listen_count: null, total_user_count: null },
+      ]),
+    );
+
+    await expect(fetchListenBrainzReleaseGroupListens([OK_COMPUTER, UNKNOWN, "not-an-mbid"])).resolves.toEqual([
+      { mbid: OK_COMPUTER, listenCount: 1781830 },
+      { mbid: UNKNOWN, listenCount: null },
+    ]);
+    const [request] = requests();
+    expect(request?.url.toString()).toBe("https://api.listenbrainz.org/1/popularity/release-group");
+    expect(request?.init?.method).toBe("POST");
+    expect(JSON.parse(String(request?.init?.body))).toEqual({ release_group_mbids: [OK_COMPUTER, UNKNOWN] });
+  });
+
+  it("asks nothing for no ids", async () => {
+    await expect(fetchListenBrainzReleaseGroupListens(["not-an-mbid"])).resolves.toEqual([]);
+    expect(tauriFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects when ListenBrainz didn't answer", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(503, {}));
+
+    await expect(fetchListenBrainzReleaseGroupListens([OK_COMPUTER])).rejects.toThrow("503");
   });
 });
 

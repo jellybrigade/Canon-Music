@@ -136,6 +136,9 @@ export function useSaveArtistIdentity() {
       void queryClient.invalidateQueries({
         queryKey: QK.artistPopularTracks(input.lastfmArtistName ?? input.artistName, input.artistName),
       });
+      void queryClient.invalidateQueries({
+        queryKey: QK.artistEssentialAlbumsOf(input.lastfmArtistName ?? input.artistName, input.artistName),
+      });
     },
   });
 }

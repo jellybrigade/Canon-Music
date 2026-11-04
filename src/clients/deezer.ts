@@ -91,15 +91,20 @@ export async function fetchDeezerAlbum(id: number): Promise<Edition | null> {
   return { releaseDate, label: typeof label === "string" && label !== "" ? label : null, recordType };
 }
 
+export interface DeezerDiscographyEntry extends DiscographyEntry {
+  /** Deezer users who saved the release: for ordering only, it isn't a listen count. */
+  fans: number | null;
+}
+
 /** Every release Deezer lists for the artist, up to a page cap. */
-export async function fetchDeezerDiscography(artistId: number): Promise<DiscographyEntry[]> {
-  const entries: DiscographyEntry[] = [];
+export async function fetchDeezerDiscography(artistId: number): Promise<DeezerDiscographyEntry[]> {
+  const entries: DeezerDiscographyEntry[] = [];
   let url: string | null = `${DEEZER_API}/artist/${artistId}/albums?limit=${DISCOGRAPHY_PAGE_SIZE}`;
   for (let page = 0; url !== null && page < DISCOGRAPHY_MAX_PAGES; page++) {
     const body = await getJson(url);
-    for (const { title, record_type: recordType, release_date: releaseDate } of dataOf(body)) {
+    for (const { title, record_type: recordType, release_date: releaseDate, fans } of dataOf(body)) {
       if (typeof title === "string" && typeof recordType === "string" && typeof releaseDate === "string") {
-        entries.push({ title, recordType, releaseDate });
+        entries.push({ title, recordType, releaseDate, fans: typeof fans === "number" ? fans : null });
       }
     }
     const next = body?.next;

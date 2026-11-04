@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import type { LastfmTopAlbum, LastfmTopTrack } from "../../clients/lastfm";
-import { fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
+import type { LastfmTopTrack } from "../../clients/lastfm";
+import { fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
+import { fetchEssentialAlbumOrder } from "../../features/enrichment/lib/essentialAlbums";
 import { fetchPopularTrackRanking, type PopularTrackRanking } from "../../features/enrichment/lib/popularTracks";
 import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { QK } from "../../lib/queryKeys";
@@ -121,10 +122,41 @@ export function useAppearsOnAlbums(artistName: string, serverId: string) {
   });
 }
 
-export function useLastfmTopAlbums(artistName: string) {
+/** Ids of `albums` most popular first, only those a source ranks; the rest keep their own order. */
+export function useEssentialAlbumOrder({
+  artistName,
+  lastfmName,
+  albums,
+  enabled,
+}: {
+  artistName: string;
+  lastfmName: string;
+  albums: readonly AlbumRow[];
+  enabled: boolean;
+}) {
+  const albumIds = albums.map((album) => album.id);
   return useQuery({
-    queryKey: QK.lastfmArtistTopAlbums(artistName),
-    queryFn: (): Promise<LastfmTopAlbum[]> => fetchArtistTopAlbums(artistName),
+    queryKey: QK.artistEssentialAlbums(lastfmName, artistName, albumIds),
+    enabled,
+    queryFn: async (): Promise<string[]> => {
+      const db = await getDb();
+      const placeholders = albumIds.map(() => "?").join(", ");
+      const identities = await db.select<{ album_id: string; mb_release_group_id: string }[]>(
+        `SELECT album_id, mb_release_group_id FROM album_identity
+         WHERE album_id IN (${placeholders}) AND mb_release_group_id IS NOT NULL`,
+        albumIds,
+      );
+      const mbidByAlbum = new Map(identities.map((row) => [row.album_id, row.mb_release_group_id]));
+      return fetchEssentialAlbumOrder({
+        artistName,
+        lastfmName,
+        albums: albums.map((album) => ({
+          id: album.id,
+          name: album.name,
+          releaseGroupMbid: mbidByAlbum.get(album.id) ?? null,
+        })),
+      });
+    },
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 }

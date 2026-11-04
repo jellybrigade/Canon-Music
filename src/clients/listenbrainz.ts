@@ -81,3 +81,24 @@ export async function fetchListenBrainzArtistPopularity(
     typeof mbid === "string" ? [{ mbid, listenCount: countOrNull(listens), userCount: countOrNull(users) }] : [],
   );
 }
+
+export interface ListenBrainzReleaseGroupListens {
+  mbid: string;
+  listenCount: number | null;
+}
+
+/** All-time listens per release group, in the order asked; null for one it has none for (often a new release). */
+export async function fetchListenBrainzReleaseGroupListens(
+  releaseGroupMbids: string[],
+): Promise<ListenBrainzReleaseGroupListens[]> {
+  const ids = releaseGroupMbids.filter((id) => MBID_PATTERN.test(id));
+  if (ids.length === 0) return [];
+  const rows = await getList(apiBudget, `${LISTENBRAINZ_API}/popularity/release-group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ release_group_mbids: ids }),
+  });
+  return rows.flatMap(({ release_group_mbid: mbid, total_listen_count: listens }) =>
+    typeof mbid === "string" ? [{ mbid, listenCount: countOrNull(listens) }] : [],
+  );
+}

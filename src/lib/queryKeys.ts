@@ -54,7 +54,6 @@ export const QK = {
   artistSeedTrack: (artistName: string, serverId: string) => ["artist-seed-track", artistName, serverId] as const,
   artistAppearsOn: (artistName: string, serverId: string) => ["artist-appears-on", artistName, serverId] as const,
   artistGenres: (artistName: string, serverId: string) => ["artist-genres", artistName, serverId] as const,
-  lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
   similarInLibrary: (names: string[]) => ["similar-in-library", names] as const,
   similarArtistAlbums: (names: string[], serverId: string) => ["similar-artist-albums", names, serverId] as const,
 
@@ -85,6 +84,11 @@ export const QK = {
   artistPopularTracksAll: () => ["artist-popular-tracks"] as const,
   artistPopularTracks: (lastfmName: string, artistName: string) =>
     ["artist-popular-tracks", lastfmName, artistName] as const,
+  artistEssentialAlbumsAll: () => ["artist-essential-albums"] as const,
+  artistEssentialAlbumsOf: (lastfmName: string, artistName: string) =>
+    ["artist-essential-albums", lastfmName, artistName] as const,
+  artistEssentialAlbums: (lastfmName: string, artistName: string, albumIds: string[]) =>
+    ["artist-essential-albums", lastfmName, artistName, albumIds] as const,
   popularTrackMatch: (artistName: string, source: string | null, trackIds: string[]) =>
     ["popular-track-match", artistName, source, trackIds] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>

@@ -77,7 +77,7 @@ function answerPissAlbum(): void {
     recordType: "album",
   });
   vi.mocked(fetchDeezerDiscography).mockResolvedValue([
-    { title: "you made me / skin on linen", recordType: "album", releaseDate: "2026-10-30" },
+    { title: "you made me / skin on linen", recordType: "album", releaseDate: "2026-10-30", fans: 40 },
   ]);
 }
 
@@ -285,7 +285,7 @@ describe("runReleaseDateLookups", () => {
       },
     ]);
     vi.mocked(fetchDeezerDiscography).mockResolvedValue([
-      { title: "Kind of Blue (Remastered)", recordType: "album", releaseDate: "2019-07-26" },
+      { title: "Kind of Blue (Remastered)", recordType: "album", releaseDate: "2019-07-26", fans: null },
     ]);
 
     await expect(run()).resolves.toEqual({ changed: true });

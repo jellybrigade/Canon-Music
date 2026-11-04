@@ -100,7 +100,10 @@ function isSameKind(kind: ReleaseKind, recordType: string): boolean {
   return SOURCE_KINDS[recordType.toLowerCase()] === kind;
 }
 
-export function isMatchingRelease(album: LocalRelease, hit: ReleaseCandidate): boolean {
+export function isMatchingRelease(
+  album: Pick<LocalRelease, "name" | "artist" | "kind" | "trackCount">,
+  hit: ReleaseCandidate,
+): boolean {
   return (
     isSameArtist(album.artist, hit.artistName) &&
     strictKey(album.name) === strictKey(hit.title) &&
