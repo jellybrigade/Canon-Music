@@ -9,6 +9,8 @@ export const DEEZER_QUOTA_COOLDOWN_MS = 10_000;
 const SEARCH_LIMIT = 10;
 const DISCOGRAPHY_PAGE_SIZE = 100;
 const DISCOGRAPHY_MAX_PAGES = 10;
+const RELATED_LIMIT = 50;
+const TOP_TRACKS_LIMIT = 50;
 // Deezer reports errors in a 200 body: 4 is its quota, 800 "no data".
 const QUOTA_EXCEEDED = 4;
 const NO_DATA = 800;
@@ -89,4 +91,44 @@ export async function fetchDeezerDiscography(artistId: number): Promise<Discogra
     url = typeof next === "string" && next.startsWith(`${DEEZER_API}/`) ? next : null;
   }
   return entries;
+}
+
+export interface DeezerArtist {
+  id: number;
+  name: string;
+}
+
+export interface DeezerTopTrack {
+  title: string;
+  albumTitle: string | null;
+}
+
+function artistsOf(body: JsonObject | null): DeezerArtist[] {
+  return dataOf(body).flatMap(({ id, name }) =>
+    typeof id === "number" && typeof name === "string" ? [{ id, name }] : [],
+  );
+}
+
+/** Every artist Deezer lists for the name, same-named strangers included. */
+export async function searchDeezerArtists(name: string): Promise<DeezerArtist[]> {
+  const url = new URL(`${DEEZER_API}/search/artist`);
+  url.searchParams.set("q", name);
+  url.searchParams.set("limit", String(SEARCH_LIMIT));
+  return artistsOf(await getJson(url.toString()));
+}
+
+/** Deezer's related artists, in its own order; it gives no score. */
+export async function fetchDeezerRelatedArtists(artistId: number): Promise<DeezerArtist[]> {
+  return artistsOf(await getJson(`${DEEZER_API}/artist/${artistId}/related?limit=${RELATED_LIMIT}`));
+}
+
+/** The artist's tracks most popular first; Deezer's rank is a global score, not a play count. */
+export async function fetchDeezerArtistTopTracks(artistId: number): Promise<DeezerTopTrack[]> {
+  return dataOf(await getJson(`${DEEZER_API}/artist/${artistId}/top?limit=${TOP_TRACKS_LIMIT}`)).flatMap(
+    ({ title, album }) => {
+      if (typeof title !== "string") return [];
+      const albumTitle = isObject(album) && typeof album.title === "string" ? album.title : null;
+      return [{ title, albumTitle }];
+    },
+  );
 }

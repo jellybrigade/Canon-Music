@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { LastfmTopAlbum, LastfmTopTrack } from "../../clients/lastfm";
-import { fetchArtistTopAlbums, fetchArtistTopTracks, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
+import { fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
+import { fetchPopularTrackRanking, type PopularTrackRanking } from "../../features/enrichment/lib/popularTracks";
 import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { QK } from "../../lib/queryKeys";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../lib/replayGainRow";
@@ -22,7 +23,7 @@ export interface TopTrack extends ReplayGainColumns {
   artwork_url: string | null;
   play_count: number | null;
   played_at: string | null;
-  lastfmRank?: number;
+  popularRank?: number;
   lastfmPlaycount?: number;
   lastfmCombined?: boolean;
 }
@@ -128,10 +129,10 @@ export function useLastfmTopAlbums(artistName: string) {
   });
 }
 
-export function useLastfmTopTracks(artistName: string) {
+export function usePopularTrackRanking(artistName: string, lastfmName: string) {
   return useQuery({
-    queryKey: QK.lastfmArtistTopTracks(artistName),
-    queryFn: (): Promise<LastfmTopTrack[]> => fetchArtistTopTracks(artistName),
+    queryKey: QK.artistPopularTracks(lastfmName, artistName),
+    queryFn: (): Promise<PopularTrackRanking> => fetchPopularTrackRanking({ artistName, lastfmName }),
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 }
@@ -152,18 +153,18 @@ export function buildTrackObj(track: TopTrack, server: Server, credential: Navid
   };
 }
 
-// Last.fm's per-title playcount can't tell apart local copies sharing a title (e.g.
-// clipping.'s many "Intro" tracks); pick by Last.fm's representative album, else local plays,
-// and mark the winner `lastfmCombined` since the count spans more than this one track.
-async function matchLastfmTracks(
+// A per-title ranking can't tell apart local copies sharing a title (e.g. clipping.'s many
+// "Intro" tracks); pick by the source's album (Deezer names it, Last.fm is asked), else local
+// plays, and mark a Last.fm winner `lastfmCombined` since its count spans more than this track.
+export async function matchPopularTracks(
   tracks: TopTrack[],
-  lastfmTracks: LastfmTopTrack[],
+  ranking: PopularTrackRanking,
   artistName: string,
 ): Promise<TopTrack[]> {
-  const lastfmByTitle = new Map<string, { rank: number; playcount: number }>();
-  lastfmTracks.forEach((t, i) => {
-    const key = normalizeTrackTitle(t.name);
-    if (!lastfmByTitle.has(key)) lastfmByTitle.set(key, { rank: i, playcount: t.playcount });
+  const rankByTitle = new Map<string, { rank: number; playcount: number | null; albumTitle: string | null }>();
+  ranking.tracks.forEach((t, i) => {
+    const key = normalizeTrackTitle(t.title);
+    if (!rankByTitle.has(key)) rankByTitle.set(key, { rank: i, playcount: t.playcount, albumTitle: t.albumTitle });
   });
 
   const groups = new Map<string, TopTrack[]>();
@@ -180,26 +181,32 @@ async function matchLastfmTracks(
   // Every ambiguous group used to cost a `track.getInfo` call against Last.fm's shared
   // 250ms limiter, visibly delaying the Popular list; only lookup groups that can reach it.
   const ambiguous = [...groups.entries()]
-    .filter(([key, group]) => group.length > 1 && lastfmByTitle.has(key))
-    .sort(([a], [b]) => lastfmByTitle.get(b)!.playcount - lastfmByTitle.get(a)!.playcount);
+    .filter(([key, group]) => group.length > 1 && rankByTitle.has(key))
+    .sort(([a], [b]) => rankByTitle.get(a)!.rank - rankByTitle.get(b)!.rank);
   const lookupTitles = new Set(ambiguous.slice(0, POPULAR_TRACKS_MAX).map(([key]) => key));
 
   for (const [key, group] of groups) {
-    const lfm = lastfmByTitle.get(key);
-    if (!lfm) continue;
+    const ranked = rankByTitle.get(key);
+    if (!ranked) continue;
 
     const [first, ...rest] = group;
     if (!first) continue;
+    const playcount = ranked.playcount ?? undefined;
 
     if (rest.length === 0) {
       const winner = byId.get(first.id)!;
-      winner.lastfmRank = lfm.rank;
-      winner.lastfmPlaycount = lfm.playcount;
+      winner.popularRank = ranked.rank;
+      winner.lastfmPlaycount = playcount;
       continue;
     }
 
     let winner: TopTrack | undefined;
-    const repAlbum = lookupTitles.has(key) ? await fetchTrackAlbum(artistName, first.title) : null;
+    const repAlbum =
+      ranking.source === "deezer"
+        ? ranked.albumTitle
+        : lookupTitles.has(key)
+          ? await fetchTrackAlbum(artistName, first.title)
+          : null;
     if (repAlbum) {
       const repNorm = normalizeTrackTitle(repAlbum);
       winner = group.find((t) => t.album_name && normalizeTrackTitle(t.album_name) === repNorm);
@@ -208,9 +215,9 @@ async function matchLastfmTracks(
     if (!winner) continue;
 
     const winnerEnriched = byId.get(winner.id)!;
-    winnerEnriched.lastfmRank = lfm.rank;
-    winnerEnriched.lastfmPlaycount = lfm.playcount;
-    winnerEnriched.lastfmCombined = true;
+    winnerEnriched.popularRank = ranked.rank;
+    winnerEnriched.lastfmPlaycount = playcount;
+    winnerEnriched.lastfmCombined = playcount !== undefined ? true : undefined;
   }
 
   return result;
@@ -219,20 +226,26 @@ async function matchLastfmTracks(
 export function useMatchedTracks(
   artistName: string,
   tracks: TopTrack[] | undefined,
-  lastfmTracks: LastfmTopTrack[] | undefined,
+  ranking: PopularTrackRanking | undefined,
 ) {
   return useQuery({
-    queryKey: QK.lastfmTrackMatch(
+    queryKey: QK.popularTrackMatch(
       artistName,
+      ranking?.source ?? null,
       (tracks ?? []).map((t) => t.id),
     ),
-    queryFn: () => matchLastfmTracks(tracks ?? [], lastfmTracks ?? [], artistName),
-    enabled: !!tracks && !!lastfmTracks,
+    queryFn: () => matchPopularTracks(tracks ?? [], ranking ?? { source: "deezer", tracks: [] }, artistName),
+    enabled: !!tracks && !!ranking,
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
-export function lastfmOnlyTracks(localTracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): LastfmTopTrack[] {
+/** Last.fm's popular tracks this library lacks; Deezer's ranking lists none, it isn't Last.fm. */
+export function lastfmOnlyTracks(localTracks: TopTrack[], ranking: PopularTrackRanking): LastfmTopTrack[] {
+  if (ranking.source !== "lastfm") return [];
   const localNorm = new Set(localTracks.map((t) => normalizeTrackTitle(t.title)));
-  return lastfmTracks.filter((t) => !localNorm.has(normalizeTrackTitle(t.name))).slice(0, 10);
+  return ranking.tracks
+    .filter((t) => !localNorm.has(normalizeTrackTitle(t.title)))
+    .slice(0, 10)
+    .map((t) => ({ name: t.title, playcount: t.playcount ?? 0 }));
 }

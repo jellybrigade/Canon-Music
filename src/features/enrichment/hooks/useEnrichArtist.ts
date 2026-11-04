@@ -4,7 +4,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchFanartTvImageByMbid, getFanartApiKey } from "../../../clients/fanart";
-import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { getArtistImageFromServer } from "../../../clients/navidrome";
 import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
@@ -22,6 +21,7 @@ import {
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
+import { fetchArtistListening, similarJson } from "../lib/artistListening";
 import { similarity } from "../lib/fuzzyMatch";
 
 /** Probes a URL via Image() (sidesteps CORS, unlike fetch) so a server-scraped
@@ -60,6 +60,7 @@ export interface ArtistEnrichmentRow {
   bio: string | null;
   listeners: number | null;
   playcount: number | null;
+  listenbrainz_listens: number | null;
   similar_json: string | null; // JSON string[]
   top_tags_json: string | null; // JSON string[]
   lastfm_image_url: string | null;
@@ -213,12 +214,13 @@ async function enrichArtist({
     }
   }
 
-  const [info, wikidataImageUrl] = await Promise.all([
-    fetchArtistInfo(lastfmName),
+  const [listening, wikidataImageUrl] = await Promise.all([
+    fetchArtistListening({ artistName, lastfmName, mbid: resolvedMbid }),
     resolvedMbid && !hasWikidataImage
       ? fetchWikidataImageByMbid(resolvedMbid).catch(markIncomplete)
       : Promise.resolve(null),
   ]);
+  const { info, similar, listenBrainz } = listening;
   let imageUrl = wikidataImageUrl;
   if (!imageUrl && !hasWikidataImage && resolvedMbid) {
     const fanartKey = await getFanartApiKey().catch(markIncomplete);
@@ -264,28 +266,31 @@ async function enrichArtist({
   }
 
   const db = await getDb();
-  // Only stamp enriched_at when Last.fm returned primary data, keeps the row retryable
-  // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
-  const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
   const hasPortrait = hasWikidataImage || !!imageUrl || !!navidromeImageUrl;
-  const enrichedAt = gotData && (hasPortrait || !isPortraitLookupIncomplete) ? Math.floor(Date.now() / 1000) : null;
+  // Stamped only with listening data from some source, and never past a failed source, so the
+  // row stays due for stats and similar artists.
+  const hasListeningData =
+    !!(info.bio || info.listeners) || (similar?.length ?? 0) > 0 || listenBrainz?.listens != null;
+  const isLookupComplete = listening.isComplete && (hasPortrait || !isPortraitLookupIncomplete);
+  const enrichedAt = hasListeningData && isLookupComplete ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
-        wikidata_image_url, navidrome_image_url, enriched_at)
-     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        wikidata_image_url, navidrome_image_url, listenbrainz_listens, enriched_at)
+     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
        mb_artist_id = COALESCE(artist_identity.mb_artist_id, excluded.mb_artist_id),
        bio = excluded.bio,
        listeners = excluded.listeners,
        playcount = excluded.playcount,
-       similar_json = excluded.similar_json,
+       similar_json = CASE WHEN ? THEN excluded.similar_json ELSE artist_identity.similar_json END,
        top_tags_json = excluded.top_tags_json,
        lastfm_image_url = excluded.lastfm_image_url,
        wikidata_image_url = COALESCE(excluded.wikidata_image_url, artist_identity.wikidata_image_url),
        navidrome_image_url = COALESCE(excluded.navidrome_image_url, artist_identity.navidrome_image_url),
+       listenbrainz_listens = CASE WHEN ? THEN excluded.listenbrainz_listens ELSE artist_identity.listenbrainz_listens END,
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
@@ -293,12 +298,15 @@ async function enrichArtist({
       finalBio,
       info.listeners,
       info.playcount,
-      info.similar.length > 0 ? JSON.stringify(info.similar) : null,
+      similarJson(similar),
       info.topTags.length > 0 ? JSON.stringify(info.topTags) : null,
       info.imageUrl,
       imageUrl,
       navidromeImageUrl,
+      listenBrainz?.listens ?? null,
       enrichedAt,
+      similar !== null ? 1 : 0,
+      listenBrainz !== null ? 1 : 0,
     ],
   );
   return { isIdentityLookupIncomplete };

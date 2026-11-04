@@ -1,8 +1,9 @@
-import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "../../../lib/replayGainRow";
 import { escapeLike } from "../../../lib/sql";
 import type { AlbumRow } from "../../../types/library";
+import { fetchPopularTrackRanking } from "../../enrichment/lib/popularTracks";
+import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 
 // Shared by the About tab and useNowPlayingPrefetch so both use the same SQL and keys.
 
@@ -20,6 +21,9 @@ export interface NowPlayingTrack extends ReplayGainColumns {
 export const NOW_PLAYING_STALE_TIME = 30 * 60 * 1000;
 /** Suggestions are randomised per track, so a shorter window keeps them from feeling stuck. */
 export const SUGGESTED_STALE_TIME = 5 * 60 * 1000;
+
+/** Suggestions draw from the closest few similar artists only. */
+const SUGGESTION_SOURCE_ARTISTS = 10;
 
 const TRACK_COLUMNS = `t.id, t.title, t.artist, t.duration, a.name AS album_name,
           t.album_id, a.artwork_url, ${REPLAY_GAIN_COLUMNS}`;
@@ -40,7 +44,7 @@ export async function fetchArtistAlbums(artistName: string, serverId: string): P
   );
 }
 
-/** Last.fm's popularity ranking intersected with the library; falls back to local track order. */
+/** Last.fm's (else Deezer's) popularity ranking intersected with the library; falls back to local track order. */
 export async function fetchArtistTopTracksForNowPlaying(
   artistName: string,
   serverId: string,
@@ -56,8 +60,10 @@ export async function fetchArtistTopTracksForNowPlaying(
        OR t.artist LIKE ? ESCAPE '\\'
        OR t.artist LIKE ? ESCAPE '\\')`;
 
-  const trackNames = await fetchArtistTopTracks(artistName).catch(() => []);
-  if (trackNames.length > 0) {
+  const ranked = await fetchPopularTrackRanking({ artistName, lastfmName: artistName })
+    .then((ranking) => ranking.tracks)
+    .catch(() => []);
+  if (ranked.length > 0) {
     const localTracks = await db.select<NowPlayingTrack[]>(
       `SELECT ${TRACK_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
@@ -67,8 +73,8 @@ export async function fetchArtistTopTracksForNowPlaying(
     const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
     const matched: NowPlayingTrack[] = [];
     const seen = new Set<string>();
-    for (const { name } of trackNames) {
-      const track = byTitle.get(name.toLowerCase());
+    for (const { title } of ranked) {
+      const track = byTitle.get(title.toLowerCase());
       if (track && !seen.has(track.id)) {
         seen.add(track.id);
         matched.push(track);
@@ -93,7 +99,9 @@ export async function fetchSuggestedTracksForNowPlaying(
   currentTrackId: string | null,
   serverId: string,
 ): Promise<NowPlayingTrack[]> {
-  const similarArtists = await fetchSimilarArtists(artistName).catch(() => []);
+  const similarArtists = await fetchSimilarArtistScores(artistName)
+    .then((artists) => artists.slice(0, SUGGESTION_SOURCE_ARTISTS).map((artist) => artist.name))
+    .catch(() => []);
   if (similarArtists.length === 0) return [];
   const db = await getDb();
   const placeholders = similarArtists.map(() => "?").join(", ");

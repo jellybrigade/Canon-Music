@@ -134,7 +134,7 @@ export function useSaveArtistIdentity() {
         queryKey: QK.artistEnrichment(input.artistName),
       });
       void queryClient.invalidateQueries({
-        queryKey: QK.lastfmArtistTopTracks(input.lastfmArtistName ?? input.artistName),
+        queryKey: QK.artistPopularTracks(input.lastfmArtistName ?? input.artistName, input.artistName),
       });
     },
   });

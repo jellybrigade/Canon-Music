@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../../../clients/lastfm";
+import { fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
 import { escapeLike } from "../../../lib/sql";
+import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { getRadioCandidates } from "../lib/radio";
@@ -144,7 +145,7 @@ export function useRadio() {
         const needsSimilarArtists = radioMode === "curated" || radioMode === "similar-artists";
         const [similarArtistsFull, similarTracks] = await Promise.all([
           needsSimilarArtists && currentTrack.artist
-            ? fetchSimilarArtistsFull(currentTrack.artist).catch(() => [])
+            ? fetchSimilarArtistScores(currentTrack.artist).catch(() => [])
             : Promise.resolve([]),
           radioMode === "curated" && currentTrack.artist && currentTrack.title
             ? fetchSimilarTracks(currentTrack.artist, currentTrack.title).catch(() => [])

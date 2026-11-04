@@ -21,6 +21,14 @@ vi.mock("../../../clients/lastfm", () => ({
     url: null,
   }),
 }));
+vi.mock("../../../clients/listenbrainz", () => ({
+  fetchListenBrainzSimilarArtists: vi.fn().mockResolvedValue([]),
+  fetchListenBrainzArtistPopularity: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("../../../clients/deezer", () => ({
+  searchDeezerArtists: vi.fn().mockResolvedValue([]),
+  fetchDeezerRelatedArtists: vi.fn().mockResolvedValue([]),
+}));
 vi.mock("../../../clients/musicbrainz", () => ({
   searchArtists: vi.fn().mockResolvedValue([]),
   fetchWikidataImageByMbid: vi.fn().mockResolvedValue(null),
@@ -42,6 +50,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistInfo } from "../../../clients/lastfm";
+import { fetchListenBrainzArtistPopularity, fetchListenBrainzSimilarArtists } from "../../../clients/listenbrainz";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
 import { getDb } from "../../../db";
@@ -236,6 +245,60 @@ describe("useEnrichArtist", () => {
 
     await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
     expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1");
+  });
+
+  describe("without Last.fm", () => {
+    const NO_LASTFM = { bio: null, listeners: null, playcount: null, similar: [], topTags: [], imageUrl: null };
+
+    function storedListening(name: string) {
+      return db.raw
+        .prepare("SELECT similar_json, listenbrainz_listens, enriched_at FROM artist_identity WHERE artist_name = ?")
+        .get(name) as { similar_json: string | null; listenbrainz_listens: number | null; enriched_at: number | null };
+    }
+
+    it("stores ListenBrainz's similar artists and listen count and marks the artist done", async () => {
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM);
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      vi.mocked(fetchListenBrainzSimilarArtists).mockResolvedValueOnce([{ mbid: "m", name: "Ride", score: 5 }]);
+      vi.mocked(fetchListenBrainzArtistPopularity).mockResolvedValueOnce([
+        { mbid: "mbid-1", listenCount: 50, userCount: 3 },
+      ]);
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+      expect(storedListening("slowdive")).toMatchObject({ similar_json: '["Ride"]', listenbrainz_listens: 50 });
+      expect(fetchListenBrainzSimilarArtists).toHaveBeenCalledWith("mbid-1");
+    });
+
+    it("keeps the similar artists stored and the artist due when ListenBrainz fails", async () => {
+      db.raw
+        .prepare("INSERT INTO artist_identity (artist_name, similar_json, listenbrainz_listens) VALUES (?, ?, ?)")
+        .run("slowdive", '["Ride"]', 50);
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM);
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      vi.mocked(fetchListenBrainzSimilarArtists).mockRejectedValueOnce(new Error("ListenBrainz returned 400"));
+      vi.mocked(fetchListenBrainzArtistPopularity).mockRejectedValueOnce(new Error("ListenBrainz returned 429"));
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(fetchListenBrainzArtistPopularity).toHaveBeenCalledOnce());
+      await waitFor(() => expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1"));
+      expect(storedListening("slowdive")).toEqual({
+        similar_json: '["Ride"]',
+        listenbrainz_listens: 50,
+        enriched_at: null,
+      });
+    });
+
+    it("leaves the artist due when no source knows anything about it", async () => {
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM);
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(storedIdentity("slowdive")).toBeDefined());
+      expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+    });
   });
 
   describe("identifying an in-library artist", () => {

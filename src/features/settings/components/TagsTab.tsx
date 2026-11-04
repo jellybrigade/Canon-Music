@@ -55,6 +55,8 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   async function setLastfmKey(k: string) {
     setLastfmKeyState(k);
     await setLastfmApiKey(k);
+    await queryClient.invalidateQueries({ queryKey: QK.artistEnrichmentAll() });
+    await queryClient.invalidateQueries({ queryKey: QK.artistPopularTracksAll() });
   }
   const lastfmKeyDisplay =
     !lastfmKeyFocused && lastfmKey.length > 8 ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}` : lastfmKey;

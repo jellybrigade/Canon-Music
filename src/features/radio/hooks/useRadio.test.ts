@@ -15,13 +15,16 @@ vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../lib/radio", () => ({ getRadioCandidates: vi.fn() }));
 vi.mock("../../../clients/lastfm", () => ({
-  fetchSimilarArtistsFull: vi.fn(async () => []),
   fetchSimilarTracks: vi.fn(async () => []),
+}));
+vi.mock("../../enrichment/lib/similarArtists", () => ({
+  fetchSimilarArtistScores: vi.fn(async () => []),
 }));
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getDb } from "../../../db";
 import { trackRenders } from "../../../test/perf";
+import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import type { RadioCandidate } from "../lib/radio";
@@ -297,6 +300,23 @@ describe("useRadio auto-advance", () => {
 
       await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1));
       err.mockRestore();
+    });
+  });
+
+  describe("similar artists", () => {
+    it("weights candidates by the similar artists any source found for the seed", async () => {
+      vi.mocked(fetchSimilarArtistScores).mockResolvedValue([{ name: "Asian Glow", match: 0.75 }]);
+      usePlayerStore.setState({ radioMode: "similar-artists" });
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
+      expect(fetchSimilarArtistScores).toHaveBeenCalledWith("Artist");
+      expect(candidateArgs().artistSimilarity).toEqual(
+        new Map([
+          ["artist", 1],
+          ["asian glow", 0.75],
+        ]),
+      );
     });
   });
 

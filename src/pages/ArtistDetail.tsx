@@ -38,8 +38,8 @@ import {
   useArtistGenres,
   useArtistTopTracks,
   useLastfmTopAlbums,
-  useLastfmTopTracks,
   useMatchedTracks,
+  usePopularTrackRanking,
 } from "./artist/artistQueries";
 import { groupAlbums, type ReleaseGroup } from "./artist/releaseGroups";
 import { SimilarArtistCard } from "./artist/SimilarArtistCard";
@@ -94,7 +94,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const removeAlias = useRemoveArtistAlias();
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
-  const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
+  const { data: popularRanking } = usePopularTrackRanking(artist.name, lastfmName);
   const { data: lastfmAlbums, isLoading: lastfmAlbumsLoading } = useLastfmTopAlbums(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -107,24 +107,24 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
-  const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, lastfmTitles);
+  const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, popularRanking);
   const topTracks = useMemo(() => {
     const source = matchedTracks ?? rawTracks ?? [];
     const rank = (t: TopTrack) => t.lastfmPlaycount ?? -1;
     return [...source].sort((a, b) => {
       const byPlaycount = rank(b) - rank(a);
       if (byPlaycount !== 0) return byPlaycount;
-      return (a.lastfmRank ?? Infinity) - (b.lastfmRank ?? Infinity);
+      return (a.popularRank ?? Infinity) - (b.popularRank ?? Infinity);
     });
   }, [matchedTracks, rawTracks]);
   const lovedTracks = useMemo(() => topTracks.filter((t) => lovedTrackIds.has(t.id)), [topTracks, lovedTrackIds]);
-  // Popular is Last.fm's ranking, which is what the world plays. This is what this
+  // Popular is Last.fm's ranking (Deezer's without one), which is what the world plays. This is what this
   // server has played, from every client, and the two answer different questions - so
   // it is a second list rather than a fallback or a rename.
   const mostPlayedTracks = useMemo(() => mostPlayedHere(rawTracks ?? [], POPULAR_TRACKS_MIN), [rawTracks]);
   const lfmOnlyTracks = useMemo(
-    () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
-    [rawTracks, lastfmTitles],
+    () => (rawTracks && popularRanking ? lastfmOnlyTracks(rawTracks, popularRanking) : []),
+    [rawTracks, popularRanking],
   );
 
   const popularTracks = topTracks.slice(0, popularExpanded ? POPULAR_TRACKS_MAX : POPULAR_TRACKS_MIN);
@@ -199,6 +199,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
       : null,
     enrichment?.playcount != null
       ? `${formatCount(enrichment.playcount)} ${plural(enrichment.playcount, "scrobble")}`
+      : null,
+    // A different, smaller scale than Last.fm's, so it shows only in place of it and says whose.
+    enrichment?.listeners == null && enrichment?.listenbrainz_listens != null
+      ? `${formatCount(enrichment.listenbrainz_listens)} ${plural(enrichment.listenbrainz_listens, "listen")} on ListenBrainz`
       : null,
     `${artist.album_count} ${plural(artist.album_count, "album")} in library`,
   ].filter((x): x is string => x !== null);

@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { fetchDeezerAlbum, fetchDeezerDiscography, searchDeezerAlbums } from "./deezer";
+import {
+  fetchDeezerAlbum,
+  fetchDeezerArtistTopTracks,
+  fetchDeezerDiscography,
+  fetchDeezerRelatedArtists,
+  searchDeezerAlbums,
+  searchDeezerArtists,
+} from "./deezer";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -103,5 +110,77 @@ describe("fetchDeezerDiscography", () => {
       { title: "Old", recordType: "album", releaseDate: "2010-01-01" },
     ]);
     expect(requestedUrls()).toHaveLength(2);
+  });
+});
+
+describe("searchDeezerArtists", () => {
+  it("asks for the name and reads each artist", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        data: [
+          { id: 69103042, name: "Weatherday", nb_fan: 5000, picture_xl: "https://cdn-images.dzcdn.net/a.jpg" },
+          { id: "broken", name: 4 },
+        ],
+      }),
+    );
+
+    await expect(searchDeezerArtists("Weatherday")).resolves.toEqual([{ id: 69103042, name: "Weatherday" }]);
+    const [url] = requestedUrls();
+    expect(new URL(url ?? "").pathname).toBe("/search/artist");
+    expect(new URL(url ?? "").searchParams.get("q")).toBe("Weatherday");
+  });
+});
+
+describe("fetchDeezerRelatedArtists", () => {
+  it("reads related artists in Deezer's order", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        data: [
+          { id: 1, name: "Asian Glow" },
+          { id: 2, name: "Horse Jumper of Love" },
+        ],
+      }),
+    );
+
+    await expect(fetchDeezerRelatedArtists(69103042)).resolves.toEqual([
+      { id: 1, name: "Asian Glow" },
+      { id: 2, name: "Horse Jumper of Love" },
+    ]);
+    expect(new URL(requestedUrls()[0] ?? "").pathname).toBe("/artist/69103042/related");
+  });
+
+  it("answers an empty list for Deezer's 'no data' error", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, { error: { type: "DataException", message: "no data", code: 800 } }),
+    );
+
+    await expect(fetchDeezerRelatedArtists(1)).resolves.toEqual([]);
+  });
+
+  it("rejects when Deezer didn't answer, so it never reads as no related artists", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(500, {}));
+
+    await expect(fetchDeezerRelatedArtists(1)).rejects.toThrow("500");
+  });
+});
+
+describe("fetchDeezerArtistTopTracks", () => {
+  it("reads the artist's tracks most popular first, with their album", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        data: [
+          { id: 10, title: "Come In", rank: 228151, album: { id: 3, title: "Come In" } },
+          { id: 11, title: "Tiara", rank: 157953, album: { id: 4, title: "Hornet Disaster" } },
+          { id: 12, title: "No album" },
+        ],
+      }),
+    );
+
+    await expect(fetchDeezerArtistTopTracks(69103042)).resolves.toEqual([
+      { title: "Come In", albumTitle: "Come In" },
+      { title: "Tiara", albumTitle: "Hornet Disaster" },
+      { title: "No album", albumTitle: null },
+    ]);
+    expect(new URL(requestedUrls()[0] ?? "").pathname).toBe("/artist/69103042/top");
   });
 });
