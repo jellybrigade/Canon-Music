@@ -1,11 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { getFanartApiKey, setFanartApiKey } from "../../../clients/fanart";
-import { getMinTagCount, setApiKey as setLastfmApiKey, setMinTagCount } from "../../../clients/lastfm";
+import {
+  getMinTagCount,
+  getApiKey as loadLastfmApiKey,
+  setApiKey as setLastfmApiKey,
+  setMinTagCount,
+} from "../../../clients/lastfm";
 import { getMinFolksonomyCount, setMinFolksonomyCount } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
+import { useApiKeyField } from "../../../hooks/useApiKeyField";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
-import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import {
   ALBUM_SHAPE_COLUMNS,
@@ -42,40 +47,15 @@ function useLastRefreshed() {
 export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const queryClient = useQueryClient();
 
-  const [lastfmKey, setLastfmKeyState] = useState("");
-  const [lastfmKeyFocused, setLastfmKeyFocused] = useState(false);
-  useEffect(() => {
-    keychain
-      .get("canon.lastfm", "api_key")
-      .then((k) => {
-        if (k) setLastfmKeyState(k);
-      })
-      .catch(() => {});
-  }, []);
-  async function setLastfmKey(k: string) {
-    setLastfmKeyState(k);
-    await setLastfmApiKey(k);
-    await queryClient.invalidateQueries({ queryKey: QK.artistEnrichmentAll() });
-    await queryClient.invalidateQueries({ queryKey: QK.artistPopularTracksAll() });
-  }
-  const lastfmKeyDisplay =
-    !lastfmKeyFocused && lastfmKey.length > 8 ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}` : lastfmKey;
-
-  const [fanartKey, setFanartKeyState] = useState("");
-  const [fanartKeyFocused, setFanartKeyFocused] = useState(false);
-  useEffect(() => {
-    getFanartApiKey()
-      .then((k) => {
-        if (k) setFanartKeyState(k);
-      })
-      .catch(() => {});
-  }, []);
-  async function handleSetFanartKey(k: string) {
-    setFanartKeyState(k);
-    await setFanartApiKey(k);
-  }
-  const fanartKeyDisplay =
-    !fanartKeyFocused && fanartKey.length > 8 ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}` : fanartKey;
+  const lastfmKeyField = useApiKeyField({
+    load: loadLastfmApiKey,
+    save: setLastfmApiKey,
+    onSaved: async () => {
+      await queryClient.invalidateQueries({ queryKey: QK.artistEnrichmentAll() });
+      await queryClient.invalidateQueries({ queryKey: QK.artistPopularTracksAll() });
+    },
+  });
+  const fanartKeyField = useApiKeyField({ load: getFanartApiKey, save: setFanartApiKey });
 
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
@@ -224,14 +204,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             is written to your files.
           </p>
           <SettingRow title="API key" stacked>
-            <input
-              type="text"
-              placeholder="Paste your Last.fm API key"
-              value={lastfmKeyDisplay}
-              onFocus={() => setLastfmKeyFocused(true)}
-              onBlur={() => setLastfmKeyFocused(false)}
-              onChange={(e) => void setLastfmKey(e.target.value)}
-            />
+            <input type="text" placeholder="Paste your Last.fm API key" {...lastfmKeyField.inputProps} />
           </SettingRow>
           <SettingRow
             title="Enrich per-track genres"
@@ -323,14 +296,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             at fanart.tv.
           </p>
           <SettingRow title="API key" stacked>
-            <input
-              type="text"
-              placeholder="Paste your Fanart.tv API key"
-              value={fanartKeyDisplay}
-              onFocus={() => setFanartKeyFocused(true)}
-              onBlur={() => setFanartKeyFocused(false)}
-              onChange={(e) => void handleSetFanartKey(e.target.value)}
-            />
+            <input type="text" placeholder="Paste your Fanart.tv API key" {...fanartKeyField.inputProps} />
           </SettingRow>
         </section>
       )}

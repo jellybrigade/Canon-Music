@@ -63,6 +63,7 @@ Rust (`src-tauri/src/`):
 - Playback: component -> `usePlayerStore` action with a `streamUrlFor` callback -> `PlaybackTarget` (`LocalTarget` = `audio_*` commands, `DlnaTarget` = SOAP).
 - Rust events back to `playerEngine.ts`: `track-ended`, `track-advanced`, `gapless-cancelled`, `audio-format`, `audio-error`.
 - Credentials: Wizard/ServerTab -> `keychain.set` -> OS keychain; `useServerWithCredential` reads them; never stored elsewhere.
+- Last.fm and fanart.tv keys (Settings Tags tab, setup wizard): `useApiKeyField` saves to the keychain on blur, Enter or unmount, only when changed, one save at a time; never per keystroke.
 - Tag normalization: file tags + Last.fm + MusicBrainz -> `normalizeAlbum` -> `albums.normalized_tags_json`, `album_genres`, `album_unresolved_genres` (display and filtering only).
 
 ## 4. Invariants

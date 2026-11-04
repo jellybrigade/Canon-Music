@@ -1,10 +1,11 @@
 import { AlertCircle, CheckCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { getFanartApiKey, setFanartApiKey } from "../../clients/fanart";
-import { setApiKey as setLastfmApiKey } from "../../clients/lastfm";
+import { getApiKey as loadLastfmApiKey, setApiKey as setLastfmApiKey } from "../../clients/lastfm";
 import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
+import { useApiKeyField } from "../../hooks/useApiKeyField";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { keychain } from "../../lib/keychain";
 import type { Server } from "../../types/server";
@@ -58,8 +59,8 @@ export function Wizard({ onSuccess }: Props) {
   const [altUrl, setAltUrl] = useState("");
 
   // Step 3 fields (optional setup)
-  const [lastfmKey, setLastfmKeyState] = useState("");
-  const [fanartKey, setFanartKeyState] = useState("");
+  const lastfmKeyField = useApiKeyField({ load: loadLastfmApiKey, save: setLastfmApiKey });
+  const fanartKeyField = useApiKeyField({ load: getFanartApiKey, save: setFanartApiKey });
   const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
   const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
@@ -67,22 +68,6 @@ export function Wizard({ onSuccess }: Props) {
   const [importState, setImportState] = useState<"idle" | "done" | "error">("idle");
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    getFanartApiKey()
-      .then((k) => {
-        if (k) setFanartKeyState(k);
-      })
-      .catch(() => {});
-  }, []);
-
-  async function handleSetLastfmKey(k: string) {
-    setLastfmKeyState(k);
-    await setLastfmApiKey(k);
-  }
-  async function handleSetFanartKey(k: string) {
-    setFanartKeyState(k);
-    await setFanartApiKey(k);
-  }
   async function handleImportSettings(file: File) {
     try {
       await importSettingsFile(file);
@@ -344,28 +329,14 @@ export function Wizard({ onSuccess }: Props) {
             <section className="settings-section">
               <h3 className="settings-section-title">Last.fm</h3>
               <SettingRow title="API key" stacked>
-                <input
-                  type="text"
-                  placeholder="Paste your Last.fm API key"
-                  value={lastfmKey}
-                  onChange={(e) => {
-                    void handleSetLastfmKey(e.target.value);
-                  }}
-                />
+                <input type="text" placeholder="Paste your Last.fm API key" {...lastfmKeyField.inputProps} />
               </SettingRow>
             </section>
 
             <section className="settings-section">
               <h3 className="settings-section-title">Fanart.tv</h3>
               <SettingRow title="API key" stacked>
-                <input
-                  type="text"
-                  placeholder="Paste your Fanart.tv API key"
-                  value={fanartKey}
-                  onChange={(e) => {
-                    void handleSetFanartKey(e.target.value);
-                  }}
-                />
+                <input type="text" placeholder="Paste your Fanart.tv API key" {...fanartKeyField.inputProps} />
               </SettingRow>
             </section>
 

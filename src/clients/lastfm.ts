@@ -1,9 +1,9 @@
 import { getDb } from "../db";
+import { readSignalCache, writeSignalCache } from "../db/radioSignalCache";
 import type { TagKind } from "../features/tags/lib/canonicalize";
 import { canonicalKey } from "../features/tags/lib/canonicalize";
 import { errorMessage } from "../lib/errorMessage";
 import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
-import { readSignalCache, writeSignalCache } from "../db/radioSignalCache";
 import { parseNumberOr } from "../lib/numberSetting";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { boundedFetch } from "./boundedFetch";
@@ -25,7 +25,7 @@ const LASTFM_ERROR_NOT_FOUND = 6;
 const rateLimit = makeRateLimiter(250);
 
 /** Resolves null when no key is stored; rejects when the secret store is locked or not up yet. */
-async function getApiKey(): Promise<string | null> {
+export async function getApiKey(): Promise<string | null> {
   try {
     const key = await keychain.get(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
     if (key) return key;
