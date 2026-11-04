@@ -40,8 +40,10 @@ vi.mock("../../../clients/fanart", () => ({
 }));
 vi.mock("../../../clients/theaudiodb", () => ({
   fetchTheAudioDbArtist: vi.fn().mockResolvedValue(null),
-  fetchWikipediaBio: vi.fn().mockResolvedValue(null),
-  fetchWikipediaBioByMbid: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("../../../clients/wikipedia", () => ({
+  fetchWikipediaTitleByArtist: vi.fn().mockResolvedValue(null),
+  fetchWikipediaSummaryText: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("../../../clients/navidrome", () => ({ getArtistImageFromServer: vi.fn().mockResolvedValue(null) }));
 
@@ -53,6 +55,7 @@ import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchListenBrainzArtistPopularity, fetchListenBrainzSimilarArtists } from "../../../clients/listenbrainz";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
+import { fetchWikipediaSummaryText, fetchWikipediaTitleByArtist } from "../../../clients/wikipedia";
 import { getDb } from "../../../db";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
@@ -214,6 +217,78 @@ describe("useEnrichArtist", () => {
 
     await waitFor(() => expect(storedIdentity("slowdive")).toBeDefined());
     expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+  });
+
+  describe("biography fallbacks", () => {
+    const NO_LASTFM_BIO = { bio: null, listeners: 1, playcount: 2, similar: [], topTags: [], imageUrl: null };
+
+    function seedStoredBio(bio: string) {
+      db.raw.prepare("INSERT INTO artist_identity (artist_name, bio) VALUES (?, ?)").run("slowdive", bio);
+    }
+
+    it("stores the Wikipedia article linked from the artist's MusicBrainz id", async () => {
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM_BIO);
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      vi.mocked(fetchWikipediaTitleByArtist).mockResolvedValueOnce("Slowdive");
+      vi.mocked(fetchWikipediaSummaryText).mockResolvedValueOnce("Slowdive are an English rock band.");
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+      expect(storedIdentity("slowdive")?.bio).toBe("Slowdive are an English rock band.");
+      expect(fetchWikipediaTitleByArtist).toHaveBeenCalledWith("mbid-1");
+      expect(fetchWikipediaSummaryText).toHaveBeenCalledWith("Slowdive");
+    });
+
+    it("keeps the stored biography and the artist due when Wikipedia doesn't answer", async () => {
+      seedStoredBio("Stored bio");
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM_BIO);
+      vi.mocked(fetchWikipediaSummaryText).mockRejectedValueOnce(new Error("Wikipedia returned 503"));
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(fetchWikipediaSummaryText).toHaveBeenCalledOnce());
+      await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("Stored bio"));
+      expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+    });
+
+    it("keeps the stored biography and the artist due when the artist's Wikidata link can't be read", async () => {
+      seedStoredBio("Stored bio");
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM_BIO);
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      vi.mocked(fetchWikidataImageByMbid).mockResolvedValueOnce("https://img/slowdive.jpg");
+      vi.mocked(fetchWikipediaTitleByArtist).mockRejectedValueOnce(new Error("Wikidata returned 429"));
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1"));
+      expect(storedIdentity("slowdive")).toMatchObject({ bio: "Stored bio", enriched_at: null });
+      // A name lookup could land on another artist's article ("Ye"), so a failed id lookup waits for a retry.
+      expect(fetchWikipediaSummaryText).not.toHaveBeenCalled();
+    });
+
+    it("keeps the stored biography when TheAudioDB fails, even with a portrait found", async () => {
+      seedStoredBio("Stored bio");
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM_BIO);
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      vi.mocked(fetchWikidataImageByMbid).mockResolvedValueOnce("https://img/slowdive.jpg");
+      vi.mocked(fetchTheAudioDbArtist).mockRejectedValueOnce(new Error("theaudiodb unreachable"));
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1"));
+      expect(storedIdentity("slowdive")).toMatchObject({ bio: "Stored bio", enriched_at: null });
+    });
+
+    it("clears the biography once every source answered that it has none", async () => {
+      seedStoredBio("Stored bio");
+      vi.mocked(fetchArtistInfo).mockResolvedValueOnce(NO_LASTFM_BIO);
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+      expect(storedIdentity("slowdive")?.bio).toBeNull();
+    });
   });
 
   it("picks the top MusicBrainz match when no other artist scores close to it", async () => {

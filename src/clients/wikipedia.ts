@@ -31,12 +31,12 @@ export function titleFromArticleUrl(articleUrl: string): string | null {
   return decodeURIComponent(path).replace(/#.*$/, "").replace(/\?.*$/, "") || null;
 }
 
-/** The English article of the Wikidata item carrying this MusicBrainz release group id (P436).
+/** The English article of the Wikidata item carrying this MusicBrainz id under `property`.
  *  Rejects when Wikidata didn't answer. */
-export async function fetchWikipediaTitleByReleaseGroup(releaseGroupMbid: string): Promise<string | null> {
+async function fetchWikipediaTitleByMbidProperty(property: "P434" | "P436", mbid: string): Promise<string | null> {
   // The id is written into the SPARQL text, so only a real MusicBrainz id gets there.
-  if (!isMbid(releaseGroupMbid)) return null;
-  const sparql = `SELECT ?article WHERE { ?item wdt:P436 "${releaseGroupMbid}" . ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . } LIMIT 1`;
+  if (!isMbid(mbid)) return null;
+  const sparql = `SELECT ?article WHERE { ?item wdt:${property} "${mbid}" . ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . } LIMIT 1`;
   const res = await boundedNativeFetch("https://query.wikidata.org/sparql", {
     method: "POST",
     headers: {
@@ -50,6 +50,14 @@ export async function fetchWikipediaTitleByReleaseGroup(releaseGroupMbid: string
   const data = (await res.json()) as SparqlArticleResponse;
   const articleUrl = data.results?.bindings?.[0]?.article?.value;
   return articleUrl ? titleFromArticleUrl(articleUrl) : null;
+}
+
+export function fetchWikipediaTitleByReleaseGroup(releaseGroupMbid: string): Promise<string | null> {
+  return fetchWikipediaTitleByMbidProperty("P436", releaseGroupMbid);
+}
+
+export function fetchWikipediaTitleByArtist(artistMbid: string): Promise<string | null> {
+  return fetchWikipediaTitleByMbidProperty("P434", artistMbid);
 }
 
 /** The English article linked from a Wikidata item. Rejects when Wikidata didn't answer. */

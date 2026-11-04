@@ -298,18 +298,38 @@ export function mbReleaseFacts(
   };
 }
 
+// Only the identity's own columns: the Last.fm bio stored beside them is keyed by release group and must survive a save.
+const IDENTITY_COLUMNS = [
+  "mb_release_group_id",
+  "mb_release_id",
+  "mb_artist_id",
+  "lastfm_artist_name",
+  "lastfm_album_name",
+  "lastfm_match_confirmed",
+  "combined_genres_json",
+  "combined_tags_json",
+  "label",
+  "country",
+  "catalog_number",
+  "barcode",
+  "release_date",
+  "first_release_date",
+  "confirmed_at",
+  "auto_matched",
+  "match_score",
+  "looked_up_at",
+] as const;
+
 /** Accepts an optional confirmedAt so bulk callers can supply their own timestamp
  * instead of calling Date.now() twice. */
 export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { confirmedAt?: number }): Promise<void> {
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   await db.execute(
-    `INSERT OR REPLACE INTO album_identity
-       (album_id, mb_release_group_id, mb_release_id, mb_artist_id,
-        lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed,
-        combined_genres_json, combined_tags_json, label, country, catalog_number, barcode,
-        release_date, first_release_date, confirmed_at, auto_matched, match_score, looked_up_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO album_identity
+       (album_id, ${IDENTITY_COLUMNS.join(", ")})
+     VALUES (?, ${IDENTITY_COLUMNS.map(() => "?").join(", ")})
+     ON CONFLICT(album_id) DO UPDATE SET ${IDENTITY_COLUMNS.map((c) => `${c} = excluded.${c}`).join(", ")}`,
     [
       input.albumId,
       input.mbReleaseGroupId,

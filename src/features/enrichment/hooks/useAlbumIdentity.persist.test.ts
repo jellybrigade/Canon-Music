@@ -82,4 +82,37 @@ describe("persistAlbumIdentity", () => {
     );
     expect(rows).toEqual([{ release_date: "1997-01-01", first_release_date: "1959-08-17" }]);
   });
+
+  it("keeps the album's stored Last.fm bio when the identity is saved again", async () => {
+    await db.execute(
+      `INSERT INTO album_identity (album_id, album_bio, lastfm_url, album_enriched_at, album_bio_release_group_id)
+       VALUES ('srv:al-1', 'A bio', 'https://last.fm/a', 100, 'rg')`,
+    );
+
+    await persistAlbumIdentity({
+      albumId: "srv:al-1",
+      mbReleaseGroupId: "rg",
+      mbReleaseId: "rel",
+      mbArtistId: null,
+      lastfmArtistName: null,
+      lastfmAlbumName: null,
+      lastfmMatchConfirmed: false,
+      combinedGenres: [],
+      combinedTags: [],
+      ...mbReleaseFacts(release("1997-01-01"), group("1959-08-17")),
+    });
+
+    const rows = await db.select<Record<string, unknown>[]>(
+      "SELECT mb_release_id, album_bio, lastfm_url, album_enriched_at, album_bio_release_group_id FROM album_identity",
+    );
+    expect(rows).toEqual([
+      {
+        mb_release_id: "rel",
+        album_bio: "A bio",
+        lastfm_url: "https://last.fm/a",
+        album_enriched_at: 100,
+        album_bio_release_group_id: "rg",
+      },
+    ]);
+  });
 });

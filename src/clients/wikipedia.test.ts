@@ -5,6 +5,7 @@ vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
   fetchWikipediaSummaryText,
+  fetchWikipediaTitleByArtist,
   fetchWikipediaTitleByReleaseGroup,
   fetchWikipediaTitleByWikidataId,
 } from "./wikipedia";
@@ -50,6 +51,37 @@ describe("fetchWikipediaTitleByReleaseGroup", () => {
 
   it("never writes something other than a MusicBrainz id into the query", async () => {
     await expect(fetchWikipediaTitleByReleaseGroup('x" . ?a ?b ?c')).resolves.toBeNull();
+    expect(tauriFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchWikipediaTitleByArtist", () => {
+  const ARTIST = "8f2b8b2a-3b4c-4d5e-9f60-1a2b3c4d5e6f";
+
+  it("reads the English article of the Wikidata item carrying the artist id", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, { results: { bindings: [{ article: { value: "https://en.wikipedia.org/wiki/Slowdive" } }] } }),
+    );
+
+    await expect(fetchWikipediaTitleByArtist(ARTIST)).resolves.toBe("Slowdive");
+    const body = String(vi.mocked(tauriFetch).mock.calls[0]?.[1]?.body);
+    expect(new URLSearchParams(body).get("query")).toContain(`P434 "${ARTIST}"`);
+  });
+
+  it("finds none when no item carries the id", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(200, { results: { bindings: [] } }));
+
+    await expect(fetchWikipediaTitleByArtist(ARTIST)).resolves.toBeNull();
+  });
+
+  it("rejects when Wikidata didn't answer, so a stored biography isn't erased", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(503, {}));
+
+    await expect(fetchWikipediaTitleByArtist(ARTIST)).rejects.toThrow("503");
+  });
+
+  it("never writes something other than a MusicBrainz id into the query", async () => {
+    await expect(fetchWikipediaTitleByArtist('x" . } DELETE {')).resolves.toBeNull();
     expect(tauriFetch).not.toHaveBeenCalled();
   });
 });

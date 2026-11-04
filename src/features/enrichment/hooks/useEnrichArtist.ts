@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchFanartTvImageByMbid, getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { getArtistImageFromServer } from "../../../clients/navidrome";
-import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
+import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
+import { fetchWikipediaSummaryText, fetchWikipediaTitleByArtist } from "../../../clients/wikipedia";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useSetting } from "../../../hooks/useSetting";
@@ -172,6 +173,14 @@ async function disambiguateArtistByLocalAlbums(
   return null;
 }
 
+/** The artist's Wikipedia lead, through the MusicBrainz id when known. Rejects when Wikipedia or Wikidata
+ *  didn't answer. A failed id lookup never falls back to the name, which can be another artist's ("Ye"). */
+async function fetchArtistWikipediaBio(artistName: string, mbid: string | null): Promise<string | null> {
+  if (!mbid) return fetchWikipediaSummaryText(artistName);
+  const title = await fetchWikipediaTitleByArtist(mbid);
+  return title ? fetchWikipediaSummaryText(title) : null;
+}
+
 interface EnrichArtistOptions {
   artistName: string;
   lastfmName: string;
@@ -229,13 +238,18 @@ async function enrichArtist({
 
   // Bio + portrait fallbacks: TheAudioDB and Wikipedia fetched in parallel when Last.fm returns nothing
   let finalBio = info.bio;
+  let isBioLookupIncomplete = false;
+  const markBioIncomplete = (): null => {
+    isBioLookupIncomplete = true;
+    return null;
+  };
   if (!finalBio) {
     const [adbResult, wikiBio] = await Promise.all([
-      fetchTheAudioDbArtist(artistName).catch(markIncomplete),
-      // Prefer MBID-based Wikipedia lookup to avoid wrong-artist matches on ambiguous names (e.g. "Ye")
-      resolvedMbid
-        ? fetchWikipediaBioByMbid(resolvedMbid).catch(() => fetchWikipediaBio(artistName).catch(() => null))
-        : fetchWikipediaBio(artistName).catch(() => null),
+      fetchTheAudioDbArtist(artistName).catch(() => {
+        markIncomplete();
+        return markBioIncomplete();
+      }),
+      fetchArtistWikipediaBio(artistName, resolvedMbid).catch(markBioIncomplete),
     ]);
     if (adbResult) {
       finalBio = adbResult.bio;
@@ -271,7 +285,8 @@ async function enrichArtist({
   // row stays due for stats and similar artists.
   const hasListeningData =
     !!(info.bio || info.listeners) || (similar?.length ?? 0) > 0 || listenBrainz?.listens != null;
-  const isLookupComplete = listening.isComplete && (hasPortrait || !isPortraitLookupIncomplete);
+  const isLookupComplete =
+    listening.isComplete && (hasPortrait || !isPortraitLookupIncomplete) && (!!finalBio || !isBioLookupIncomplete);
   const enrichedAt = hasListeningData && isLookupComplete ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(
@@ -282,7 +297,7 @@ async function enrichArtist({
      VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
        mb_artist_id = COALESCE(artist_identity.mb_artist_id, excluded.mb_artist_id),
-       bio = excluded.bio,
+       bio = CASE WHEN ? THEN excluded.bio ELSE COALESCE(excluded.bio, artist_identity.bio) END,
        listeners = excluded.listeners,
        playcount = excluded.playcount,
        similar_json = CASE WHEN ? THEN excluded.similar_json ELSE artist_identity.similar_json END,
@@ -305,6 +320,7 @@ async function enrichArtist({
       navidromeImageUrl,
       listenBrainz?.listens ?? null,
       enrichedAt,
+      isBioLookupIncomplete ? 0 : 1,
       similar !== null ? 1 : 0,
       listenBrainz !== null ? 1 : 0,
     ],
