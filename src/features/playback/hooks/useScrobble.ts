@@ -109,7 +109,7 @@ export function useScrobble(track: CurrentTrack | null, serverWithCred: ServerWi
         }
         scrobbedRef.current = false;
       });
-  }, [track, elapsed]);
+  }, [track, elapsed, minElapsedS, fraction]);
 }
 
 // Isolated in its own leaf so the 5x/second elapsed tick doesn't re-render App's large tree.
