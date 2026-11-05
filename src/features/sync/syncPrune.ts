@@ -1,6 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
+import { forYouLocksKey } from "../../lib/forYouGroups";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { escapeLike } from "../../lib/sql";
 
@@ -115,7 +116,10 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   for (const sql of statements) {
     await db.execute(sql, [serverId]);
   }
-  await db.execute("DELETE FROM settings WHERE key = ?", [`server.opensub_extensions.${serverId}`]);
+  await db.execute("DELETE FROM settings WHERE key IN (?, ?)", [
+    `server.opensub_extensions.${serverId}`,
+    forYouLocksKey(serverId),
+  ]);
 }
 
 // Every read is scoped by server_id, so rows left by an unfinished purge or a `servers` row

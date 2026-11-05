@@ -142,6 +142,7 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('${al}', 'rock', 'direct', 'Rock');
     INSERT INTO album_unresolved_genres (album_id, raw_value, source) VALUES ('${al}', 'weird', 'server');
     INSERT INTO settings (key, value) VALUES ('server.opensub_extensions.${serverId}', '["x"]');
+    INSERT INTO settings (key, value) VALUES ('server.for_you_locked.${serverId}', '{"loved":["${al}"]}');
     INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${al}', '${serverId}', 1);
     INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${serverId}', 'Artist', 1);
     INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${al}', '${serverId}', 1);
@@ -225,13 +226,13 @@ describe("purgeServerData", () => {
     expect(after).toEqual(before);
   });
 
-  it("deletes only its own opensub_extensions settings key", async () => {
+  it("deletes only its own per-server settings keys", async () => {
     seedServerRows(db(), SRV);
     seedServerRows(db(), OTHER);
     db().raw.exec("INSERT INTO settings (key, value) VALUES ('theme', 'dark')");
     await purgeServerData(asDb(db()), SRV);
     const keys = await db().select<{ key: string }[]>("SELECT key FROM settings ORDER BY key");
-    expect(keys.map((r) => r.key)).toEqual(["server.opensub_extensions.srv-b", "theme"]);
+    expect(keys.map((r) => r.key)).toEqual(["server.for_you_locked.srv-b", "server.opensub_extensions.srv-b", "theme"]);
   });
 
   it("leaves no track-keyed orphans behind", async () => {

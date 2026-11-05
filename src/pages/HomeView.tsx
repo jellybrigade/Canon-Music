@@ -266,12 +266,23 @@ export function HomeView({
     ],
   );
 
+  const forYouLoading = statsLoading || recentLoading || allLoading;
   const spotlightIds = useMemo(() => spotlightPicks.map((p) => p.album.id), [spotlightPicks]);
   const {
     groups: forYouGroups,
     perTab: forYouPerTab,
     setPerTab: setForYouPerTab,
-  } = useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
+    toggleLock: toggleForYouLock,
+    isLoading: forYouGroupsLoading,
+  } = useForYouGroups({
+    spotlightIds,
+    sources: forYouSources,
+    library: allAlbums,
+    config: categoryConfig,
+    serverId: server.id,
+    seed: forYouSeed,
+    isReady: !forYouLoading,
+  });
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const newAlbumsCheck = useNewAlbumsCheck({
@@ -440,11 +451,12 @@ export function HomeView({
               unlocked edit state. */}
           <ForYouRail
             groups={forYouGroups}
-            isLoading={statsLoading || recentLoading || allLoading}
+            isLoading={forYouGroupsLoading}
             serverWithCred={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
             onRefresh={refreshForYou}
+            onToggleLock={toggleForYouLock}
             onCardContextMenu={openCardContextMenu}
             config={categoryConfig}
             onConfigChange={handleForYouConfigChange}
