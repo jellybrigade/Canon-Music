@@ -5,6 +5,7 @@ mod keychain;
 mod library_read;
 mod library_write;
 mod net_probe;
+mod quit;
 mod settings_backup;
 mod stream_classify;
 mod streaming;
@@ -167,6 +168,7 @@ pub fn run() {
             visualizer,
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .manage(quit::QuitState::default())
         .manage(library_read::LibraryReadStore::default())
         .manage(library_write::LibraryWriteStore::default())
         .manage(CoverState {
@@ -205,7 +207,7 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "quit" => app.exit(0),
+                    "quit" => quit::request_quit(app),
                     "show" => {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.show();
@@ -270,6 +272,9 @@ pub fn run() {
                 if let Some(state) = window.app_handle().try_state::<AudioState>() {
                     state.visualizer.set_active(false);
                 }
+                if let Some(state) = window.app_handle().try_state::<quit::QuitState>() {
+                    state.forget_listener();
+                }
             }
             // Fires on every reload, not just the first (window is created hidden); show() on an
             // already-visible window is a no-op, and nothing hides it, so a reload can't unmap it.
@@ -277,11 +282,15 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if let Some(state) = window.app_handle().try_state::<TrayState>() {
-                    if state.close_to_tray.load(Ordering::Relaxed) {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    }
+                api.prevent_close();
+                let is_close_to_tray = window
+                    .app_handle()
+                    .try_state::<TrayState>()
+                    .is_some_and(|state| state.close_to_tray.load(Ordering::Relaxed));
+                if is_close_to_tray {
+                    let _ = window.hide();
+                } else {
+                    quit::request_quit(window.app_handle());
                 }
             }
         })
@@ -309,6 +318,8 @@ pub fn run() {
             tray::tray_update,
             tray::tray_set_visible,
             tray::tray_set_close_to_tray,
+            quit::quit_listener_ready,
+            quit::quit_ready,
             cover::set_cover_proxy_config,
             cover_override::sync_cover_overrides,
             cover_override::save_album_cover_override,

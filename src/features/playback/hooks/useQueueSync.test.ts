@@ -24,6 +24,7 @@ import { getPlayQueue, type SavedPlayQueue, savePlayQueue } from "../../../clien
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { runQuitFlushes } from "../../../lib/quitFlush";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import type { Server } from "../../../types/server";
 import { usePlayerStore } from "../store/player";
@@ -414,7 +415,7 @@ describe("useQueueSync restored session", () => {
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     await act(async () => {
       document.dispatchEvent(new Event("visibilitychange"));
-      window.dispatchEvent(new Event("beforeunload"));
+      await runQuitFlushes(1000);
     });
 
     expect(savePlayQueue).not.toHaveBeenCalled();
@@ -429,7 +430,7 @@ describe("useQueueSync restored session", () => {
       usePlayerStore.setState({ isPlaying: true, elapsed: 3 });
     });
     await act(async () => {
-      window.dispatchEvent(new Event("beforeunload"));
+      await runQuitFlushes(1000);
     });
 
     expect(savePlayQueue).toHaveBeenCalledTimes(1);
@@ -478,16 +479,44 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
     expect(savePlayQueue).not.toHaveBeenCalled();
   });
 
-  it("saves immediately on beforeunload", async () => {
+  it("saves immediately on quit", async () => {
     const track = makeTrack("srv-a:t1");
     usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     renderSync(swc());
     await act(async () => {
-      window.dispatchEvent(new Event("beforeunload"));
+      await runQuitFlushes(1000);
     });
 
     expect(savePlayQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds quit until the queue save finishes", async () => {
+    const track = makeTrack("srv-a:t1");
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
+    let finishSave: () => void = () => {};
+    vi.mocked(savePlayQueue).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+
+    renderSync(swc());
+    let isQuitDone = false;
+    const quit = runQuitFlushes(1000).then(() => {
+      isQuitDone = true;
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(isQuitDone).toBe(false);
+    finishSave();
+    await act(async () => {
+      await quit;
+    });
+
+    expect(isQuitDone).toBe(true);
   });
 
   it("does nothing on an immediate save when there is no current track", async () => {
@@ -495,7 +524,7 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
 
     renderSync(swc());
     await act(async () => {
-      window.dispatchEvent(new Event("beforeunload"));
+      await runQuitFlushes(1000);
     });
 
     expect(savePlayQueue).not.toHaveBeenCalled();
@@ -509,7 +538,7 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
     unmount();
 
     await act(async () => {
-      window.dispatchEvent(new Event("beforeunload"));
+      await runQuitFlushes(1000);
     });
 
     expect(savePlayQueue).not.toHaveBeenCalled();

@@ -64,6 +64,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useGenres } from "./hooks/useGenres";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useLoved } from "./hooks/useLoved";
+import { useQuitHandshake } from "./hooks/useQuitHandshake";
 import { useRemoteNotice } from "./hooks/useRemoteNotice";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
@@ -94,6 +95,7 @@ function runBackgroundUpdateCheck(onFound: (update: Update) => void): void {
 export default function App() {
   useWakeLock();
   useAppActivityTracking();
+  useQuitHandshake();
   useRadio();
   useBackgroundNormalizer();
 

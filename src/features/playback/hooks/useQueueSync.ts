@@ -3,6 +3,7 @@ import { getPlayQueue, savePlayQueue } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { onQuit } from "../../../lib/quitFlush";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
 import { makeStreamUrlBuilder } from "../../../lib/track";
 import { usePlayerStore } from "../store/player";
@@ -137,20 +138,20 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     // meant the server kept the stale order.
   }, [serverWithCred, currentTrack?.id, queue, hasPlayed]);
 
-  // Save immediately on visibility change (tab loses focus) or page unload
+  // Save immediately on visibility change (tab loses focus) or quit
   useEffect(() => {
     if (!serverWithCred) return;
     const { server, credential } = serverWithCred;
 
-    function saveNow() {
+    function saveNow(): Promise<void> {
       const { queue: q, currentTrack: ct, elapsed: el } = usePlayerStore.getState();
-      if (!ct || q.length === 0 || !hasPlayedRef.current) return;
+      if (!ct || q.length === 0 || !hasPlayedRef.current) return Promise.resolve();
       const prefix = `${server.id}:`;
       const nativeIds = q
         .map((t) => (t.id.startsWith(prefix) ? t.id.slice(prefix.length) : null))
         .filter((id): id is string => id != null);
       const currentNativeId = ct.id.startsWith(prefix) ? ct.id.slice(prefix.length) : null;
-      savePlayQueue(
+      return savePlayQueue(
         server.url,
         server.username,
         credential,
@@ -162,14 +163,14 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     }
 
     function onVisibilityChange() {
-      if (document.visibilityState === "hidden") saveNow();
+      if (document.visibilityState === "hidden") void saveNow();
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("beforeunload", saveNow);
+    const stopQuitFlush = onQuit(saveNow);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("beforeunload", saveNow);
+      stopQuitFlush();
     };
   }, [serverWithCred?.server.id]);
 }

@@ -50,6 +50,7 @@ Rust (`src-tauri/src/`):
 | `net_probe.rs` | `probe_server`: reqwest reachability check to tell webview proxy (PAC) hangs from real outages. |
 | `settings_backup.rs` | `save_settings_backup`: opens the save dialog (`tauri-plugin-dialog`, Rust side only, no webview permission) and writes the backup JSON to the picked path; returns the path, or null on cancel. |
 | `tray.rs` | Tray menu, `tray_update`, `tray_set_visible`, `tray_set_close_to_tray`; emits `tray-action`. |
+| `quit.rs` | Quit handshake: window close (unless close-to-tray) and tray Quit emit `quit-requested`; `useQuitHandshake` runs `runQuitFlushes` (`src/lib/quitFlush.ts`, 3s cap: debounced queue/volume writes, server queue save) then `quit_ready`. Exits at once if no listener reported via `quit_listener_ready` (reset on page load); 5s watchdog otherwise. |
 | `library_read/` | `LibraryReadStore` (lazy rusqlite conn, READ_WRITE for WAL, no CREATE). `get_albums`, `get_artists`, `get_tracks`, `get_all_tracks`, `get_genres`, `get_recent_genres`, `get_loved`, `get_playlists`, `get_unmapped_tag_count`. |
 | `library_write/` | `LibraryWriteStore`. Transactions: `playlist_append_tracks`, `playlist_remove_track`, `delete_user_tree_node`, `carry_genre_renames`, `repair_dangling_genre_id`, `remap_track_ids`, `merge_artist`. |
 

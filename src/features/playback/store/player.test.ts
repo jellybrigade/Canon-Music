@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
 import { getDb } from "../../../db";
+import { runQuitFlushes } from "../../../lib/quitFlush";
 import { emitTauriEvent, invoke, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { usePlayerStore } from "./player";
 import { runtime } from "./playerRuntime";
@@ -2173,5 +2174,29 @@ describe("player store - startRadioFrom", () => {
     expect(state.queueIndex).toBe(1);
     expect(state.radioSeed).toBe(current);
     expect(audioPlayCount()).toBe(0);
+  });
+});
+
+describe("player store - quit flush", () => {
+  it("writes a queue edit still waiting on its debounce before quit finishes", async () => {
+    const db = mockDb();
+    usePlayerStore.getState().addToQueue(makeTrack("late"), streamUrlFor);
+    expect(db.execute).not.toHaveBeenCalled();
+
+    await runQuitFlushes(1000);
+
+    const queueWrites = db.execute.mock.calls.filter(
+      ([, params]) => params[0] !== undefined && String(params[0]).includes('"late"'),
+    );
+    expect(queueWrites).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("writes nothing on quit when no edit is pending", async () => {
+    const db = mockDb();
+
+    await runQuitFlushes(1000);
+
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });

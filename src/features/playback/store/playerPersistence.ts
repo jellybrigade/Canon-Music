@@ -1,4 +1,5 @@
 import { getDb } from "../../../db";
+import { onQuit } from "../../../lib/quitFlush";
 import { runtime } from "./playerRuntime";
 import type { PlayerGet, QueueSnapshot } from "./playerTypes";
 
@@ -67,19 +68,20 @@ export function createPlayerPersistence(get: PlayerGet) {
     }, 500);
   }
 
-  // Flush the debounced writes on quit so a skip/shuffle/volume change right before close
-  // isn't lost.
-  window.addEventListener("beforeunload", () => {
+  // A skip, shuffle or volume change right before close is still waiting on its debounce.
+  onQuit(async () => {
+    const writes: Promise<void>[] = [];
     if (runtime.queuePersistTimer) {
       clearTimeout(runtime.queuePersistTimer);
       runtime.queuePersistTimer = null;
-      void persistQueueStateNow();
+      writes.push(persistQueueStateNow());
     }
     if (runtime.volumePersistTimer) {
       clearTimeout(runtime.volumePersistTimer);
       runtime.volumePersistTimer = null;
-      void persistVolumeNow(get().volume);
+      writes.push(persistVolumeNow(get().volume));
     }
+    await Promise.all(writes);
   });
 
   return { persistRadioState, persistQueueState, persistVolume };
