@@ -34,6 +34,15 @@
   color: var(--text-primary);
 }
 
+.artist-hero-facts {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .artist-hero-genres {
   font-size: var(--text-base);
   font-weight: 500;

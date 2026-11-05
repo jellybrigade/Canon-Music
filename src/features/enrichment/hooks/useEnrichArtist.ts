@@ -22,6 +22,7 @@ import {
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
+import { type ArtistFacts, fetchArtistFacts } from "../lib/artistFacts";
 import { fetchArtistListening, similarJson } from "../lib/artistListening";
 import { similarity } from "../lib/fuzzyMatch";
 
@@ -67,11 +68,18 @@ export interface ArtistEnrichmentRow {
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
   navidrome_image_url: string | null;
+  artist_type: string | null;
+  country_code: string | null;
+  begin_year: number | null;
+  facts_source: string | null;
+  /** The match the facts were read under; facts for any other match are stale. */
+  facts_mb_artist_id: string | null;
   enriched_at: number | null;
 }
 
-function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): boolean {
+function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number, includeFacts: boolean): boolean {
   if (!row || row.enriched_at === null) return true;
+  if (includeFacts && row.mb_artist_id && row.facts_mb_artist_id !== row.mb_artist_id) return true;
   return Date.now() - row.enriched_at * 1000 > staleDays * 24 * 60 * 60 * 1000;
 }
 
@@ -188,6 +196,8 @@ interface EnrichArtistOptions {
   hasWikidataImage: boolean;
   serverWithCredential: ServerWithCredential | null;
   minAutoSelectScore: number;
+  /** Type, country and starting year; only the artist page shows them, so cards skip the request. */
+  includeFacts: boolean;
 }
 
 async function enrichArtist({
@@ -197,6 +207,7 @@ async function enrichArtist({
   hasWikidataImage,
   serverWithCredential,
   minAutoSelectScore,
+  includeFacts,
 }: EnrichArtistOptions): Promise<{ isIdentityLookupIncomplete: boolean }> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
   // A confident MusicBrainz score wins outright; otherwise local album overlap decides.
@@ -223,10 +234,17 @@ async function enrichArtist({
     }
   }
 
-  const [listening, wikidataImageUrl] = await Promise.all([
+  let isFactsLookupIncomplete = false;
+  const [listening, wikidataImageUrl, facts] = await Promise.all([
     fetchArtistListening({ artistName, lastfmName, mbid: resolvedMbid }),
     resolvedMbid && !hasWikidataImage
       ? fetchWikidataImageByMbid(resolvedMbid).catch(markIncomplete)
+      : Promise.resolve(null),
+    includeFacts && resolvedMbid
+      ? fetchArtistFacts(resolvedMbid).catch((): ArtistFacts | null => {
+          isFactsLookupIncomplete = true;
+          return null;
+        })
       : Promise.resolve(null),
   ]);
   const { info, similar, listenBrainz } = listening;
@@ -286,15 +304,21 @@ async function enrichArtist({
   const hasListeningData =
     !!(info.bio || info.listeners) || (similar?.length ?? 0) > 0 || listenBrainz?.listens != null;
   const isLookupComplete =
-    listening.isComplete && (hasPortrait || !isPortraitLookupIncomplete) && (!!finalBio || !isBioLookupIncomplete);
+    listening.isComplete &&
+    (hasPortrait || !isPortraitLookupIncomplete) &&
+    (!!finalBio || !isBioLookupIncomplete) &&
+    !isFactsLookupIncomplete;
   const enrichedAt = hasListeningData && isLookupComplete ? Math.floor(Date.now() / 1000) : null;
+  // Only an answer replaces stored facts; a skipped or failed lookup keeps them.
+  const isFactsAnswer = facts !== null ? 1 : 0;
 
   await db.execute(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
-        wikidata_image_url, navidrome_image_url, listenbrainz_listens, enriched_at)
-     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        wikidata_image_url, navidrome_image_url, listenbrainz_listens,
+        artist_type, country_code, begin_year, facts_source, facts_mb_artist_id, enriched_at)
+     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
        mb_artist_id = COALESCE(artist_identity.mb_artist_id, excluded.mb_artist_id),
        bio = CASE WHEN ? THEN excluded.bio ELSE COALESCE(excluded.bio, artist_identity.bio) END,
@@ -306,6 +330,11 @@ async function enrichArtist({
        wikidata_image_url = COALESCE(excluded.wikidata_image_url, artist_identity.wikidata_image_url),
        navidrome_image_url = COALESCE(excluded.navidrome_image_url, artist_identity.navidrome_image_url),
        listenbrainz_listens = CASE WHEN ? THEN excluded.listenbrainz_listens ELSE artist_identity.listenbrainz_listens END,
+       artist_type = CASE WHEN ? THEN excluded.artist_type ELSE artist_identity.artist_type END,
+       country_code = CASE WHEN ? THEN excluded.country_code ELSE artist_identity.country_code END,
+       begin_year = CASE WHEN ? THEN excluded.begin_year ELSE artist_identity.begin_year END,
+       facts_source = CASE WHEN ? THEN excluded.facts_source ELSE artist_identity.facts_source END,
+       facts_mb_artist_id = CASE WHEN ? THEN excluded.facts_mb_artist_id ELSE artist_identity.facts_mb_artist_id END,
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
@@ -319,10 +348,20 @@ async function enrichArtist({
       imageUrl,
       navidromeImageUrl,
       listenBrainz?.listens ?? null,
+      facts?.type ?? null,
+      facts?.countryCode ?? null,
+      facts?.beginYear ?? null,
+      facts?.source ?? null,
+      facts ? resolvedMbid : null,
       enrichedAt,
       isBioLookupIncomplete ? 0 : 1,
       similar !== null ? 1 : 0,
       listenBrainz !== null ? 1 : 0,
+      isFactsAnswer,
+      isFactsAnswer,
+      isFactsAnswer,
+      isFactsAnswer,
+      isFactsAnswer,
     ],
   );
   return { isIdentityLookupIncomplete };
@@ -330,9 +369,15 @@ async function enrichArtist({
 
 export function useEnrichArtist(
   artistName: string,
-  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential; identifyIfUnidentified?: boolean },
+  options?: {
+    enabled?: boolean;
+    serverWithCredential?: ServerWithCredential;
+    identifyIfUnidentified?: boolean;
+    includeFacts?: boolean;
+  },
 ) {
   const enabled = options?.enabled ?? true;
+  const includeFacts = options?.includeFacts ?? false;
   const identifyIfUnidentified = options?.identifyIfUnidentified ?? false;
   const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
@@ -370,7 +415,7 @@ export function useEnrichArtist(
   useEffect(() => {
     if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded || !isStaleDaysLoaded) return;
     const needsIdentify = identifyIfUnidentified && !query.data?.mb_artist_id && !identifyAttempted.has(artistName);
-    if (!isEnrichmentStale(query.data ?? null, staleDays) && !needsIdentify) return;
+    if (!isEnrichmentStale(query.data ?? null, staleDays, includeFacts) && !needsIdentify) return;
     if (ranRef.current === artistName) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
     // permanently prevent this mount from retrying.
@@ -400,6 +445,7 @@ export function useEnrichArtist(
           hasWikidataImage,
           serverWithCredential,
           minAutoSelectScore,
+          includeFacts,
         });
         if (isIdentityLookupIncomplete) identifyAttempted.delete(artistName);
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
@@ -428,6 +474,7 @@ export function useEnrichArtist(
     minAutoSelectScore,
     isMinAutoSelectScoreLoaded,
     identifyIfUnidentified,
+    includeFacts,
   ]);
 
   const refresh = useCallback(async () => {
@@ -446,6 +493,7 @@ export function useEnrichArtist(
         hasWikidataImage,
         serverWithCredential,
         minAutoSelectScore,
+        includeFacts,
       });
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
       useArtistBrowseSessionStore.getState().bumpRefresh();
@@ -455,7 +503,7 @@ export function useEnrichArtist(
     } finally {
       setIsRefreshing(false);
     }
-  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential, minAutoSelectScore]);
+  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential, minAutoSelectScore, includeFacts]);
 
   return { data: query.data ?? null, isLoading: query.isLoading, isRefreshing, error, refresh };
 }

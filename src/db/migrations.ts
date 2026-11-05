@@ -987,6 +987,16 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
     `,
   },
+  {
+    version: 68,
+    sql: `
+      ALTER TABLE artist_identity ADD COLUMN artist_type TEXT;
+      ALTER TABLE artist_identity ADD COLUMN country_code TEXT;
+      ALTER TABLE artist_identity ADD COLUMN begin_year INTEGER;
+      ALTER TABLE artist_identity ADD COLUMN facts_source TEXT;
+      ALTER TABLE artist_identity ADD COLUMN facts_mb_artist_id TEXT;
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

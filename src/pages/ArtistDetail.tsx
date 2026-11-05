@@ -14,6 +14,7 @@ import {
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
 import { useTourEvents } from "../features/enrichment/hooks/useTourEvents";
+import { artistFactsLine, storedArtistFacts } from "../features/enrichment/lib/artistFacts";
 import { usePlayerStore } from "../features/playback/store/player";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
@@ -76,7 +77,11 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     isRefreshing,
     error: enrichError,
     refresh,
-  } = useEnrichArtist(artist.name, { serverWithCredential, identifyIfUnidentified: true });
+  } = useEnrichArtist(artist.name, {
+    serverWithCredential,
+    identifyIfUnidentified: true,
+    includeFacts: true,
+  });
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -184,6 +189,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   );
   const effectiveSimilarTab = similarInLibrary.length === 0 ? "out" : similarTab;
   const bio = enrichment?.bio ?? null;
+  const storedFacts = enrichment ? storedArtistFacts(enrichment) : null;
+  const factsLine = storedFacts ? artistFactsLine(storedFacts) : null;
 
   const metaItems: string[] = [
     enrichment?.listeners != null
@@ -273,6 +280,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           {heroArt}
           <div className="artist-hero-info">
             <h1 className="artist-hero-name">{artist.name}</h1>
+            {factsLine && <p className="artist-hero-facts">{factsLine}</p>}
             <div className="artist-hero-meta-row">
               {metaItems.map((item, i) => (
                 <span key={i}>{i > 0 ? `· ${item}` : item}</span>

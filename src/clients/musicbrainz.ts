@@ -81,6 +81,11 @@ export interface MbArtistDetail {
   disambiguation: string | null;
   country: string | null;
   genres: MbGenre[];
+  /** "Person", "Group", "Orchestra", "Choir", "Character" or "Other". */
+  type: string | null;
+  /** Birth or formation date, as precise as MusicBrainz knows it ("1991", "1998-05-07"). */
+  lifeSpanBegin: string | null;
+  wikidataId: string | null;
 }
 
 /** A MusicBrainz answer other than 2xx; `status` tells an id MusicBrainz doesn't know (404) from a busy server. */
@@ -294,17 +299,36 @@ export async function fetchArtistReleaseGroupTitles(artistMbid: string): Promise
   return titles;
 }
 
-interface MbLookupArtistResponse {
+interface MbUrlRelationsResponse {
+  relations?: Array<{ type?: string; url?: { resource?: string } }>;
+}
+
+const WIKIDATA_ITEM_URL = /^https?:\/\/www\.wikidata\.org\/wiki\/(Q\d+)$/;
+const DISCOGS_MASTER_URL = /^https?:\/\/www\.discogs\.com\/master\/(\d+)$/;
+
+/** The id `pattern` captures from the first link of `type`, or null without one. */
+function linkId(data: MbUrlRelationsResponse, type: string, pattern: RegExp): string | null {
+  for (const relation of data.relations ?? []) {
+    if (relation.type !== type) continue;
+    const id = pattern.exec(relation.url?.resource ?? "")?.[1];
+    if (id) return id;
+  }
+  return null;
+}
+
+interface MbLookupArtistResponse extends MbUrlRelationsResponse {
   id: string;
   name: string;
   disambiguation?: string;
   country?: string;
+  type?: string | null;
+  "life-span"?: { begin?: string | null };
   genres?: Array<{ name: string; count: number }>;
 }
 
 export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> {
   const data = await mbGet<MbLookupArtistResponse>(`artist/${artistMbid}`, {
-    inc: "genres",
+    inc: "genres+url-rels",
   });
 
   return {
@@ -313,15 +337,11 @@ export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> 
     disambiguation: data.disambiguation ?? null,
     country: data.country ?? null,
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+    type: data.type ?? null,
+    lifeSpanBegin: data["life-span"]?.begin ?? null,
+    wikidataId: linkId(data, "wikidata", WIKIDATA_ITEM_URL),
   };
 }
-
-interface MbUrlRelationsResponse {
-  relations?: Array<{ type?: string; url?: { resource?: string } }>;
-}
-
-const WIKIDATA_ITEM_URL = /^https?:\/\/www\.wikidata\.org\/wiki\/(Q\d+)$/;
-const DISCOGS_MASTER_URL = /^https?:\/\/www\.discogs\.com\/master\/(\d+)$/;
 
 /** The id captured from the release group's first link of `type` that `pattern` reads; rejects when MusicBrainz didn't answer. */
 async function fetchReleaseGroupLinkId(
@@ -331,12 +351,7 @@ async function fetchReleaseGroupLinkId(
 ): Promise<string | null> {
   if (!isMbid(releaseGroupMbid)) return null;
   const data = await mbGet<MbUrlRelationsResponse>(`release-group/${releaseGroupMbid}`, { inc: "url-rels" });
-  for (const relation of data.relations ?? []) {
-    if (relation.type !== type) continue;
-    const id = pattern.exec(relation.url?.resource ?? "")?.[1];
-    if (id) return id;
-  }
-  return null;
+  return linkId(data, type, pattern);
 }
 
 /** The Wikidata item a release group links to, or null without one. Rejects when MusicBrainz didn't answer. */
