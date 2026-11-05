@@ -171,24 +171,24 @@ export function removeTrackFromNavidromePlaylist(
   );
 }
 
+/** `createPlaylist` naming an existing playlist replaces its whole list, so no stored count
+ *  of what the server holds can leave entries behind. */
 export async function replaceNavidromePlaylistTracks(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
   nativePlaylistId: string,
   nativeTrackIds: string[],
-  currentTrackCount: number,
   altUrl?: string,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   params.set("playlistId", nativePlaylistId);
-  for (let i = 0; i < currentTrackCount; i++) params.append("songIndexToRemove", String(i));
-  for (const id of nativeTrackIds) params.append("songIdToAdd", id);
-  const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
-  if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
+  for (const id of nativeTrackIds) params.append("songId", id);
+  const res = await apiPost(baseUrl, "createPlaylist", params, altUrl);
+  if (!res.ok) throw new Error(`createPlaylist returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { code?: number; message?: string } };
   };
   const response = data["subsonic-response"];
-  checkEnvelope(baseUrl, "updatePlaylist", response, "updatePlaylist failed");
+  checkEnvelope(baseUrl, "createPlaylist", response, "createPlaylist failed");
 }

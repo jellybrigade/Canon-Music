@@ -229,4 +229,8 @@ describe("buildSmartQuery on tied and album-less tracks", () => {
       expect(await run(filters({ sort, titleContains: "Same", limit: 2 })), sort).toEqual(["srv:t1", "srv:t2"]);
     }
   });
+
+  it("keeps tracks with no album when excluding a genre", async () => {
+    expect(await run(filters({ selectedGenres: ["art-rock"], genreMode: "exclude" }))).toEqual(["srv:loose"]);
+  });
 });

@@ -31,7 +31,7 @@ import {
   songExists,
   starTrack,
 } from "./navidrome";
-import { addTrackToNavidromePlaylist, fetchPlaylists } from "./navidromePlaylists";
+import { addTrackToNavidromePlaylist, fetchPlaylists, replaceNavidromePlaylistTracks } from "./navidromePlaylists";
 import { SubsonicError } from "./navidromeTransport";
 import type { NavidromeCredential } from "./navidromeUrls";
 
@@ -601,6 +601,21 @@ describe("a newer write to the same thing", () => {
     await expect(settle(older)).resolves.toBeUndefined();
     await settle(newer);
     expect(bodies().map((b) => b.get("current"))).toEqual(["old", "new"]);
+  });
+});
+
+describe("replaceNavidromePlaylistTracks", () => {
+  it("replaces the server's whole list without trusting a locally stored count", async () => {
+    // Removing indices 0..n-1 by the local count left any surplus on a longer server list,
+    // and the playlist grew on every smart refresh.
+    fetchMock.mockImplementation(() => Promise.resolve(ok()));
+
+    await settle(replaceNavidromePlaylistTracks(BASE, "alice", cred, "pl-1", ["a", "b"]));
+
+    expect(urls()).toEqual([`${BASE}/rest/createPlaylist`]);
+    expect(body().get("playlistId")).toBe("pl-1");
+    expect(body().getAll("songId")).toEqual(["a", "b"]);
+    expect(body().has("songIndexToRemove")).toBe(false);
   });
 });
 

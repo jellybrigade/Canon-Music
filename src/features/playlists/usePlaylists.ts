@@ -258,7 +258,6 @@ export function usePlaylists() {
       credential,
       nativePlaylistId,
       nativeTrackIds,
-      playlist.track_count,
       server.alt_url ?? undefined,
     );
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);

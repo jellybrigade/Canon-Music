@@ -115,7 +115,7 @@ export function buildSmartQuery(filters: SmartFilters, serverId: string): { sql:
       );
     } else {
       conditions.push(
-        `t.album_id NOT IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders}))`,
+        `(t.album_id IS NULL OR t.album_id NOT IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders})))`,
       );
     }
     params.push(...filters.selectedGenres);
