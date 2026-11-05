@@ -16,7 +16,8 @@ type AliasFoldedRoot =
   | ReturnType<typeof QK.artistGenres>[0]
   | ReturnType<typeof QK.artistAppearsOn>[0]
   | ReturnType<typeof QK.similarArtistAlbums>[0]
-  | ReturnType<typeof QK.similarInLibrary>[0];
+  | ReturnType<typeof QK.similarInLibrary>[0]
+  | ReturnType<typeof QK.artistByName>[0];
 
 // Reads that fold aliases into their canonical artist: a merge or unmerge changes every one of them.
 const ALIAS_FOLDED_ROOTS: ReadonlySet<unknown> = new Set<AliasFoldedRoot>([
@@ -26,6 +27,7 @@ const ALIAS_FOLDED_ROOTS: ReadonlySet<unknown> = new Set<AliasFoldedRoot>([
   "artist-appears-on",
   "similar-artist-albums",
   "similar-in-library",
+  "artists",
 ]);
 
 function refreshAliasReads(qc: QueryClient) {

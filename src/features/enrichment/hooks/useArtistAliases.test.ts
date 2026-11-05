@@ -27,6 +27,7 @@ const aliasFoldedKeys = [
   QK.artistAppearsOn("Kanye West", "s1"),
   QK.similarArtistAlbums(["Kanye West"], "s1"),
   QK.similarInLibrary(["kanye west"]),
+  QK.artistByName("Kanye West", "s1"),
 ];
 
 function seedAliasFoldedReads() {

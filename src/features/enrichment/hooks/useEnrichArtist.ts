@@ -1,7 +1,7 @@
 // On open, refreshes a stale artist_identity row from Last.fm artist.getInfo, preserving
 // MB columns. Failures are silent.
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchFanartTvImageByMbid, getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
@@ -367,6 +367,16 @@ async function enrichArtist({
   return { isIdentityLookupIncomplete };
 }
 
+// The artist page's hero row and the artists grid/search each read portraits off their own query,
+// so a fresh portrait shows up there only once those are refreshed too.
+async function refreshPortraitReads(queryClient: QueryClient, artistName: string): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) }),
+    queryClient.invalidateQueries({ queryKey: QK.artists() }),
+  ]);
+  useArtistBrowseSessionStore.getState().bumpRefresh();
+}
+
 export function useEnrichArtist(
   artistName: string,
   options?: {
@@ -448,10 +458,7 @@ export function useEnrichArtist(
           includeFacts,
         });
         if (isIdentityLookupIncomplete) identifyAttempted.delete(artistName);
-        await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
-        // The artists grid/search reads portraits off its own query (joined once, not per-artist),
-        // so a fresh portrait doesn't show up there until that list is invalidated too.
-        useArtistBrowseSessionStore.getState().bumpRefresh();
+        await refreshPortraitReads(queryClient, artistName);
       } catch {
         // Nothing here moves a dep, so the claim has to be released or this mount
         // never retries a transient Last.fm failure.
@@ -495,8 +502,7 @@ export function useEnrichArtist(
         minAutoSelectScore,
         includeFacts,
       });
-      await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
-      useArtistBrowseSessionStore.getState().bumpRefresh();
+      await refreshPortraitReads(queryClient, artistName);
     } catch (e) {
       console.error("[useEnrichArtist] refresh failed:", e);
       setError(errorMessage(e));

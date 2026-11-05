@@ -120,6 +120,13 @@ describe("useEnrichArtist", () => {
     await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
   });
 
+  it("refreshes the artist page's own row once a new portrait is stored", async () => {
+    queryClient.setQueryData(QK.artistByName("Slowdive", "s1"), null);
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(queryClient.getQueryState(QK.artistByName("Slowdive", "s1"))?.isInvalidated).toBe(true));
+  });
+
   it("leaves an artist enriched within the stored staleness window alone, even before it is read back", async () => {
     const sixtyDaysAgo = Math.floor(Date.now() / 1000) - 60 * 24 * 60 * 60;
     db.raw
