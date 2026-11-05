@@ -62,21 +62,18 @@ export const SORT_OPTIONS = [
   { value: "-title", label: "Title Z→A" },
 ] as const;
 
+const SORT_SQL: Record<string, string> = {
+  "+title": "t.title ASC",
+  "-title": "t.title DESC",
+  "-year": "t.year DESC",
+  "+year": "t.year ASC",
+  "-playcount": "t.play_count DESC",
+};
+
+// The id tiebreak keeps the LIMIT cut the same on every refresh; most tracks tie on plays and year.
 function sortToSql(sort: string): string {
-  switch (sort) {
-    case "+title":
-      return "t.title ASC";
-    case "-title":
-      return "t.title DESC";
-    case "-year":
-      return "t.year DESC";
-    case "+year":
-      return "t.year ASC";
-    case "-playcount":
-      return "t.play_count DESC";
-    default:
-      return "RANDOM()";
-  }
+  const order = SORT_SQL[sort];
+  return order ? `${order}, t.id` : "RANDOM()";
 }
 
 export function buildSmartQuery(filters: SmartFilters, serverId: string): { sql: string; params: (string | number)[] } {
@@ -131,6 +128,6 @@ export function buildSmartQuery(filters: SmartFilters, serverId: string): { sql:
   const needsAlbumJoin = filters.albumContains.trim() !== "";
   const joinClause = needsAlbumJoin ? "LEFT JOIN albums a ON t.album_id = a.id" : "";
 
-  const sql = `SELECT DISTINCT t.id FROM tracks t ${joinClause} WHERE ${where} ORDER BY ${order} LIMIT ${limit}`;
+  const sql = `SELECT t.id FROM tracks t ${joinClause} WHERE ${where} ORDER BY ${order} LIMIT ${limit}`;
   return { sql, params };
 }

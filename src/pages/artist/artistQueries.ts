@@ -65,7 +65,7 @@ export function useArtistSeedTrack(artistName: string, serverId: string, options
          WHERE t.server_id = ?
            AND (t.artist = ?
             OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
-         ORDER BY t.play_count DESC, t.track_number, t.title
+         ORDER BY t.play_count DESC, t.track_number, t.title, t.id
          LIMIT 1`,
         [serverId, artistName, artistName],
       );
@@ -80,7 +80,7 @@ export function useArtistGenres(artistName: string, serverId: string) {
     queryFn: async (): Promise<string[]> => {
       const db = await getDb();
       const rows = await db.select<{ name: string }[]>(
-        `SELECT ag.name, COUNT(DISTINCT ag.album_id) AS n
+        `SELECT MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS n
          FROM album_genres ag
          JOIN albums a ON a.id = ag.album_id
          WHERE a.server_id = ?
@@ -88,7 +88,7 @@ export function useArtistGenres(artistName: string, serverId: string) {
            AND ag.relation = 'direct'
            AND ag.canonical_id NOT LIKE 'raw:%'
          GROUP BY ag.canonical_id
-         ORDER BY n DESC
+         ORDER BY n DESC, name, ag.canonical_id
          LIMIT 5`,
         [serverId, artistName, artistName],
       );
@@ -112,7 +112,7 @@ export function useAppearsOnAlbums(artistName: string, serverId: string) {
            AND a.artist IS NOT NULL
            AND a.artist != ?
            AND a.artist NOT IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
-         ORDER BY a.year IS NULL, a.year DESC, a.name
+         ORDER BY a.year IS NULL, a.year DESC, a.name, a.id
          LIMIT 24`,
         [serverId, artistName, artistName, artistName, artistName],
       );

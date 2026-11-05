@@ -3,6 +3,7 @@ import { lazy, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CredentialNotice } from "../components/CredentialNotice";
 import { getDb } from "../db";
+import { type ArtistByNameRow, readArtistByName } from "../db/artistByName";
 import type { PlaylistRow, usePlaylists } from "../features/playlists/usePlaylists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { QK } from "../lib/queryKeys";
@@ -140,28 +141,10 @@ export function ArtistDetailRoute({
   // Decoding a second time threw `URIError` on any name holding a literal `%` - in the
   // render body, so it took the whole tree down, not just this route.
   const decodedName = artistName ?? null;
-  const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistRow | null>({
+  const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistByNameRow | null>({
     queryKey: QK.artistByName(artistName, serverWithCred?.server.id),
     enabled: !!artistName && !!serverWithCred,
-    queryFn: async () => {
-      const db = await getDb();
-      const serverId = serverWithCred!.server.id;
-      // Matched case-insensitively: a Last.fm card's spelling can drift ("Tyler, The Creator"
-      // vs "Tyler, the Creator"); `a.name` is selected so downstream queries use the library's own spelling.
-      const rows = await db.select<ArtistRow[]>(
-        `SELECT a.name, a.album_count,
-           (SELECT al.artwork_url FROM albums al
-            WHERE al.artist = a.name AND al.server_id = a.server_id AND al.artwork_url IS NOT NULL
-            LIMIT 1) AS artwork_url,
-           ai.lastfm_image_url,
-           ai.wikidata_image_url
-         FROM artists a
-         LEFT JOIN artist_identity ai ON ai.artist_name = a.name
-         WHERE LOWER(TRIM(a.name)) = LOWER(TRIM(?)) AND a.server_id = ?`,
-        [decodedName!, serverId],
-      );
-      return rows[0] ?? null;
-    },
+    queryFn: async () => readArtistByName(await getDb(), decodedName!, serverWithCred!.server.id),
   });
   if (!serverWithCred) {
     return (
@@ -178,12 +161,13 @@ export function ArtistDetailRoute({
   if (artistPending) return <main className={`library${queueClass}`} />;
   // Recommended/similar artists aren't in the local `artists` table; synthesize a minimal row
   // (same shape as openArtist(string)) instead of hard-returning null (black screen).
-  const artist: ArtistRow = fetchedArtist ?? {
+  const artist: ArtistRow = {
     name: decodedName,
     album_count: 0,
     artwork_url: null,
     lastfm_image_url: null,
     wikidata_image_url: null,
+    ...fetchedArtist,
     navidrome_image_url: null,
     enriched_at: null,
   };

@@ -18,10 +18,10 @@ pub struct AlbumRowDto {
 // boundary as a plain string.
 fn order_by_clause(sort: &str) -> Result<&'static str, String> {
     match sort {
-        "artist" => Ok("a.artist COLLATE NOCASE, a.name COLLATE NOCASE"),
-        "alphabetical" => Ok("a.name COLLATE NOCASE"),
-        "year" => Ok("a.year DESC, a.name COLLATE NOCASE"),
-        "recently_added" => Ok("COALESCE(a.navidrome_created, a.created_at) DESC"),
+        "artist" => Ok("a.artist COLLATE NOCASE, a.name COLLATE NOCASE, a.id"),
+        "alphabetical" => Ok("a.name COLLATE NOCASE, a.id"),
+        "year" => Ok("a.year DESC, a.name COLLATE NOCASE, a.id"),
+        "recently_added" => Ok("COALESCE(a.navidrome_created, a.created_at) DESC, a.id"),
         other => Err(format!("unknown album sort: {other}")),
     }
 }
@@ -112,19 +112,19 @@ mod tests {
     fn each_allowlisted_sort_key_maps_to_its_own_order_by_fragment() {
         assert_eq!(
             order_by_clause("artist").unwrap(),
-            "a.artist COLLATE NOCASE, a.name COLLATE NOCASE"
+            "a.artist COLLATE NOCASE, a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("alphabetical").unwrap(),
-            "a.name COLLATE NOCASE"
+            "a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("year").unwrap(),
-            "a.year DESC, a.name COLLATE NOCASE"
+            "a.year DESC, a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("recently_added").unwrap(),
-            "COALESCE(a.navidrome_created, a.created_at) DESC"
+            "COALESCE(a.navidrome_created, a.created_at) DESC, a.id"
         );
     }
 
@@ -280,6 +280,26 @@ mod tests {
 
         let rows = query_albums(&conn, "recently_added", &[]).expect("query");
         assert_eq!(ids(&rows), ["s1:nav", "s1:local", "s1:older"]);
+    }
+
+    #[test]
+    fn every_sort_breaks_full_ties_by_album_id() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO albums (id, server_id, name, artist, year, created_at) VALUES
+               ('s2:al', 's2', 'Same', 'Same', 2020, '2026-01-01'),
+               ('s1:al', 's1', 'Same', 'Same', 2020, '2026-01-01')",
+        )
+        .expect("seed");
+
+        for sort in SORT_KEYS {
+            let rows = query_albums(&conn, sort, &[]).expect("query");
+            assert_eq!(
+                ids(&rows),
+                ["s1:al", "s2:al"],
+                "{sort} must order ties by id"
+            );
+        }
     }
 
     #[test]

@@ -88,7 +88,7 @@ export async function fetchArtistTopTracksForNowPlaying(
     `SELECT ${TRACK_COLUMNS}
      FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
      WHERE ${artistMatch}
-     ORDER BY t.track_number, t.title
+     ORDER BY t.track_number, t.title, t.id
      LIMIT 10`,
     featParams,
   );

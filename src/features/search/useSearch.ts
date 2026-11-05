@@ -55,7 +55,7 @@ const RANKED_CTE = `
     FROM tracks_fts fts
     JOIN tracks pooled ON pooled.id = fts.id
     WHERE tracks_fts MATCH ? AND pooled.server_id = ?
-    ORDER BY rank
+    ORDER BY rank, fts.id
     LIMIT ${RANKED_POOL}
   )`;
 
@@ -76,7 +76,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        JOIN albums a ON a.id = t.album_id
        WHERE a.server_id = ?
        GROUP BY a.id
-       ORDER BY rank
+       ORDER BY rank, a.id
        LIMIT ${SECTION_LIMIT}`,
       [fts, serverId, serverId],
     ),
@@ -89,7 +89,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        JOIN tracks t ON t.id = r.id
        LEFT JOIN albums a ON a.id = t.album_id
        WHERE t.server_id = ?
-       ORDER BY r.rank
+       ORDER BY r.rank, t.id
        LIMIT ${SECTION_LIMIT}`,
       [fts, serverId, serverId],
     ),
@@ -111,7 +111,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        LEFT JOIN artist_identity ai ON ai.artist_name = t.artist
        WHERE t.server_id = ? AND t.artist IS NOT NULL
        GROUP BY t.artist
-       ORDER BY rank
+       ORDER BY rank, t.artist
        LIMIT ${SECTION_LIMIT}`,
       [fts, serverId, serverId],
     ),

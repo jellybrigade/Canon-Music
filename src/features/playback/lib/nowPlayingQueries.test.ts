@@ -297,3 +297,25 @@ describe("server scoping", () => {
     expect(rows.map((r) => r.id)).toEqual(["alpha:t2"]);
   });
 });
+
+describe("fetchArtistTopTracksForNowPlaying: tied fallback order", () => {
+  it("orders tracks sharing a number and title by id, so the cut at ten is stable", async () => {
+    vi.clearAllMocks();
+    const db = await createMigratedTestDb();
+    vi.mocked(getDb).mockResolvedValue(db as never);
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({ source: "deezer", tracks: [] });
+    // Descending id order, so scan order disagrees with id order on the tie.
+    for (let i = 12; i >= 1; i--) {
+      db.raw
+        .prepare(
+          `INSERT INTO tracks (id, server_id, server_type, title, artist, track_number)
+           VALUES (?, 'srv', 'navidrome', 'Intro', 'Burial', 1)`,
+        )
+        .run(`srv:t${String(i).padStart(2, "0")}`);
+    }
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "srv");
+    expect(rows.map((r) => r.id)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `srv:t${String(i + 1).padStart(2, "0")}`),
+    );
+  });
+});
