@@ -1,5 +1,6 @@
 import { md5 } from "js-md5";
 import { noteEnvelope } from "../lib/credentialRejections";
+import { latestWrite } from "../lib/latestWrite";
 import type { ReleaseDateParts } from "../lib/releaseDate";
 import { apiPost, callSubsonicVoid, checkEnvelope, SubsonicError } from "./navidromeTransport";
 import { buildAuthParams, type NavidromeCredential, normalizeUrl } from "./navidromeUrls";
@@ -342,13 +343,16 @@ export function setRating(
   rating: number,
   altUrl?: string,
 ): Promise<void> {
-  return callSubsonicVoid(
-    baseUrl,
-    username,
-    credential,
-    "setRating.view",
-    { id: nativeTrackId, rating: String(rating) },
-    altUrl,
+  return latestWrite(`setRating|${normalizeUrl(baseUrl)}|${username}|${nativeTrackId}`, (signal) =>
+    callSubsonicVoid(
+      baseUrl,
+      username,
+      credential,
+      "setRating.view",
+      { id: nativeTrackId, rating: String(rating) },
+      altUrl,
+      signal,
+    ),
   );
 }
 
@@ -579,8 +583,9 @@ export async function savePlayQueue(
   for (const id of trackIds) params.append("id", id);
   if (currentId) params.set("current", currentId);
   params.set("position", String(Math.round(positionMs)));
-  const res = await apiPost(baseUrl, "savePlayQueue", params, altUrl);
-  if (!res.ok) return;
+  return latestWrite(`savePlayQueue|${normalizeUrl(baseUrl)}|${username}`, async (signal) => {
+    await apiPost(baseUrl, "savePlayQueue", params, altUrl, signal);
+  });
 }
 
 export async function getPlayQueue(

@@ -118,7 +118,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         : null;
 
       const { elapsed: el } = usePlayerStore.getState();
-      void savePlayQueue(
+      savePlayQueue(
         server.url,
         server.username,
         credential,
@@ -126,7 +126,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         currentNativeId,
         Math.round((el ?? 0) * 1000),
         server.alt_url ?? undefined,
-      );
+      ).catch((err: unknown) => console.warn("Saving the queue to the server failed", err));
     }, 10_000);
 
     return () => {
@@ -150,7 +150,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         .map((t) => (t.id.startsWith(prefix) ? t.id.slice(prefix.length) : null))
         .filter((id): id is string => id != null);
       const currentNativeId = ct.id.startsWith(prefix) ? ct.id.slice(prefix.length) : null;
-      void savePlayQueue(
+      savePlayQueue(
         server.url,
         server.username,
         credential,
@@ -158,7 +158,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         currentNativeId,
         Math.round((el ?? 0) * 1000),
         server.alt_url ?? undefined,
-      );
+      ).catch((err: unknown) => console.warn("Saving the queue to the server failed", err));
     }
 
     function onVisibilityChange() {

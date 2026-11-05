@@ -332,6 +332,18 @@ describe("useQueueSync debounced save", () => {
     ]);
   });
 
+  it("logs a save the server never took instead of leaving it unhandled", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(savePlayQueue).mockRejectedValue(new Error("savePlayQueue failed after 3 attempts"));
+    usePlayerStore.setState({ isPlaying: true, currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
+
+    renderSync(swc());
+    await tick(10_000);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it("does not save before the 10s debounce elapses", async () => {
     usePlayerStore.setState({ isPlaying: true, currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
 
