@@ -125,18 +125,7 @@ export function usePlaylists() {
       nativeTrackId,
       server.alt_url ?? undefined,
     );
-    const db = await getDb();
-    const rows = await db.select<{ max_pos: number | null }[]>(
-      "SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?",
-      [playlist.id],
-    );
-    const nextPos = (rows[0]?.max_pos ?? -1) + 1;
-    await db.execute("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", [
-      playlist.id,
-      trackId,
-      nextPos,
-    ]);
-    await db.execute("UPDATE playlists SET track_count = track_count + 1 WHERE id = ?", [playlist.id]);
+    await invoke("playlist_append_tracks", { playlistId: playlist.id, trackIds: [trackId] });
     usePlaylistSessionStore.getState().bumpPlaylists();
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
@@ -181,18 +170,7 @@ export function usePlaylists() {
       nativeTrackIds,
       server.alt_url ?? undefined,
     );
-    const rows = await db.select<{ max_pos: number | null }[]>(
-      "SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?",
-      [playlist.id],
-    );
-    const nextPos = (rows[0]?.max_pos ?? -1) + 1;
-    await insertPlaylistTracksBatch(
-      db,
-      playlist.id,
-      tracks.map((t) => t.id),
-      nextPos,
-    );
-    await db.execute("UPDATE playlists SET track_count = track_count + ? WHERE id = ?", [tracks.length, playlist.id]);
+    await invoke("playlist_append_tracks", { playlistId: playlist.id, trackIds: tracks.map((t) => t.id) });
     usePlaylistSessionStore.getState().bumpPlaylists();
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }

@@ -67,6 +67,9 @@ export function PlaylistList({
   // inside the element tree, which the ErrorBoundary turns into a blank playlists page.
   const editSmartRules = useMemo(() => parseSmartFilters(editSmartPlaylist?.rules_json ?? null), [editSmartPlaylist]);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  // Which rename is still open, read synchronously: a blur arriving after Enter or Escape, as the field
+  // is removed, runs the old render's handler, which still sees the rename open.
+  const openRenameRef = useRef<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetId = useRef<string | null>(null);
 
@@ -148,14 +151,21 @@ export function PlaylistList({
   }
 
   function startRename(playlist: PlaylistRow) {
+    openRenameRef.current = playlist.id;
     setRenamingId(playlist.id);
     setRenameValue(playlist.name);
     setContextMenu(null);
   }
 
-  async function commitRename(playlist: PlaylistRow) {
-    const trimmed = renameValue.trim();
+  function cancelRename() {
+    openRenameRef.current = null;
     setRenamingId(null);
+  }
+
+  async function commitRename(playlist: PlaylistRow) {
+    if (openRenameRef.current !== playlist.id) return;
+    const trimmed = renameValue.trim();
+    cancelRename();
     if (!onRename || !trimmed || trimmed === playlist.name) return;
     try {
       await onRename(playlist, trimmed, playlist.comment, serverWithCredential);
@@ -324,7 +334,7 @@ export function PlaylistList({
                                 e.preventDefault();
                                 void commitRename(pl);
                               }
-                              if (e.key === "Escape") setRenamingId(null);
+                              if (e.key === "Escape") cancelRename();
                             }}
                           />
                         ) : (
