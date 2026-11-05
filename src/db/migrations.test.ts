@@ -399,16 +399,24 @@ describe("post-migration schema", () => {
       }[]
     ).map((r) => r.name);
     expect(indexes).toEqual([
+      "idx_album_genre_exclusions_canonical",
       "idx_album_genres_canonical",
+      "idx_album_user_genres_canonical",
       "idx_albums_artist",
       "idx_albums_artist_server_artwork",
+      "idx_albums_year",
       "idx_artist_aliases_canonical",
+      "idx_artists_server_name",
+      "idx_playlist_resume_track",
+      "idx_playlist_tracks_track",
+      "idx_scrobble_queue_track",
+      "idx_tag_mappings_canonical",
       "idx_tag_mappings_norm",
       "idx_track_tags_canonical",
-      "idx_track_tags_track",
       "idx_tracks_album_id",
       "idx_tracks_artist",
-      "idx_tracks_genre",
+      "idx_tracks_artist_nocase",
+      "idx_tracks_server_album",
     ]);
   });
 

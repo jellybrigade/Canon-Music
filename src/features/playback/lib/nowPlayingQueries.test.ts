@@ -131,6 +131,11 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
     ]);
   });
 
+  it("matches the artist in any case, as it already did their collaborations", async () => {
+    seed("burial", "BURIAL feat. Four Tet");
+    expect(await artistsFor("Burial")).toEqual(["burial", "BURIAL feat. Four Tet"]);
+  });
+
   it("matches a bare 'feat.' but needs the space the 'featuring' pattern spells out", async () => {
     // The patterns are asymmetric: `feat.%` and `ft.%` have no space before the wildcard, so a
     // guest-less "Burial feat." matches; `featuring %` does, so "Burial featuring" misses while

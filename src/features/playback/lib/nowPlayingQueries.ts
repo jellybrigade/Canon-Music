@@ -44,21 +44,29 @@ export async function fetchArtistAlbums(artistName: string, serverId: string): P
   );
 }
 
+/**
+ * An artist's own tracks and their collaborations on one server. One indexed lookup per spelling,
+ * since an OR group over them made SQLite walk every track the server holds. The unary `+` keeps
+ * the planner off the server index, which it prefers to an artist prefix range without statistics.
+ */
+export const ARTIST_TRACK_MATCH = `t.rowid IN (
+       SELECT rowid FROM tracks WHERE server_id = ? AND artist = ? COLLATE NOCASE
+       UNION ALL SELECT rowid FROM tracks WHERE +server_id = ? AND artist LIKE ? ESCAPE '\\'
+       UNION ALL SELECT rowid FROM tracks WHERE +server_id = ? AND artist LIKE ? ESCAPE '\\'
+       UNION ALL SELECT rowid FROM tracks WHERE +server_id = ? AND artist LIKE ? ESCAPE '\\')`;
+
+export function artistTrackMatchParams(serverId: string, artistName: string): string[] {
+  const like = escapeLike(artistName);
+  return [serverId, artistName, serverId, `${like} feat.%`, serverId, `${like} ft.%`, serverId, `${like} featuring %`];
+}
+
 /** Last.fm's (else Deezer's) popularity ranking intersected with the library; falls back to local track order. */
 export async function fetchArtistTopTracksForNowPlaying(
   artistName: string,
   serverId: string,
 ): Promise<NowPlayingTrack[]> {
   const db = await getDb();
-  const like = escapeLike(artistName);
-  const featParams = [serverId, artistName, `${like} feat.%`, `${like} ft.%`, `${like} featuring %`];
-  // The name match is an OR group, so the server scope has to bracket it or the first
-  // alternative alone carries the AND and the three feat. variants stay library-wide.
-  const artistMatch = `t.server_id = ?
-       AND (t.artist = ?
-       OR t.artist LIKE ? ESCAPE '\\'
-       OR t.artist LIKE ? ESCAPE '\\'
-       OR t.artist LIKE ? ESCAPE '\\')`;
+  const featParams = artistTrackMatchParams(serverId, artistName);
 
   const ranked = await fetchPopularTrackRanking({ artistName, lastfmName: artistName })
     .then((ranking) => ranking.tracks)
@@ -67,7 +75,7 @@ export async function fetchArtistTopTracksForNowPlaying(
     const localTracks = await db.select<NowPlayingTrack[]>(
       `SELECT ${TRACK_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-       WHERE ${artistMatch}`,
+       WHERE ${ARTIST_TRACK_MATCH}`,
       featParams,
     );
     const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
@@ -87,7 +95,7 @@ export async function fetchArtistTopTracksForNowPlaying(
   return db.select<NowPlayingTrack[]>(
     `SELECT ${TRACK_COLUMNS}
      FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-     WHERE ${artistMatch}
+     WHERE ${ARTIST_TRACK_MATCH}
      ORDER BY t.track_number, t.title, t.id
      LIMIT 10`,
     featParams,

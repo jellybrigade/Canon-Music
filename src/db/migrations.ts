@@ -997,6 +997,38 @@ export const migrations: Migration[] = [
       ALTER TABLE artist_identity ADD COLUMN facts_mb_artist_id TEXT;
     `,
   },
+  {
+    version: 69,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_artists_server_name ON artists(server_id, name COLLATE NOCASE);
+      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id);
+      CREATE INDEX IF NOT EXISTS idx_scrobble_queue_track ON scrobble_queue(track_id);
+      CREATE INDEX IF NOT EXISTS idx_playlist_resume_track ON playlist_resume(last_track_id);
+      CREATE INDEX IF NOT EXISTS idx_tracks_server_album ON tracks(server_id, album_id);
+      DROP INDEX IF EXISTS idx_track_tags_track;
+      DROP INDEX IF EXISTS idx_tracks_genre;
+    `,
+  },
+  {
+    version: 70,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_tracks_artist_nocase ON tracks(artist COLLATE NOCASE, server_id);
+    `,
+  },
+  {
+    version: 71,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_albums_year ON albums(year);
+    `,
+  },
+  {
+    version: 72,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_tag_mappings_canonical ON tag_mappings(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_album_user_genres_canonical ON album_user_genres(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_album_genre_exclusions_canonical ON album_genre_exclusions(canonical_id);
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

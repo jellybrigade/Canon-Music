@@ -193,6 +193,23 @@ describe("useRecentlyReleasedAlbums", () => {
     expect(await recentIds()).toEqual(["c", "a", "b", "d"]);
   });
 
+  it("fills the list from older years when the newest year holds only reissues", async () => {
+    for (const id of ["r1", "r2", "r3"]) seed({ id, name: `${id} (Remastered)`, year: 2026 });
+    seed({ id: "a", year: 2025 });
+    seed({ id: "b", year: 2024 });
+    seed({ id: "c", year: 2023 });
+    expect(await recentIds(2)).toEqual(["a", "b"]);
+  });
+
+  it("ranks every album of the last year that fits, not only the first ones found", async () => {
+    seed({ id: "new", year: 2026 });
+    seed({ id: "a", year: 2025 });
+    seed({ id: "b", year: 2025 });
+    seed({ id: "z", year: 2025, releaseDate: "2025-12-01" });
+    seed({ id: "old", year: 2024, releaseDate: "2024-12-31" });
+    expect(await recentIds(2)).toEqual(["new", "z"]);
+  });
+
   it("leaves out albums with no year", async () => {
     seed({ id: "none", year: null, releaseDate: "2026-10-30" });
     seed({ id: "dated", year: 2026 });
