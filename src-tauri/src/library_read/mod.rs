@@ -120,19 +120,22 @@ mod tests {
                 .pragma_update(None, "journal_mode", "WAL")
                 .expect("wal");
             writer
-                .execute_batch("CREATE TABLE t (v TEXT); INSERT INTO t VALUES ('x')")
+                .execute_batch(
+                    "CREATE TABLE settings (value TEXT); INSERT INTO settings VALUES ('x')",
+                )
                 .expect("seed");
         }
 
         let conn = open_read_conn_at(&path).expect("existing db must open");
         let v: String = conn
-            .query_row("SELECT v FROM t", [], |r| r.get(0))
+            .query_row("SELECT value FROM settings", [], |r| r.get(0))
             .expect("read back");
         assert_eq!(v, "x");
         // READ_ONLY is the flag that broke this once: it cannot recover a -wal/-shm
         // pair the writer pool has not established yet.
         assert!(
-            conn.execute("INSERT INTO t VALUES ('y')", []).is_ok(),
+            conn.execute("INSERT INTO settings VALUES ('y')", [])
+                .is_ok(),
             "connection is opened READ_WRITE by design, even though it issues no writes"
         );
     }

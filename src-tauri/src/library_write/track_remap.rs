@@ -87,7 +87,7 @@ mod tests {
           position INTEGER NOT NULL, PRIMARY KEY (playlist_id, position));
         CREATE TABLE tag_issues (track_id TEXT NOT NULL, issue_type TEXT,
           UNIQUE(track_id, issue_type));
-        CREATE TABLE lyrics (track_id TEXT PRIMARY KEY, content TEXT);
+        CREATE TABLE lyrics (track_id TEXT PRIMARY KEY, plain TEXT);
         CREATE TABLE waveform_cache (track_id TEXT PRIMARY KEY, peaks_json TEXT);
         CREATE TABLE recent_tracks (track_id TEXT PRIMARY KEY, server_id TEXT NOT NULL,
           opened_at INTEGER NOT NULL);
