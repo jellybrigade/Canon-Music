@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import type { TagKind } from "../lib/canonicalize";
-import { sqlNorm } from "../lib/canonicalize";
+import { sqlNorm, sqlNormExpression } from "../lib/canonicalize";
 import { invalidateManualMappings } from "../lib/manualMappings";
 
 export const ACCEPTED = "__accepted__";
@@ -93,7 +93,7 @@ export function useTagMappings() {
       invalidateManualMappings();
       // Clear all raw variants that share the same norm_value, not just the one passed in
       await db.execute(
-        "UPDATE track_tags SET canonical_id = NULL WHERE LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')) = ? AND kind = ?",
+        `UPDATE track_tags SET canonical_id = NULL WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`,
         [norm, kind],
       );
     },
@@ -125,6 +125,67 @@ export function useTagMappings() {
   return { saveMapping, deleteMapping, lockMapping };
 }
 
+/** One decision per spelling group: a locked one, then a manual one, then the first spelling. */
+export const TAG_VOCAB_SQL = `
+  WITH ranked AS (
+    SELECT raw_value, norm_value, kind, canonical_id, source, locked,
+      ROW_NUMBER() OVER (
+        PARTITION BY norm_value, kind ORDER BY locked DESC, source = 'manual' DESC, raw_value
+      ) AS group_rank
+    FROM tag_mappings
+  ),
+  decision AS (SELECT * FROM ranked WHERE group_rank = 1)
+  SELECT
+    c.raw_value,
+    c.kind,
+    c.album_count,
+    c.sources,
+    decision.canonical_id,
+    decision.source AS mapping_source,
+    COALESCE(decision.locked, 0) AS locked
+  FROM tag_vocab_cache c
+  LEFT JOIN decision ON decision.norm_value = c.norm_value AND decision.kind = c.kind
+  UNION ALL
+  SELECT
+    decision.raw_value,
+    decision.kind,
+    0 AS album_count,
+    NULL AS sources,
+    decision.canonical_id,
+    decision.source AS mapping_source,
+    COALESCE(decision.locked, 0) AS locked
+  FROM decision
+  WHERE NOT EXISTS (
+    SELECT 1 FROM tag_vocab_cache c WHERE c.norm_value = decision.norm_value AND c.kind = decision.kind
+  )
+  ORDER BY album_count DESC, raw_value, kind`;
+
+/** Up to four of the server's albums carrying a tag, most tagged tracks first. */
+export const TAG_ALBUMS_SQL = `
+  SELECT a.id AS album_id, a.name AS album_name, a.artwork_url
+  FROM track_tags tt
+  JOIN tracks t ON t.id = tt.track_id
+  JOIN albums a ON a.id = t.album_id
+  WHERE tt.raw_value = ? AND tt.kind = ? AND t.server_id = ?
+  GROUP BY a.id
+  ORDER BY COUNT(DISTINCT tt.track_id) DESC, a.id
+  LIMIT 4`;
+
+/** Tags on albums with no decision for any of their spellings. */
+export const UNRESOLVED_TAG_COUNT_SQL = `
+  SELECT COUNT(*) AS n FROM (
+    SELECT DISTINCT tt.raw_value, tt.kind
+    FROM track_tags tt
+    JOIN tracks t ON t.id = tt.track_id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM tag_mappings tm
+      WHERE tm.norm_value = ${sqlNormExpression("tt.raw_value")}
+        AND tm.kind = tt.kind
+    )
+    GROUP BY tt.raw_value, tt.kind
+    HAVING COUNT(DISTINCT t.album_id) > 0
+  )`;
+
 /**
  * Every distinct (raw_value, kind) tag joined with its tag_mappings decision, with album counts.
  * Classified in JS: unresolved, accepted, ignored, mapped, or stale (decision, no albums left).
@@ -134,37 +195,7 @@ export function useTagVocab() {
     queryKey: QK.tagVocab(),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<TagVocabRow[]>(`
-        SELECT
-          c.raw_value,
-          c.kind,
-          c.album_count,
-          c.sources,
-          tm.canonical_id,
-          tm.source AS mapping_source,
-          COALESCE(tm.locked, 0) AS locked
-        FROM tag_vocab_cache c
-        LEFT JOIN (
-          SELECT norm_value, kind, canonical_id, source, locked
-          FROM tag_mappings
-          GROUP BY norm_value, kind
-        ) tm ON tm.norm_value = c.norm_value AND tm.kind = c.kind
-        UNION ALL
-        SELECT
-          tm.raw_value,
-          tm.kind,
-          0 AS album_count,
-          NULL AS sources,
-          tm.canonical_id,
-          tm.source AS mapping_source,
-          COALESCE(tm.locked, 0) AS locked
-        FROM tag_mappings tm
-        WHERE NOT EXISTS (
-          SELECT 1 FROM tag_vocab_cache c WHERE c.norm_value = tm.norm_value AND c.kind = tm.kind
-        )
-        GROUP BY tm.norm_value, tm.kind
-        ORDER BY album_count DESC, raw_value
-      `);
+      return db.select<TagVocabRow[]>(TAG_VOCAB_SQL);
     },
   });
 }
@@ -186,25 +217,15 @@ export function useUnmappedTagCount() {
 }
 
 /** Album art for a tag, works for both resolved and unresolved tags. */
-export function useTagAlbums(rawValue: string, kind: TagKind) {
+export function useTagAlbums(rawValue: string, kind: TagKind, serverId: string | undefined) {
   return useQuery({
-    queryKey: QK.tagAlbums(rawValue, kind),
+    queryKey: QK.tagAlbums(rawValue, kind, serverId),
     queryFn: async () => {
       const db = await getDb();
       type Row = { album_id: string; album_name: string; artwork_url: string | null };
-      return db.select<Row[]>(
-        `SELECT a.id as album_id, a.name as album_name, a.artwork_url
-         FROM track_tags tt
-         JOIN tracks t ON tt.track_id = t.id
-         JOIN albums a ON t.album_id = a.id
-         WHERE tt.raw_value = ? AND tt.kind = ?
-         GROUP BY a.id, a.name
-         ORDER BY COUNT(tt.track_id) DESC
-         LIMIT 4`,
-        [rawValue, kind],
-      );
+      return db.select<Row[]>(TAG_ALBUMS_SQL, [rawValue, kind, serverId]);
     },
-    enabled: !!rawValue,
+    enabled: !!rawValue && !!serverId,
   });
 }
 
@@ -269,21 +290,7 @@ export function useAutoMapExact() {
       }
 
       // Count remaining unresolved tags that still have albums in the library
-      const remainingRows = await db.select<{ n: number }[]>(`
-        SELECT COUNT(*) AS n FROM (
-          SELECT DISTINCT tt.raw_value, tt.kind
-          FROM track_tags tt
-          JOIN tracks t ON t.id = tt.track_id
-          WHERE NOT EXISTS (
-            SELECT 1 FROM tag_mappings tm
-            WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
-                = LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
-              AND tm.kind = tt.kind
-          )
-          GROUP BY tt.raw_value, tt.kind
-          HAVING COUNT(DISTINCT t.album_id) > 0
-        )
-      `);
+      const remainingRows = await db.select<{ n: number }[]>(UNRESOLVED_TAG_COUNT_SQL);
       const remaining = remainingRows[0]?.n ?? 0;
 
       return { mapped, remaining };

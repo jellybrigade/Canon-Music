@@ -7,7 +7,10 @@ import { __resetModalRegistry, useAnyModalOpen } from "../../../ui/useModalChrom
 import { TagDrawer } from "./TagDrawer";
 
 vi.mock("../../../db", () => ({ getDb: () => Promise.resolve({ select: () => Promise.resolve([]) }) }));
-vi.mock("../lib/canonicalize", () => ({ getCanonTree: () => Promise.resolve({ nodes: [] }) }));
+vi.mock("../lib/canonicalize", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/canonicalize")>()),
+  getCanonTree: () => Promise.resolve({ nodes: [] }),
+}));
 vi.mock("../hooks/useNormalizeAlbum", () => ({
   useNormalizeAlbum: () => ({
     data: { genres: [], descriptors: [], scenes: [], unresolved: [] },

@@ -12,6 +12,7 @@ import {
   getAncestorIds,
   getCanonTree,
   rawGenreId,
+  sqlNormExpression,
 } from "./canonicalize";
 import { getManualGenreMappings } from "./manualMappings";
 import { bucketize } from "./tagBuckets";
@@ -46,20 +47,35 @@ const SOURCE_DISPLAY_RANK: Record<TagSource, number> = {
   "musicbrainz-folksonomy": 5,
 };
 
+/** Fills an album's unmapped external tags from tag_mappings: a manual decision beats an automatic one. */
+export const APPLY_TAG_MAPPINGS_SQL = `
+  UPDATE track_tags
+  SET canonical_id = (
+    SELECT tm.canonical_id FROM tag_mappings tm
+    WHERE tm.norm_value = ${sqlNormExpression("track_tags.raw_value")}
+      AND tm.kind = track_tags.kind
+      AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
+    ORDER BY tm.source = 'manual' DESC, tm.raw_value
+    LIMIT 1
+  )
+  WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
+    AND canonical_id IS NULL
+    AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`;
+
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM tag_vocab_cache");
   await db.execute(`
     INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
     SELECT
-      LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
+      ${sqlNormExpression("tt.raw_value")},
       tt.raw_value,
       tt.kind,
       COUNT(DISTINCT tr.album_id),
       GROUP_CONCAT(DISTINCT CASE WHEN tt.source = 'server' THEN 'file' ELSE tt.source END)
     FROM track_tags tt
     JOIN tracks tr ON tr.id = tt.track_id
-    GROUP BY LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')), tt.kind
+    GROUP BY ${sqlNormExpression("tt.raw_value")}, tt.kind
   `);
 }
 
@@ -369,21 +385,7 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
       3,
       (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
     );
-    await db.execute(
-      `UPDATE track_tags
-       SET canonical_id = (
-         SELECT tm.canonical_id FROM tag_mappings tm
-         WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
-             = LOWER(REPLACE(REPLACE(TRIM(track_tags.raw_value), '-', ' '), '_', ' '))
-           AND tm.kind = track_tags.kind
-           AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
-         LIMIT 1
-       )
-       WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
-         AND canonical_id IS NULL
-         AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
-      [albumId],
-    );
+    await db.execute(APPLY_TAG_MAPPINGS_SQL, [albumId]);
   }
 
   type ExclusionRow = { canonical_id: string };

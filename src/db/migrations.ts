@@ -1029,6 +1029,14 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_album_genre_exclusions_canonical ON album_genre_exclusions(canonical_id);
     `,
   },
+  {
+    version: 73,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_track_tags_raw_kind ON track_tags(raw_value, kind);
+      UPDATE tag_mappings SET norm_value = LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '))
+        WHERE norm_value IS NOT LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '));
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

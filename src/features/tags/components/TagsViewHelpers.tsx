@@ -44,9 +44,10 @@ export function AlbumArtStrip({
   size?: number;
   max?: number;
 }) {
-  const { data: albums = [] } = useTagAlbums(rawValue, kind);
   const { data: servers } = useServers();
-  const { data: swc } = useServerWithCredential(servers?.[0]?.id);
+  const serverId = servers?.[0]?.id;
+  const { data: albums = [] } = useTagAlbums(rawValue, kind, serverId);
+  const { data: swc } = useServerWithCredential(serverId);
 
   const tiles = albums
     .map((a) => ({

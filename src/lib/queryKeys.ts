@@ -33,7 +33,8 @@ export const QK = {
   /** Under `tagVocab` so every mapping or tree write that refreshes the vocabulary re-sweeps it. */
   danglingGenreIds: () => ["tag-vocab", "dangling-genre-ids"] as const,
   tagMappings: () => ["tag_mappings"] as const,
-  tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,
+  tagAlbums: (rawValue: string, kind: string, serverId: string | undefined) =>
+    ["tag-albums", rawValue, kind, serverId] as const,
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,

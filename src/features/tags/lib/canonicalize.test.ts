@@ -8,6 +8,7 @@ import {
   getParentChain,
   rawGenreId,
   sqlNorm,
+  sqlNormExpression,
   type TreeNode,
 } from "./canonicalize";
 
@@ -75,6 +76,16 @@ describe("sqlNorm", () => {
   it("trims surrounding whitespace", () => {
     expect(sqlNorm("  Ambient  ")).toBe("ambient");
   });
+
+  it.each(["Électronique", "Post-Rock-", "_Drill", " Ambient\t", "Hip-Hop"])(
+    "agrees with the SQL normalization for %j",
+    async (raw) => {
+      const { createTestDb } = await import("../../../test/sqlite");
+      const db = createTestDb();
+      const row = db.raw.prepare(`SELECT ${sqlNormExpression("?")} AS norm`).get(raw) as { norm: string };
+      expect(sqlNorm(raw)).toBe(row.norm);
+    },
+  );
 });
 
 describe("rawGenreId", () => {

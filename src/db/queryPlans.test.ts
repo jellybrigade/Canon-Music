@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { ARTIST_TRACK_MATCH, artistTrackMatchParams } from "../features/playback/lib/nowPlayingQueries";
+import { TAG_ALBUMS_SQL, UNRESOLVED_TAG_COUNT_SQL } from "../features/tags/hooks/useTagMappings";
+import { APPLY_TAG_MAPPINGS_SQL } from "../features/tags/lib/tagNormalize";
 import { RECENTLY_RELEASED_SQL } from "../hooks/useRecentlyReleasedAlbums";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { GENRE_ID_HOLDERS } from "./genreIdTables";
@@ -68,6 +70,24 @@ describe("query plans", () => {
     const plan = planOf(RECENTLY_RELEASED_SQL, [19, 20]);
     expect(plan).not.toMatch(/^SCAN a$/m);
     expect(plan.match(/SEARCH a USING INDEX idx_albums_year/g)).toHaveLength(2);
+  });
+
+  it.each([
+    ["applying mappings to an album", APPLY_TAG_MAPPINGS_SQL, ["s:a"]],
+    ["counting unresolved tags", UNRESOLVED_TAG_COUNT_SQL, []],
+  ])("finds a tag's decision by its spelling group when %s", (_, sql, params) => {
+    const plan = planOf(sql, params);
+    expect(plan).toContain("idx_tag_mappings_norm");
+    expect(plan).not.toMatch(/SCAN tm$/m);
+  });
+
+  it.each([
+    ["UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'x' AND kind = 'genre'", []],
+    [TAG_ALBUMS_SQL, ["x", "genre", "s"]],
+  ])("finds every row of one tag without scanning all tags: %#", (sql, params) => {
+    const plan = planOf(sql, params);
+    expect(plan).toContain("idx_track_tags_raw_kind");
+    expect(plan).not.toMatch(/^SCAN tt?$|^SCAN track_tags$/m);
   });
 
   it.each(GENRE_ID_HOLDERS.filter((holder) => holder.jsonPath === null).map((holder) => [holder.table, holder.column]))(
