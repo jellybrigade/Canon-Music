@@ -47,6 +47,7 @@ import type { RadioMode } from "./features/playback/store/playerTypes";
 import { usePlaylists } from "./features/playlists/usePlaylists";
 import { useRadio } from "./features/radio/hooks/useRadio";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
+import { loadArtistSeedTrack } from "./features/radio/lib/artistSeed";
 import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
 import { useReleaseDateLookups } from "./features/releaseDates/hooks/useReleaseDateLookups";
 import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
@@ -448,17 +449,7 @@ export default function App() {
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
-    const db = await getDb();
-    const rows = await db.select<PlayableTrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
-              ${REPLAY_GAIN_COLUMNS}
-       FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-       WHERE t.server_id = ?
-         AND (t.artist = ? OR a.artist = ?)
-       ORDER BY random() LIMIT 1`,
-      [srv.id, artist.name, artist.name],
-    );
-    const t = rows[0];
+    const t = await loadArtistSeedTrack(srv.id, artist.name);
     if (!t) return;
     const track = currentTrackFromRow(t, srv);
     await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
