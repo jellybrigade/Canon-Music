@@ -95,7 +95,7 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({
           </button>
           <StartRadioSubmenu
             onSelect={(mode) => {
-              const track = buildTrackObj(seedTrack, server, credential);
+              const track = buildTrackObj(seedTrack, server);
               void startRadio({ tracks: [track], streamUrlFor, mode });
               setMenu(null);
             }}

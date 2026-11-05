@@ -58,7 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  replaceCoverRevisions(new Map());
+  replaceCoverRevisions(null, new Map());
   usePlayerStore.setState({ currentTrack: null, isPlaying: false, elapsed: 0, seek: realSeek });
 });
 
@@ -103,7 +103,7 @@ describe("useMediaSession", () => {
     const artworkSrc = () => (session.metadata as { artwork?: MediaImage[] } | null)?.artwork?.[0]?.src;
     expect(artworkSrc()).not.toContain("v=");
 
-    act(() => setCoverRevision("abc", 1700));
+    act(() => setCoverRevision("srv-a", "abc", 1700));
 
     expect(artworkSrc()).toContain("v=1700");
   });

@@ -248,9 +248,7 @@ export function TrackTableView({
 
   const buildTrackObj = useCallback(
     (track: AllTrackRow): CurrentTrack => {
-      const coverArtUrl = track.album_artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, track.album_artwork_url, 64)
-        : null;
+      const coverArtUrl = track.album_artwork_url ? getCoverArtUrl(server.id, track.album_artwork_url, 64) : null;
       return {
         id: track.id,
         title: track.title,

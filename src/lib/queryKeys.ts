@@ -134,7 +134,11 @@ export const QK = {
     inputs: { releaseMbid: string | null; releaseGroupMbid: string | null; hasFanartKey: boolean | null },
   ) => ["album-cover-candidates", serverId, albumId, inputs] as const,
   albumCoverOverride: (serverId: string, albumId: string) => ["album-cover-override", serverId, albumId] as const,
-  albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
+  /** No server = every server's count, for invalidation. */
+  albumCoversMissingCount: (serverId?: string) =>
+    serverId === undefined
+      ? (["album-covers", "missing-count"] as const)
+      : (["album-covers", "missing-count", serverId] as const),
 
   artistCovers: () => ["artist-covers"] as const,
   artistCoversMissingCount: () => ["artist-covers", "missing-count"] as const,

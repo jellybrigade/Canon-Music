@@ -51,6 +51,12 @@ export interface SyncProgress {
 export interface SyncOptions {
   /** Read every album's tracks whatever the watermark and the probe say. */
   forceTrackPass?: boolean;
+  /** Stops the run between stages and albums, e.g. when the user switches server. */
+  signal?: AbortSignal;
+}
+
+function stopIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException("Sync stopped", "AbortError");
 }
 
 export async function syncLibrary(
@@ -76,6 +82,8 @@ export async function syncLibrary(
   changed: SyncChanges;
 }> {
   const altUrl = server.alt_url ?? undefined;
+  const signal = options?.signal;
+  stopIfAborted(signal);
   const skippedStages: string[] = [];
   // Deliberately not awaited: extension discovery is advisory. It still needs its own
   // catch, or a transient network failure surfaces as an unhandled rejection.
@@ -88,13 +96,14 @@ export async function syncLibrary(
   // Fatal by design: without the album list there is no sync to run. Scan status is
   // survivable (some deployments restrict it to admins); its failure falls through to the id probe, not "nothing changed".
   const [albums, scanStatus] = await Promise.all([
-    fetchAllAlbums(server.url, server.username, credential, altUrl),
+    fetchAllAlbums(server.url, server.username, credential, altUrl, signal),
     fetchScanStatus(server.url, server.username, credential, altUrl).catch((err: unknown) => {
       console.error("sync: failed to read the server scan status, falling back to the id probe:", err);
       return null;
     }),
   ]);
 
+  stopIfAborted(signal);
   const db = await getDb();
   // Inside the run, not before it: a clear made while another sync ran was written back by
   // that sync's own watermark, losing the resync. Cleared up front so an interrupted resync
@@ -301,13 +310,17 @@ export async function syncLibrary(
   let albumTracksIncomplete = false;
   let attemptedCount = 0;
   const readAlbumIds: string[] = [];
+  // A stop breaks out like a stall rather than throwing: the bookkeeping after the loop
+  // (artists, search index, read stamps) must still cover the albums already written.
   for (const { album, albumDbId, existingTrackCount } of albumsNeedingTracks) {
+    if (signal?.aborted) break;
     let tracks: Awaited<ReturnType<typeof fetchAlbumTracks>>;
     attemptedCount++;
     try {
-      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
+      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl, signal);
       consecutiveFailures = 0;
     } catch (err) {
+      if (signal?.aborted) break;
       if (err instanceof TransportStalledError) {
         console.error(`sync: stopping the album pass early, the connection is paused: ${err.message}`);
         albumTracksIncomplete = true;
@@ -396,9 +409,12 @@ export async function syncLibrary(
   await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
   await healTracksFts(db, server.id);
 
+  stopIfAborted(signal);
   const stage = { db, server, credential, altUrl, skippedStages };
   const lovedChanged = await syncLoved(stage);
+  stopIfAborted(signal);
   const { failedPlaylists, playlistsChanged } = await syncPlaylists(stage);
+  stopIfAborted(signal);
 
   // Only a pass that actually finished may move the watermark: storing it after a run that
   // broke early or lost albums to failures would tell the next sync those albums were read

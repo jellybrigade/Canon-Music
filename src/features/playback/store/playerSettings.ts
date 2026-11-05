@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { DlnaRenderer } from "../../../clients/dlna";
 import { getDb } from "../../../db";
-import { isOwnedByServer } from "../../../lib/ids";
+import { isOwnedByServer, owningServerId } from "../../../lib/ids";
 import { parseIntegerOr } from "../../../lib/numberSetting";
+import { withCoverFromRef } from "../../../lib/track";
 import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget } from "./playbackTarget";
 import type { PlayerEngine } from "./playerEngine";
 import { runtime } from "./playerRuntime";
@@ -241,12 +242,13 @@ export function createSettingsActions(
                 isOwnedByServer(t.id, serverIds),
               );
               if (owned && Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
+                const withCover = (t: CurrentTrack) => withCoverFromRef(t, owningServerId(t.id, serverIds));
                 set({
-                  queue: saved.queue,
+                  queue: saved.queue.map(withCover),
                   queueIndex: saved.queueIndex ?? 0,
                   shuffleOrder: saved.shuffleOrder ?? [],
                   isShuffled: saved.isShuffled ?? false,
-                  currentTrack: saved.currentTrack ?? null,
+                  currentTrack: saved.currentTrack ? withCover(saved.currentTrack) : null,
                 });
               }
             } catch {
@@ -258,7 +260,8 @@ export function createSettingsActions(
             if (row.value) {
               try {
                 const seed = JSON.parse(row.value) as CurrentTrack;
-                if (isOwnedByServer(seed.id, serverIds)) set({ radioSeed: seed });
+                const seedServerId = owningServerId(seed.id, serverIds);
+                if (seedServerId !== undefined) set({ radioSeed: withCoverFromRef(seed, seedServerId) });
                 else radioSeedStranded = true;
               } catch {
                 // malformed seed, ignore

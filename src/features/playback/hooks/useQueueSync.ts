@@ -83,7 +83,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         duration: r.duration,
         album: r.album_name ?? null,
         albumId: r.album_id,
-        coverArtUrl: r.artwork_url ? getCoverArtUrl(server.url, server.username, credential, r.artwork_url, 64) : null,
+        coverArtUrl: r.artwork_url ? getCoverArtUrl(server.id, r.artwork_url, 64) : null,
         artworkRef: r.artwork_url,
         replayGain: replayGainFromRow(r),
       }));

@@ -88,9 +88,7 @@ const AlbumCard = memo(function AlbumCard({
   // Memoized because getCoverArtUrl returns a fresh string each call, which would
   // otherwise defeat this component's React.memo.
   const artUrl = useMemo(
-    () =>
-      coverUrl ??
-      (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null),
+    () => coverUrl ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url) : null),
     [coverUrl, album.artwork_url, server.url, server.username, credential],
   );
   return (

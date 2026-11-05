@@ -75,7 +75,7 @@ export function NowPlayingView({
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
 
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
   const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
@@ -107,13 +107,13 @@ export function NowPlayingView({
   const overlayPeaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
 
   const largeArtUrl = currentTrack?.artworkRef
-    ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
+    ? getCoverArtUrl(server.id, currentTrack.artworkRef, 600)
     : (currentTrack?.coverArtUrl ?? null);
   // Blur destroys detail anyway, so the full-viewport blurred backdrop only needs a
   // tiny source image (avoids WebKit running its expensive blur filter over 600px
   // of pixels it's about to throw away).
   const blurArtUrl = currentTrack?.artworkRef
-    ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
+    ? getCoverArtUrl(server.id, currentTrack.artworkRef, 64)
     : (currentTrack?.coverArtUrl ?? null);
 
   const otherAlbums = useMemo(

@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { LastfmTopTrack } from "../../clients/lastfm";
 import { fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { fetchEssentialAlbumOrder } from "../../features/enrichment/lib/essentialAlbums";
@@ -169,9 +168,9 @@ export function usePopularTrackRanking(artistName: string, lastfmName: string) {
   });
 }
 
-export function buildTrackObj(track: TopTrack, server: Server, credential: NavidromeCredential): CurrentTrack {
+export function buildTrackObj(track: TopTrack, server: Server): CurrentTrack {
   const artworkRef = track.artwork_url ?? null;
-  const coverArtUrl = artworkRef ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500) : null;
+  const coverArtUrl = artworkRef ? getCoverArtUrl(server.id, artworkRef, 500) : null;
   return {
     id: track.id,
     title: track.title,

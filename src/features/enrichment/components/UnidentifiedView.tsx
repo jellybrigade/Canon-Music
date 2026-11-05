@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const queryClient = useQueryClient();
   const { data: albums = [], isPending, error, refetch } = useFailedLookupAlbums(server.id);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
@@ -126,9 +126,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
       ) : (
         <div className="unidentified-list">
           {albums.map((album) => {
-            const artUrl = album.artwork_url
-              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url)
-              : null;
+            const artUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url) : null;
             return (
               <div key={album.id} className="unidentified-row">
                 <div

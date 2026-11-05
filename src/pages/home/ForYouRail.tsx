@@ -86,7 +86,7 @@ export function ForYouRail({
   perTab,
   onPerTabChange,
 }: ForYouRailProps) {
-  const { server, credential } = serverWithCred;
+  const { server } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
   const descByKey = useMemo(() => {
@@ -415,10 +415,7 @@ export function ForYouRail({
       <div className="foryou-v2-grid" role="tabpanel">
         {activeTabGroup.albums.map((album) => {
           const artUrl =
-            coverMap.get(album.id) ??
-            (album.artwork_url
-              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
-              : null);
+            coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 300) : null);
           return (
             <div
               key={album.id}

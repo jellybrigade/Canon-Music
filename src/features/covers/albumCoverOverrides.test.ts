@@ -25,7 +25,7 @@ beforeEach(async () => {
   vi.mocked(getDb).mockResolvedValue(db as never);
   resetTauriMocks();
   nav.initCoverServer();
-  nav.replaceCoverRevisions(new Map());
+  nav.replaceCoverRevisions(null, new Map());
 });
 
 function rows() {
@@ -51,7 +51,7 @@ describe("chooseAlbumCover", () => {
       revision: 1700,
     });
     expect(await rows()).toEqual([{ server_id: "srv", album_id: "srv:abc", mime: "image/png" }]);
-    expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).toContain("&v=1700");
+    expect(nav.getCoverArtUrl("srv", "al-abc_ff")).toContain("&v=1700");
   });
 
   it("records nothing when the image could not be stored", async () => {
@@ -62,7 +62,7 @@ describe("chooseAlbumCover", () => {
       "not an image",
     );
     expect(await rows()).toEqual([]);
-    expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).not.toContain("&v=");
+    expect(nav.getCoverArtUrl("srv", "al-abc_ff")).not.toContain("&v=");
   });
 
   it("drops only the new image when the row cannot be written, keeping an earlier choice", async () => {
@@ -175,7 +175,7 @@ describe("clearAlbumCover", () => {
 
     expect(await rows()).toEqual([]);
     expect(invoke).toHaveBeenCalledWith("clear_album_cover_override", { serverId: "srv", albumId: "srv:abc" });
-    expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).not.toContain("&v=");
+    expect(nav.getCoverArtUrl("srv", "al-abc_ff")).not.toContain("&v=");
   });
 });
 
@@ -195,6 +195,7 @@ describe("loadCoverOverrides", () => {
         { serverId: "srv", albumId: "srv:abc", revision: 10 },
       ],
     });
-    expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).toContain("&v=10");
+    expect(nav.getCoverArtUrl("srv", "al-abc_ff")).toContain("&v=10");
+    expect(nav.getCoverArtUrl("other", "al-abc_ff")).not.toContain("&v=");
   });
 });

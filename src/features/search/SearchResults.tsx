@@ -228,9 +228,7 @@ export function SearchResults({
       title: track.title,
       artist: track.artist,
       duration: track.duration,
-      coverArtUrl: track.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512)
-        : null,
+      coverArtUrl: track.artwork_url ? getCoverArtUrl(server.id, track.artwork_url, 512) : null,
       artworkRef: track.artwork_url,
       album: track.album_name,
       albumId: track.album_id,
@@ -318,11 +316,7 @@ export function SearchResults({
               >
                 <div className="search-album-thumb">
                   {album.artwork_url ? (
-                    <CoverImg
-                      src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 64)}
-                      alt={album.name}
-                      loading="lazy"
-                    />
+                    <CoverImg src={getCoverArtUrl(server.id, album.artwork_url, 64)} alt={album.name} loading="lazy" />
                   ) : (
                     <Music size={18} />
                   )}
@@ -362,7 +356,7 @@ export function SearchResults({
                 <div className="search-track-thumb">
                   {track.artwork_url ? (
                     <CoverImg
-                      src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
+                      src={getCoverArtUrl(server.id, track.artwork_url, 64)}
                       alt={track.album_name ?? track.title}
                       loading="lazy"
                     />

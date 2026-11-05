@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRED, SRV, server } from "../../test/navidromeFixtures";
+import { SRV, server } from "../../test/navidromeFixtures";
 import { buildTrackObj, type TopTrack } from "./artistQueries";
 
 const TRACK: TopTrack = {
@@ -20,7 +20,7 @@ const TRACK: TopTrack = {
 
 describe("buildTrackObj", () => {
   it("carries the track's ReplayGain tags into playback", () => {
-    expect(buildTrackObj(TRACK, server(SRV), CRED).replayGain).toEqual({
+    expect(buildTrackObj(TRACK, server(SRV)).replayGain).toEqual({
       trackGain: -5,
       trackPeak: 0.8,
       albumGain: -6,

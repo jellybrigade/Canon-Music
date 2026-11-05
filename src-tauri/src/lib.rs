@@ -12,8 +12,8 @@ mod tray;
 mod upnp;
 use audio::{AudioState, PosTracker};
 use cover::{
-    cover_error_response, handle_cover_request, CoverProxyConfig, CoverState, ImageCache,
-    COVER_CACHE_DIR, MAX_COVER_REQUESTS,
+    cover_error_response, handle_cover_request, CoverState, ImageCache, COVER_CACHE_DIR,
+    MAX_COVER_REQUESTS,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -99,7 +99,6 @@ pub fn run() {
     // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
     let cover_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
-    let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     let cover_client_builder = || {
         reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
@@ -173,7 +172,7 @@ pub fn run() {
         .manage(CoverState {
             cache: cover_cache,
             artist_image_cache,
-            proxy_config: cover_proxy_config,
+            proxy_configs: Arc::default(),
             request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
             http_client: cover_http_client,
             override_http_client: cover_override_http_client,

@@ -211,10 +211,8 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
     (result) =>
       result.status === "skipped" && (result.source === "caa-release" || result.source === "caa-release-group"),
   );
-  const { server, credential } = serverWithCredential;
-  const currentUrl = album.artwork_url
-    ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, ORIGINAL_COVER_SIZE)
-    : null;
+  const { server } = serverWithCredential;
+  const currentUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, ORIGINAL_COVER_SIZE) : null;
   const hasOverride = override.isSuccess && override.data !== null;
 
   const choose = (choice: CoverCandidate | null) => {

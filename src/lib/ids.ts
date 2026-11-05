@@ -10,5 +10,9 @@ export function stripServerPrefix(id: string, serverId: string): string {
 // in global `settings` rows while the ids inside it are server-scoped, so a removed server
 // leaves ids nothing can resolve and every stripServerPrefix call site throws on them.
 export function isOwnedByServer(id: string, serverIds: readonly string[]): boolean {
-  return serverIds.some((serverId) => id.startsWith(`${serverId}:`));
+  return owningServerId(id, serverIds) !== undefined;
+}
+
+export function owningServerId(id: string, serverIds: readonly string[]): string | undefined {
+  return serverIds.find((serverId) => id.startsWith(`${serverId}:`));
 }

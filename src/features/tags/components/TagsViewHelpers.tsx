@@ -51,10 +51,7 @@ export function AlbumArtStrip({
   const tiles = albums
     .map((a) => ({
       ...a,
-      url:
-        swc && a.artwork_url
-          ? getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, a.artwork_url, size * 2)
-          : null,
+      url: swc && a.artwork_url ? getCoverArtUrl(swc.server.id, a.artwork_url, size * 2) : null,
     }))
     .filter((a) => a.url)
     .slice(0, max);

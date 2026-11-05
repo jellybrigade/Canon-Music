@@ -300,9 +300,7 @@ export function HomeView({
       const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
       const t = rows[0];
       if (!t) return;
-      const coverArtUrl = t.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
-        : null;
+      const coverArtUrl = t.artwork_url ? getCoverArtUrl(server.id, t.artwork_url, 64) : null;
       const track: CurrentTrack = {
         id: t.id,
         title: t.title,

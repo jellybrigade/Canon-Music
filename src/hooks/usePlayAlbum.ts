@@ -19,9 +19,7 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
     async (album: AlbumRow) => {
       const tracks = await loadAlbumTracksForPlay(server, credential, album);
       if (tracks.length === 0) return;
-      const coverArtUrl = album.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-        : null;
+      const coverArtUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null;
       const streamUrlFor = makeStreamUrlBuilder(server, credential);
       for (const t of tracks) {
         addToQueue(
@@ -59,9 +57,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential | undefined) {
       const tracks = await loadAlbumTracksForPlay(server, credential, album);
       if (tracks.length === 0) return;
 
-      const coverArtUrl = album.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-        : null;
+      const coverArtUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null;
 
       const trackObjs: CurrentTrack[] = tracks.map((t) => ({
         id: t.id,

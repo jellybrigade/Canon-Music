@@ -51,6 +51,7 @@ export function loadCoverOverrides(activeServerId: string | null): Promise<void>
       rows: rows.map((row) => ({ serverId: row.server_id, albumId: row.album_id, revision: row.chosen_at })),
     });
     replaceCoverRevisions(
+      activeServerId,
       new Map(
         rows
           .filter((row) => row.server_id === activeServerId)
@@ -82,7 +83,7 @@ export function chooseAlbumCover({
       throw err;
     }
     await invoke("use_album_cover_override", file);
-    setCoverRevision(albumKey({ serverId, albumId }), now);
+    setCoverRevision(serverId, albumKey({ serverId, albumId }), now);
   });
 }
 
@@ -91,7 +92,7 @@ export function clearAlbumCover({ serverId, albumId }: AlbumRef): Promise<void> 
     const db = await getDb();
     await db.execute("DELETE FROM album_cover_overrides WHERE server_id = ? AND album_id = ?", [serverId, albumId]);
     await invoke("clear_album_cover_override", { serverId, albumId });
-    setCoverRevision(albumKey({ serverId, albumId }), null);
+    setCoverRevision(serverId, albumKey({ serverId, albumId }), null);
   });
 }
 

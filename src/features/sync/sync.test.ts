@@ -2084,3 +2084,63 @@ describe("syncAlbumTracks", () => {
     ]);
   });
 });
+
+describe("syncLibrary cancellation", () => {
+  it("writes nothing when stopped before the album list arrives", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(await count("albums")).toBe(0);
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+  });
+
+  it("stops between albums once stopped and leaves the later stages alone", async () => {
+    const controller = new AbortController();
+    mAllAlbums.mockResolvedValue([album("al-1"), album("al-2")]);
+    mAlbumTracks.mockImplementation(async (_url, _user, _cred, albumId) => {
+      controller.abort();
+      return [track(`t-${albumId}`, albumId)];
+    });
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+    expect(await count("tracks")).toBe(1);
+    expect(await count("tracks_fts")).toBe(1);
+    expect(await count("artists")).toBe(1);
+    expect(mStarred).not.toHaveBeenCalled();
+    expect(mPlaylists).not.toHaveBeenCalled();
+  });
+
+  it("hands the stop to the album list and album track requests", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    const controller = new AbortController();
+
+    await syncLibrary(server(), CRED, undefined, { signal: controller.signal });
+
+    expect(mAllAlbums.mock.calls[0]?.[4]).toBe(controller.signal);
+    expect(mAlbumTracks.mock.calls[0]?.[5]).toBe(controller.signal);
+  });
+
+  it("does not count a stopped album request as a failed album", async () => {
+    const controller = new AbortController();
+    mAllAlbums.mockResolvedValue([album("al-1"), album("al-2")]);
+    mAlbumTracks.mockImplementation(async () => {
+      controller.abort();
+      throw new DOMException("The operation was aborted.", "AbortError");
+    });
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+  });
+});

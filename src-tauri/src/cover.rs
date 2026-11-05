@@ -1,13 +1,70 @@
 use crate::cover_override::{read_override, CoverOverrides};
 use crate::stream_classify::is_image_response;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) struct CoverProxyConfig {
     /// The server's addresses, the one that last answered first.
     pub(crate) routes: Vec<String>,
     pub(crate) auth_params: String,
+}
+
+/// Each server's proxy config, kept after a switch so covers already on screen still resolve
+/// against the server they name.
+#[derive(Default)]
+pub(crate) struct ProxyConfigs {
+    by_server: Mutex<HashMap<String, CoverProxyConfig>>,
+    arrived: Condvar,
+}
+
+/// How long a cover request waits for its server's config. Cover URLs are built as soon as a
+/// server is known, which can be before the config is handed over.
+pub(crate) const PROXY_CONFIG_WAIT: Duration = Duration::from_secs(10);
+
+impl ProxyConfigs {
+    pub(crate) fn set(&self, server_id: String, config: CoverProxyConfig) {
+        self.by_server
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(server_id, config);
+        self.arrived.notify_all();
+    }
+
+    pub(crate) fn wait_for(&self, server_id: &str, timeout: Duration) -> Option<CoverProxyConfig> {
+        let configs = self.by_server.lock().unwrap_or_else(|e| e.into_inner());
+        let (configs, _) = self
+            .arrived
+            .wait_timeout_while(configs, timeout, |configs| !configs.contains_key(server_id))
+            .unwrap_or_else(|e| e.into_inner());
+        configs.get(server_id).cloned()
+    }
+
+    pub(crate) fn promote(&self, server_id: &str, route: &str) {
+        let mut configs = self.by_server.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(config) = configs.get_mut(server_id) {
+            promote_route(&mut config.routes, route);
+        }
+    }
+}
+
+/// What a `cover://localhost/cover/{server id}/{cover id}?size=&v=` request asks for.
+#[derive(Clone, Copy)]
+pub(crate) struct CoverRequest<'a> {
+    pub(crate) server_id: &'a str,
+    /// Still percent-encoded: it goes into the upstream query as is.
+    pub(crate) cover_id: &'a str,
+    pub(crate) size: u32,
+    pub(crate) revision: Option<i64>,
+}
+
+/// `/cover/{server}/{id}` -> (decoded server id, encoded cover id). An older URL without the
+/// server segment names no server, so it is refused rather than served from whichever is set.
+pub(crate) fn parse_cover_path(path: &str) -> Option<(String, &str)> {
+    let (server, id) = path.strip_prefix("/cover/")?.split_once('/')?;
+    let server_id = percent_decode(server);
+    (!server_id.is_empty() && !id.is_empty() && !id.contains('/')).then_some((server_id, id))
 }
 
 pub(crate) fn cover_routes(base_url: String, alt_url: Option<String>) -> Vec<String> {
@@ -43,7 +100,7 @@ pub(crate) type ImageCache = Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>;
 pub(crate) struct CoverState {
     pub(crate) cache: ImageCache,
     pub(crate) artist_image_cache: ImageCache,
-    pub(crate) proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
+    pub(crate) proxy_configs: Arc<ProxyConfigs>,
     pub(crate) request_sem: Arc<tokio::sync::Semaphore>,
     pub(crate) http_client: reqwest::blocking::Client,
     /// Downloads chosen covers: same as `http_client`, but follows only https redirects.
@@ -161,14 +218,18 @@ pub(crate) fn percent_decode(s: &str) -> String {
 #[tauri::command]
 pub fn set_cover_proxy_config(
     state: tauri::State<'_, CoverState>,
+    server_id: String,
     base_url: String,
     alt_url: Option<String>,
     auth_params: String,
 ) {
-    *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig {
-        routes: cover_routes(base_url, alt_url),
-        auth_params,
-    });
+    state.proxy_configs.set(
+        server_id,
+        CoverProxyConfig {
+            routes: cover_routes(base_url, alt_url),
+            auth_params,
+        },
+    );
 }
 
 // `getBlurredBackdrop` loads covers with `crossOrigin = "anonymous"` to read pixels via
@@ -290,21 +351,24 @@ pub(crate) fn handle_cover_request(
         return cover_image_response(bytes, &content_type);
     }
 
-    let id = match path.strip_prefix("/cover/") {
-        Some(s) => s.to_string(),
-        None => return cover_error_response(404),
+    let Some((server_id, id)) = parse_cover_path(path) else {
+        return cover_error_response(404);
     };
     let size = query_param(query, "size")
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(300);
+    let request = CoverRequest {
+        server_id: &server_id,
+        cover_id: id,
+        size,
+        revision: query_param(query, "v").and_then(|v| v.parse::<i64>().ok()),
+    };
     // Ahead of both caches, which keep the server's cover so going back to it needs no refetch.
-    let revision = query_param(query, "v").and_then(|v| v.parse::<i64>().ok());
-    if let Some((bytes, content_type)) =
-        read_override(&state.overrides, &state.cache, &id, size, revision)
-    {
+    if let Some((bytes, content_type)) = read_override(&state.overrides, &state.cache, &request) {
         return cover_image_response(bytes, &content_type);
     }
-    let cache_key = format!("{id}:{size}");
+    // Two servers can share a cover id (same library, same Navidrome hash), not the image.
+    let cache_key = format!("{server_id}:{id}:{size}");
     let is_cached = is_cached_cover_size(size);
     let cached = is_cached
         .then(|| {
@@ -330,12 +394,7 @@ pub(crate) fn handle_cover_request(
         cache.insert(cache_key.clone(), entry.clone());
         entry
     } else {
-        let cfg = state
-            .proxy_config
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        match cfg {
+        match state.proxy_configs.wait_for(&server_id, PROXY_CONFIG_WAIT) {
             None => return cover_error_response(503),
             Some(cfg) => {
                 // Only a transport failure moves on to the next route: an HTTP answer
@@ -350,10 +409,7 @@ pub(crate) fn handle_cover_request(
                 });
                 if let Some((route, _)) = &answered {
                     if cfg.routes.first() != Some(*route) {
-                        let mut live = state.proxy_config.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(live) = live.as_mut() {
-                            promote_route(&mut live.routes, route);
-                        }
+                        state.proxy_configs.promote(&server_id, route);
                     }
                 }
                 match answered.map(|(_, resp)| resp) {
@@ -405,11 +461,13 @@ pub(crate) fn handle_cover_request(
 mod tests {
     use super::{
         cover_routes, disk_cache_read, disk_cache_write, evict_disk_cache_if_needed,
-        is_cached_cover_size, percent_decode, promote_route, sanitize_cache_key,
-        MAX_DISK_CACHE_ENTRIES,
+        is_cached_cover_size, parse_cover_path, percent_decode, promote_route, sanitize_cache_key,
+        CoverProxyConfig, ProxyConfigs, MAX_DISK_CACHE_ENTRIES,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
 
     /// Unique scratch dir per test, removed on drop. Avoids pulling in `tempfile`
     /// as a dev-dependency for a handful of directories.
@@ -446,6 +504,79 @@ mod tests {
         assert!(!is_cached_cover_size(0));
         assert!(is_cached_cover_size(64));
         assert!(is_cached_cover_size(300));
+    }
+
+    fn config(route: &str) -> CoverProxyConfig {
+        CoverProxyConfig {
+            routes: vec![route.to_string()],
+            auth_params: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_cover_path_names_its_server_and_keeps_the_cover_id_encoded() {
+        assert_eq!(
+            parse_cover_path("/cover/srv%2F1/al%2Fx_ff"),
+            Some(("srv/1".to_string(), "al%2Fx_ff"))
+        );
+    }
+
+    #[test]
+    fn a_cover_path_without_a_server_is_refused() {
+        assert_eq!(parse_cover_path("/cover/al-1"), None);
+        assert_eq!(parse_cover_path("/cover//al-1"), None);
+        assert_eq!(parse_cover_path("/cover/srv/"), None);
+        assert_eq!(parse_cover_path("/cover/srv/al/1"), None);
+        assert_eq!(parse_cover_path("/artist-image/x"), None);
+    }
+
+    #[test]
+    fn each_server_keeps_its_own_proxy_config_after_another_is_set() {
+        let configs = ProxyConfigs::default();
+        configs.set("a".into(), config("http://a"));
+        configs.set("b".into(), config("http://b"));
+        let routes = |id| configs.wait_for(id, Duration::ZERO).map(|c| c.routes);
+        assert_eq!(routes("a"), Some(vec!["http://a".to_string()]));
+        assert_eq!(routes("b"), Some(vec!["http://b".to_string()]));
+    }
+
+    #[test]
+    fn a_request_waits_for_its_servers_config_to_arrive() {
+        let configs = Arc::new(ProxyConfigs::default());
+        let setter = Arc::clone(&configs);
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            setter.set("other".into(), config("http://other"));
+            std::thread::sleep(Duration::from_millis(30));
+            setter.set("a".into(), config("http://a"));
+        });
+        let found = configs.wait_for("a", Duration::from_secs(5));
+        handle.join().unwrap();
+        assert_eq!(found.map(|c| c.routes), Some(vec!["http://a".to_string()]));
+    }
+
+    #[test]
+    fn a_request_gives_up_once_its_servers_config_never_arrives() {
+        let configs = ProxyConfigs::default();
+        configs.set("other".into(), config("http://other"));
+        let started = Instant::now();
+        assert!(configs.wait_for("a", Duration::from_millis(40)).is_none());
+        assert!(started.elapsed() >= Duration::from_millis(40));
+    }
+
+    #[test]
+    fn promoting_a_route_touches_only_that_servers_config() {
+        let configs = ProxyConfigs::default();
+        let both = |primary: &str, alt: &str| CoverProxyConfig {
+            routes: vec![primary.to_string(), alt.to_string()],
+            auth_params: String::new(),
+        };
+        configs.set("a".into(), both("http://a", "http://a-alt"));
+        configs.set("b".into(), both("http://a", "http://a-alt"));
+        configs.promote("a", "http://a-alt");
+        let first = |id| configs.wait_for(id, Duration::ZERO).unwrap().routes[0].clone();
+        assert_eq!(first("a"), "http://a-alt");
+        assert_eq!(first("b"), "http://a");
     }
 
     #[test]

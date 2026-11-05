@@ -1738,6 +1738,27 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     expect(usePlayerStore.getState().currentTrack?.id).toBe(`${SRV}:saved`);
   });
 
+  it("rebuilds restored cover URLs from the cover id, so none keeps a credential or an old server's URL", async () => {
+    const leaky = "http://music.example/rest/getCoverArt?u=alice&t=tok&s=slt&id=al-x&size=64";
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: [
+          { ...makeTrack(`${SRV}:a`), artworkRef: "al-x", coverArtUrl: leaky },
+          { ...makeTrack(`${SRV}:b`), artworkRef: null, coverArtUrl: "cover://localhost/cover/al-y?size=64" },
+        ],
+        queueIndex: 0,
+        currentTrack: { ...makeTrack(`${SRV}:a`), artworkRef: "al-x", coverArtUrl: leaky },
+      }),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const { queue, currentTrack } = usePlayerStore.getState();
+    expect(queue.map((t) => t.coverArtUrl)).toEqual(["cover://localhost/cover/srv-1/al-x?size=64", null]);
+    expect(currentTrack?.coverArtUrl).toBe("cover://localhost/cover/srv-1/al-x?size=64");
+  });
+
   it("does not restore a queue left by a server that has since been removed", async () => {
     // Deleting a server purges its mirrored rows but the snapshot is a global settings
     // row, so its ids outlive it. Restoring them puts a track the new server never had

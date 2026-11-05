@@ -206,7 +206,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     `${artist.album_count} ${plural(artist.album_count, "album")} in library`,
   ].filter((x): x is string => x !== null);
 
-  const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server, credential), [server, credential]);
+  const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server), [server, credential]);
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
@@ -365,7 +365,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                       currentTrack={currentTrack}
                       isPlaying={isPlaying}
                       server={server}
-                      credential={credential}
                       onPlay={handlePlayTrack}
                       lastfmPlaycount={track.lastfmPlaycount}
                       lastfmCombined={track.lastfmCombined}
@@ -396,7 +395,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                         currentTrack={currentTrack}
                         isPlaying={isPlaying}
                         server={server}
-                        credential={credential}
                         onPlay={handlePlayTrack}
                         onAlbumClick={handleAlbumClick}
                         onContextMenu={handleTrackContextMenu}
@@ -418,7 +416,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                         currentTrack={currentTrack}
                         isPlaying={isPlaying}
                         server={server}
-                        credential={credential}
                         onPlay={handlePlayTrack}
                         lastfmPlaycount={track.lastfmPlaycount}
                         lastfmCombined={track.lastfmCombined}

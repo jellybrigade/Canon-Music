@@ -68,7 +68,7 @@ export function NowPlayingAbout({
       title: t.title,
       artist: t.artist,
       duration: t.duration,
-      coverArtUrl: t.artwork_url ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64) : null,
+      coverArtUrl: t.artwork_url ? getCoverArtUrl(server.id, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null,
       album: t.album_name ?? null,
       albumId: t.album_id ?? null,
@@ -111,11 +111,7 @@ export function NowPlayingAbout({
         }}
       >
         {track.artwork_url ? (
-          <CoverImg
-            className="now-playing-track-thumb"
-            src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
-            alt=""
-          />
+          <CoverImg className="now-playing-track-thumb" src={getCoverArtUrl(server.id, track.artwork_url, 64)} alt="" />
         ) : (
           placeholder
         )}
@@ -187,9 +183,7 @@ export function NowPlayingAbout({
           <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
           <div className="now-playing-album-scroll">
             {otherAlbums.map((album) => {
-              const thumbUrl = album.artwork_url
-                ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 120)
-                : null;
+              const thumbUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 120) : null;
               return (
                 <button
                   key={album.id}

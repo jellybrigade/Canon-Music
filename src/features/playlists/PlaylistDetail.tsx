@@ -251,9 +251,7 @@ export function PlaylistDetail({
   }
 
   function buildTrackObj(track: PlaylistTrackRow): CurrentTrack {
-    const coverArtUrl = track.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
-      : null;
+    const coverArtUrl = track.artwork_url ? getCoverArtUrl(server.id, track.artwork_url, 64) : null;
     return {
       id: track.id,
       title: track.title,
@@ -347,9 +345,7 @@ export function PlaylistDetail({
 
   const displayCoverUrl =
     playlist.custom_cover_data ??
-    (playlist.cover_art_url
-      ? getCoverArtUrl(server.url, server.username, credential, playlist.cover_art_url, 300)
-      : null);
+    (playlist.cover_art_url ? getCoverArtUrl(server.id, playlist.cover_art_url, 300) : null);
 
   return (
     <div className="album-detail">

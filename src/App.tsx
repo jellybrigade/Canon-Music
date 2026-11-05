@@ -286,25 +286,24 @@ export default function App() {
     void loadSettings();
   }, [loadSettings]);
 
-  // Cover art proxy: push credentials to Rust first, then enable proxy URLs only after config is confirmed.
-  // Sequenced in one effect to prevent a window where proxy URLs are returned but the Rust config is still None.
+  // Cover requests for this server wait in Rust until its config lands; artist portraits wait for initCoverServer.
   useEffect(() => {
     if (!serverWithCred) return;
     void (async () => {
       try {
-        await updateCoverProxyConfig(
-          serverWithCred.server.url,
-          serverWithCred.server.alt_url,
-          serverWithCred.server.username,
-          serverWithCred.credential,
-        );
-        // Before the switch to cover:// so no URL is built without its chosen-cover revision.
+        await updateCoverProxyConfig({
+          serverId: serverWithCred.server.id,
+          baseUrl: serverWithCred.server.url,
+          altUrl: serverWithCred.server.alt_url,
+          username: serverWithCred.server.username,
+          credential: serverWithCred.credential,
+        });
         await loadCoverOverrides(serverWithCred.server.id).catch((err: unknown) => {
           console.error("Chosen album covers could not be loaded", err);
         });
         initCoverServer();
-      } catch {
-        // proxy unavailable; getCoverArtUrl falls back to direct Navidrome URL
+      } catch (err: unknown) {
+        console.error("The cover proxy could not be configured", err);
       }
     })();
   }, [serverWithCred]);
@@ -377,7 +376,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    await play(currentTrackFromRow(t, srv, credential), makeStreamUrlBuilder(srv, credential));
+    await play(currentTrackFromRow(t, srv), makeStreamUrlBuilder(srv, credential));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -395,9 +394,7 @@ export default function App() {
     if (rows.length === 0) return;
     const topHalf = rows.slice(0, Math.max(1, Math.ceil(rows.length / 2)));
     const t = topHalf[Math.floor(Math.random() * topHalf.length)]!;
-    const coverArtUrl = album.artwork_url
-      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
-      : null;
+    const coverArtUrl = album.artwork_url ? getCoverArtUrl(srv.id, album.artwork_url, 64) : null;
     const track = {
       id: t.id,
       title: t.title,
@@ -416,9 +413,7 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const rows = await loadAlbumTracksForPlay(srv, credential, album);
-    const coverArtUrl = album.artwork_url
-      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
-      : null;
+    const coverArtUrl = album.artwork_url ? getCoverArtUrl(srv.id, album.artwork_url, 64) : null;
     const streamUrlFor = makeStreamUrlBuilder(srv, credential);
     for (const t of rows) {
       const track = {
@@ -441,7 +436,7 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
-    const tracks = rows.map((t) => currentTrackFromRow(t, srv, credential));
+    const tracks = rows.map((t) => currentTrackFromRow(t, srv));
     await startRadio({
       tracks,
       streamUrlFor: makeStreamUrlBuilder(srv, credential),
@@ -465,7 +460,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    const track = currentTrackFromRow(t, srv, credential);
+    const track = currentTrackFromRow(t, srv);
     await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 

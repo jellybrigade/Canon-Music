@@ -38,6 +38,7 @@ export async function fetchAllAlbums(
   username: string,
   credential: NavidromeCredential,
   altUrl?: string,
+  signal?: AbortSignal,
 ): Promise<NavidromeAlbum[]> {
   const PAGE_SIZE = 500;
   // A server that ignores `offset` answers every request with the same full page, so the
@@ -53,7 +54,7 @@ export async function fetchAllAlbums(
     params.set("size", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
-    const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl);
+    const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl, signal);
     if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
     const data = (await res.json()) as {
@@ -147,10 +148,11 @@ export async function fetchAlbumTracks(
   credential: NavidromeCredential,
   albumId: string,
   altUrl?: string,
+  signal?: AbortSignal,
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", albumId);
-  const res = await apiPost(baseUrl, "getAlbum", params, altUrl);
+  const res = await apiPost(baseUrl, "getAlbum", params, altUrl, signal);
   if (!res.ok) throw new Error(`getAlbum returned ${res.status}`);
 
   const data = (await res.json()) as {

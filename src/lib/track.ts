@@ -25,19 +25,20 @@ export function makeStreamUrlBuilder(server: Server, credential: NavidromeCreden
   };
 }
 
-export function currentTrackFromRow(
-  row: PlayableTrackRow,
-  server: Server,
-  credential: NavidromeCredential,
-): CurrentTrack {
+/** A stored cover URL may predate its server's scoping or carry a credential (older builds); rebuild it from the cover id. */
+export function withCoverFromRef(track: CurrentTrack, serverId: string | undefined): CurrentTrack {
+  const coverArtUrl =
+    track.artworkRef && serverId !== undefined ? getCoverArtUrl(serverId, track.artworkRef, PLAYER_COVER_SIZE) : null;
+  return { ...track, coverArtUrl };
+}
+
+export function currentTrackFromRow(row: PlayableTrackRow, server: Server): CurrentTrack {
   return {
     id: row.id,
     title: row.title,
     artist: row.artist,
     duration: row.duration,
-    coverArtUrl: row.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, row.artwork_url, PLAYER_COVER_SIZE)
-      : null,
+    coverArtUrl: row.artwork_url ? getCoverArtUrl(server.id, row.artwork_url, PLAYER_COVER_SIZE) : null,
     artworkRef: row.artwork_url,
     album: row.album_name,
     albumId: row.album_id,

@@ -543,15 +543,7 @@ export function CommandPalette({
   });
 
   const coverUrl = (artworkUrl: string | null, size: number) =>
-    serverWithCredential && artworkUrl
-      ? getCoverArtUrl(
-          serverWithCredential.server.url,
-          serverWithCredential.server.username,
-          serverWithCredential.credential,
-          artworkUrl,
-          size,
-        )
-      : null;
+    serverWithCredential && artworkUrl ? getCoverArtUrl(serverWithCredential.server.id, artworkUrl, size) : null;
 
   const artOf = (result: LibraryResult, size: number) => {
     if (result.kind === "artist") {

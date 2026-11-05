@@ -88,6 +88,6 @@ async function shuffleLibrary(
 ): Promise<void> {
   const row = await loadRandomLibraryTrack(server.id);
   if (!row) return;
-  const track = currentTrackFromRow(row, server, credential);
+  const track = currentTrackFromRow(row, server);
   await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(server, credential), mode: "random" });
 }

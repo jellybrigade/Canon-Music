@@ -51,7 +51,7 @@ export function PlaylistList({
 }: Props) {
   const isLoading = playlistsProp === undefined;
   const playlists = useMemo(() => playlistsProp ?? [], [playlistsProp]);
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const [creating, setCreating] = useState(false);
   const [showSmartModal, setShowSmartModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -293,9 +293,7 @@ export function PlaylistList({
                 {rowItems.map((pl) => {
                   const artUrl =
                     pl.custom_cover_data ??
-                    (pl.cover_art_url
-                      ? getCoverArtUrl(server.url, server.username, credential, pl.cover_art_url, 300)
-                      : null);
+                    (pl.cover_art_url ? getCoverArtUrl(server.id, pl.cover_art_url, 300) : null);
                   return (
                     <button
                       key={pl.id}

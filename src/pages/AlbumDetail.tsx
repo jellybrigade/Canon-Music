@@ -226,9 +226,7 @@ export function AlbumDetail({
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const albumBio = albumEnrichment?.album_bio ?? null;
 
-  const coverArtUrl = useCoverUrl(
-    album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500) : null,
-  );
+  const coverArtUrl = useCoverUrl(album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null);
 
   const accentColor = useAlbumAccent(album.id, album.accent_color, coverArtUrl, server.id);
 

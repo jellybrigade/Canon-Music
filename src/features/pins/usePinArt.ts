@@ -6,7 +6,7 @@ import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { PinnedItem } from "./pins";
 
-export function usePinArt({ server, credential }: ServerWithCredential, thumbSize: number) {
+export function usePinArt({ server }: ServerWithCredential, thumbSize: number) {
   const albumDisplayName = useAlbumDisplayName();
   const artistImageMap = useArtistImageMap();
   const coverMap = useAlbumCoverMap();
@@ -18,10 +18,7 @@ export function usePinArt({ server, credential }: ServerWithCredential, thumbSiz
       return resolveArtistImageUrl(artistImageMap, item.artist.name, resolvePortraitUrl(item.artist));
     }
     const { id, artwork_url } = item.album;
-    return (
-      coverMap.get(id) ??
-      (artwork_url ? getCoverArtUrl(server.url, server.username, credential, artwork_url, thumbSize) : null)
-    );
+    return coverMap.get(id) ?? (artwork_url ? getCoverArtUrl(server.id, artwork_url, thumbSize) : null);
   };
   return { nameOf, thumbOf };
 }

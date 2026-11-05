@@ -45,7 +45,7 @@ export function AlbumCarousel({
   refresh,
   scrollToStartRequest = 0,
 }: AlbumCarouselProps) {
-  const { server, credential } = serverWithCred;
+  const { server } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
 
@@ -96,10 +96,7 @@ export function AlbumCarousel({
             ))
           : (items ?? []).map((item) => {
               const artUrl =
-                coverMap.get(item.id) ??
-                (item.artwork_url
-                  ? getCoverArtUrl(server.url, server.username, credential, item.artwork_url, 300)
-                  : null);
+                coverMap.get(item.id) ?? (item.artwork_url ? getCoverArtUrl(server.id, item.artwork_url, 300) : null);
               return (
                 <div
                   key={item.id}

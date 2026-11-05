@@ -33,7 +33,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   const startRadio = useStartRadio();
   const albumDisplayName = useAlbumDisplayName();
   const [upNextMenu, setUpNextMenu] = useState<{ x: number; y: number; position: number } | null>(null);
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
 
   const orderedTracks = useMemo(
     () =>
@@ -74,7 +74,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
             {track.artworkRef ? (
               <CoverImg
                 className="now-playing-up-next-thumb"
-                src={getCoverArtUrl(server.url, server.username, credential, track.artworkRef, 64)}
+                src={getCoverArtUrl(server.id, track.artworkRef, 64)}
                 alt=""
                 loading="lazy"
                 decoding="async"
