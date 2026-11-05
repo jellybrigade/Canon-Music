@@ -288,6 +288,41 @@ describe("getRadioCandidates", () => {
       expect(single.score).toBeCloseTo(0.4 * (1 / Math.sqrt(2)), 6);
     });
 
+    it("counts a tag once however many sources and spellings carry it", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTreeNode(db, "x");
+      await insertTrack(db, { id: "seed", albumId: "alb" });
+      await insertTag(db, "seed", "x");
+
+      await insertTrack(db, { id: "widely-tagged", albumId: "alb" });
+      for (const [rawValue, source] of [
+        ["x", "server"],
+        ["x", "lastfm"],
+        ["X ", "lastfm"],
+        ["x", "musicbrainz"],
+      ]) {
+        await db.execute(
+          "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES ('widely-tagged', 'genre', ?, 'x', ?)",
+          [rawValue, source],
+        );
+      }
+
+      await insertTrack(db, { id: "single", albumId: "alb" });
+      await insertTag(db, "single", "x");
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "same-genre",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result).toHaveLength(2);
+      for (const candidate of result) expect(candidate.score).toBeCloseTo(0.4, 6);
+    });
+
     it("normalizes against the pre-exclusion max, so excluding the top scorer shrinks what remains", async () => {
       const db = holder.db!;
       await insertAlbum(db, "alb");

@@ -157,12 +157,13 @@ async function getCuratedCandidates(
             SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS sum_score,
             COUNT(DISTINCT tt.canonical_id) AS tag_count
      FROM tracks t
-     JOIN track_tags tt ON tt.track_id = t.id
+     -- One row per source and spelling is stored; each tag counts once.
+     JOIN (SELECT DISTINCT track_id, canonical_id, kind FROM track_tags) tt ON tt.track_id = t.id
      JOIN seed_weights sw ON sw.canonical_id = tt.canonical_id
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY sum_score DESC
+     ORDER BY sum_score DESC, t.id
      LIMIT ?`,
     [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
   );
