@@ -82,7 +82,7 @@ describe("normalizeAlbum when Last.fm doesn't answer", () => {
   it("keeps the album's earlier Last.fm genres and leaves it due for another try", async () => {
     vi.mocked(fetchAlbumTags).mockRejectedValue(new Error("Last.fm album.getTopTags returned 503"));
 
-    const result = await normalizeAlbum(ALBUM_ID, "Slowdive", "Souvlaki");
+    const result = await normalizeAlbum(ALBUM_ID);
 
     expect(albumGenreIds()).toEqual(["shoegaze"]);
     expect(storedComputedAt()).toBe(EARLIER);
@@ -94,7 +94,7 @@ describe("normalizeAlbum when Last.fm doesn't answer", () => {
     vi.mocked(fetchAlbumTags).mockResolvedValue({ genres: [], moods: [] });
     vi.mocked(fetchArtistGenreTags).mockResolvedValue([]);
 
-    await normalizeAlbum(ALBUM_ID, "Slowdive", "Souvlaki");
+    await normalizeAlbum(ALBUM_ID);
 
     expect(storedComputedAt()).toBeGreaterThan(EARLIER);
   });
@@ -104,7 +104,7 @@ describe("normalizeAlbum when Last.fm doesn't answer", () => {
     vi.mocked(fetchAlbumTags).mockResolvedValue({ genres: [], moods: [] });
     vi.mocked(fetchArtistGenreTags).mockRejectedValue(new Error("Last.fm artist.getTopTags returned 503"));
 
-    await normalizeAlbum(ALBUM_ID, "Slowdive", "Souvlaki");
+    await normalizeAlbum(ALBUM_ID);
 
     expect(storedComputedAt()).toBe(EARLIER);
   });

@@ -158,36 +158,44 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
   return { mapped, unmapped };
 }
 
-export async function normalizeAlbum(
-  albumId: string,
-  artist: string,
-  album: string,
-  identity?: {
-    lastfmArtistName?: string | null;
-    lastfmAlbumName?: string | null;
-    combinedMbGenres?: MbGenre[] | null;
-    combinedMbTags?: MbGenre[] | null;
-  },
-): Promise<NormalizedTags> {
+/** Re-derives the album's genres from every stored source; reads its own inputs so no caller can leave one out. */
+export async function normalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const existing = inFlightPromises.get(albumId);
   if (existing) return existing;
-  const promise = _doNormalizeAlbum(albumId, artist, album, identity).finally(() => inFlightPromises.delete(albumId));
+  const promise = _doNormalizeAlbum(albumId).finally(() => inFlightPromises.delete(albumId));
   inFlightPromises.set(albumId, promise);
   return promise;
 }
 
-async function _doNormalizeAlbum(
-  albumId: string,
-  artist: string,
-  album: string,
-  identity?: {
-    lastfmArtistName?: string | null;
-    lastfmAlbumName?: string | null;
-    combinedMbGenres?: MbGenre[] | null;
-    combinedMbTags?: MbGenre[] | null;
-  },
-): Promise<NormalizedTags> {
+type NormalizeInputRow = {
+  name: string;
+  artist: string | null;
+  lastfm_artist_name: string | null;
+  lastfm_album_name: string | null;
+  combined_genres_json: string | null;
+  combined_tags_json: string | null;
+};
+
+function parseMbGenres(json: string | null): MbGenre[] {
+  if (json === null) return [];
+  try {
+    return JSON.parse(json) as MbGenre[];
+  } catch {
+    return [];
+  }
+}
+
+async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const db = await getDb();
+  const inputRows = await db.select<NormalizeInputRow[]>(
+    `SELECT a.name, a.artist, ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
+     FROM albums a
+     LEFT JOIN album_identity ai ON ai.album_id = a.id
+     WHERE a.id = ?`,
+    [albumId],
+  );
+  const input = inputRows[0];
+  if (input === undefined) throw new Error(`normalizeAlbum: album ${albumId} is not in the library`);
   const tree = await getCanonTree();
   const skipYearGenres = await getSkipYearGenres();
 
@@ -204,8 +212,8 @@ async function _doNormalizeAlbum(
   // whatever mutation writes tag_mappings (see src/features/tags/lib/manualMappings.ts).
   const manualMap = await getManualGenreMappings();
 
-  const lfmArtist = identity?.lastfmArtistName ?? artist;
-  const lfmAlbum = identity?.lastfmAlbumName ?? album;
+  const lfmArtist = input.lastfm_artist_name ?? input.artist ?? "";
+  const lfmAlbum = input.lastfm_album_name ?? input.name;
 
   let lastfmRaw: string[] = [];
   // A Last.fm outage is not "no tags": keep the album's earlier Last.fm tags and leave it due.
@@ -226,20 +234,11 @@ async function _doNormalizeAlbum(
     lastfmRaw = await readStoredLastfmTags(db, albumId);
   }
 
-  const mbRaw: string[] = [];
-  if (identity?.combinedMbGenres?.length) {
-    for (const g of identity.combinedMbGenres) {
-      mbRaw.push(g.name);
-    }
-  }
-
+  const mbRaw = parseMbGenres(input.combined_genres_json).map((genre) => genre.name);
   const minFolksonomy = await getMinFolksonomyCount();
-  const mbFolkRaw: string[] = [];
-  if (identity?.combinedMbTags?.length) {
-    for (const t of identity.combinedMbTags) {
-      if (t.count >= minFolksonomy) mbFolkRaw.push(t.name);
-    }
-  }
+  const mbFolkRaw = parseMbGenres(input.combined_tags_json)
+    .filter((tag) => tag.count >= minFolksonomy)
+    .map((tag) => tag.name);
 
   // Artist tags as last resort: only when no file tags AND no album/MB tags exist
   if (

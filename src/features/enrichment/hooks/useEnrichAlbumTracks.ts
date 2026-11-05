@@ -13,7 +13,6 @@ import { QK } from "../../../lib/queryKeys";
 import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
 import { findCanonicalSync, getCanonTree } from "../../tags/lib/canonicalize";
 import { normalizeAlbum } from "../../tags/lib/tagNormalize";
-import { useAlbumIdentity } from "./useAlbumIdentity";
 
 // Module-level dedupe: one enrichment run per album at a time across all mounts.
 const inFlight = new Map<string, Promise<void>>();
@@ -26,18 +25,7 @@ interface TrackStub {
   tags_enriched_at: number | null;
 }
 
-async function enrichAlbumTracks(
-  albumId: string,
-  albumArtist: string,
-  albumName: string,
-  staleDays: number,
-  identity: {
-    lastfm_artist_name?: string | null;
-    lastfm_album_name?: string | null;
-    combined_genres_json?: string | null;
-    combined_tags_json?: string | null;
-  } | null,
-): Promise<void> {
+async function enrichAlbumTracks(albumId: string, albumArtist: string, staleDays: number): Promise<void> {
   const db = await getDb();
 
   const tracks = await db.select<TrackStub[]>(
@@ -108,36 +96,14 @@ async function enrichAlbumTracks(
   if (!anySucceeded) return;
 
   // Re-run album normalization so consensus promotion + album_genres reflect new track tags.
-  let combinedMbGenres: Array<{ name: string; count: number }> | null = null;
-  let combinedMbTags: Array<{ name: string; count: number }> | null = null;
-  if (identity?.combined_genres_json) {
-    try {
-      combinedMbGenres = JSON.parse(identity.combined_genres_json) as Array<{ name: string; count: number }>;
-    } catch {
-      /* ignore */
-    }
-  }
-  if (identity?.combined_tags_json) {
-    try {
-      combinedMbTags = JSON.parse(identity.combined_tags_json) as Array<{ name: string; count: number }>;
-    } catch {
-      /* ignore */
-    }
-  }
-  await normalizeAlbum(albumId, albumArtist, albumName, {
-    lastfmArtistName: identity?.lastfm_artist_name ?? null,
-    lastfmAlbumName: identity?.lastfm_album_name ?? null,
-    combinedMbGenres,
-    combinedMbTags,
-  });
+  await normalizeAlbum(albumId);
 }
 
-export function useEnrichAlbumTracks(albumId: string, albumArtist: string, albumName: string) {
+export function useEnrichAlbumTracks(albumId: string, albumArtist: string) {
   const queryClient = useQueryClient();
   const [enrichTracks, , isEnrichTracksLoaded] = useSetting("tags.enrich_tracks", "true");
   const [staleDaysStr, , isStaleDaysLoaded] = useSetting("tags.staleness_days", "30");
   const staleDays = parseStalenessDays(staleDaysStr);
-  const { data: identity, isSuccess: identityReady } = useAlbumIdentity(albumId);
   // Holds the album the claim was stamped for, not a bare boolean: `AlbumDetail` has no `key`,
   // so navigating between two cached albums re-runs this effect on the same mount.
   const ranRef = useRef<string | null>(null);
@@ -146,15 +112,13 @@ export function useEnrichAlbumTracks(albumId: string, albumArtist: string, album
     if (!isEnrichTracksLoaded || !isStaleDaysLoaded) return;
     if (enrichTracks !== "true") return;
     if (!albumId || !albumArtist) return;
-    // Wait for identity query to settle (may be null for albums with no identity).
-    if (!identityReady) return;
     if (ranRef.current === albumId) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
     // permanently prevent this mount from retrying.
     if (inFlight.has(albumId)) return;
     ranRef.current = albumId;
 
-    const promise = enrichAlbumTracks(albumId, albumArtist, albumName, staleDays, identity ?? null)
+    const promise = enrichAlbumTracks(albumId, albumArtist, staleDays)
       .then(() => {
         useTrackListSessionStore.getState().bumpRefresh();
         void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
@@ -168,16 +132,5 @@ export function useEnrichAlbumTracks(albumId: string, albumArtist: string, album
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);
-  }, [
-    albumId,
-    albumArtist,
-    albumName,
-    enrichTracks,
-    staleDays,
-    isEnrichTracksLoaded,
-    isStaleDaysLoaded,
-    identityReady,
-    identity,
-    queryClient,
-  ]);
+  }, [albumId, albumArtist, enrichTracks, staleDays, isEnrichTracksLoaded, isStaleDaysLoaded, queryClient]);
 }

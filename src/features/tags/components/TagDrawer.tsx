@@ -1,12 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { MbGenre } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
-import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useTagMappings } from "../hooks/useTagMappings";
 import type { TreeNode } from "../lib/canonicalize";
@@ -19,8 +17,6 @@ import "./TagsView.css";
 
 interface Props {
   albumId: string;
-  albumArtist: string;
-  albumName: string;
   trackId?: string;
   onClose: () => void;
 }
@@ -171,13 +167,10 @@ function TagSection({
 
 interface UnmatchedSectionProps {
   albumId: string;
-  albumArtist: string;
-  albumName: string;
 }
 
-export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionProps) {
+export function UnmatchedSection({ albumId }: UnmatchedSectionProps) {
   const { data: unmatched = [] } = useAlbumUnmatchedGenres(albumId);
-  const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
@@ -197,29 +190,7 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
       return;
     }
 
-    let combinedMbGenres: MbGenre[] | null = null;
-    if (identity?.combined_genres_json) {
-      try {
-        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    let combinedMbTags: MbGenre[] | null = null;
-    if (identity?.combined_tags_json) {
-      try {
-        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-
-    await normalizeAlbum(albumId, albumArtist, albumName, {
-      lastfmArtistName: identity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: identity?.lastfm_album_name ?? null,
-      combinedMbGenres,
-      combinedMbTags,
-    });
+    await normalizeAlbum(albumId);
 
     void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
@@ -266,11 +237,10 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
 
 // ── TagDrawer ─────────────────────────────────────────────────────────────────
 
-export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
-  const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
+export function TagDrawer({ albumId, trackId, onClose }: Props) {
+  const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId);
   const { data: rawTrackTags } = useTrackRawTags(trackId);
   const { data: rawMap } = useAlbumRawGenreMap(albumId);
-  const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
   const dismiss = useOverlayDismiss(onClose);
@@ -282,28 +252,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
     } catch {
       return;
     }
-    let combinedMbGenres: MbGenre[] | null = null;
-    if (identity?.combined_genres_json) {
-      try {
-        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    let combinedMbTags: MbGenre[] | null = null;
-    if (identity?.combined_tags_json) {
-      try {
-        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    await normalizeAlbum(albumId, albumArtist, albumName, {
-      lastfmArtistName: identity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: identity?.lastfm_album_name ?? null,
-      combinedMbGenres,
-      combinedMbTags,
-    });
+    await normalizeAlbum(albumId);
     void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumGenreRawSources(albumId) });
@@ -327,7 +276,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
             <div className="tag-drawer-empty">No normalized tags yet.</div>
           ) : (
             <>
-              <UnmatchedSection albumId={albumId} albumArtist={albumArtist} albumName={albumName} />
+              <UnmatchedSection albumId={albumId} />
               <TagSection
                 title="Genres"
                 tags={normalizedTags.genres}

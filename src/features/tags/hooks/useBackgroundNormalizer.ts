@@ -78,7 +78,7 @@ async function runEnrichPasses(albums: AlbumRow[], artists: ArtistRow[], signal?
     albums,
     async (album) => {
       try {
-        await normalizeAlbum(album.id, album.artist ?? "", album.name);
+        await normalizeAlbum(album.id);
       } catch (e) {
         console.warn("Background normalizer failed for:", album.name, e);
       }

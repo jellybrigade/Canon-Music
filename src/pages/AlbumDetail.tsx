@@ -102,8 +102,8 @@ export function AlbumDetail({
 
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
-  const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
-  useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
+  const { data: normalizedTags } = useNormalizeAlbum(album.id);
+  useEnrichAlbumTracks(album.id, album.artist ?? "");
   const { data: albumEnrichment } = useEnrichAlbum(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
 
@@ -162,16 +162,7 @@ export function AlbumDetail({
     setTagRefreshError(null);
     try {
       await doSyncTracks();
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
+      await normalizeAlbum(album.id);
       await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
       await queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(album.id) });
     } catch (err) {
@@ -180,7 +171,7 @@ export function AlbumDetail({
     } finally {
       setIsTagRefreshing(false);
     }
-  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient, doSyncTracks]);
+  }, [album.id, isTagRefreshing, queryClient, doSyncTracks]);
   const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
@@ -322,8 +313,6 @@ export function AlbumDetail({
       {showGenreEditor && (
         <AlbumGenreEditor
           albumId={album.id}
-          albumArtist={album.artist ?? ""}
-          albumName={album.name}
           genreGroups={genreGroups}
           rawSourcesByCanonicalId={rawSourcesByCanonicalId}
           onTagFilter={onTagFilter}
@@ -395,13 +384,7 @@ export function AlbumDetail({
       )}
 
       {drawerState && (
-        <TagDrawer
-          albumId={drawerState.albumId}
-          albumArtist={album.artist ?? ""}
-          albumName={album.name}
-          trackId={drawerState.trackId}
-          onClose={() => setDrawerState(null)}
-        />
+        <TagDrawer albumId={drawerState.albumId} trackId={drawerState.trackId} onClose={() => setDrawerState(null)} />
       )}
 
       {coverDialogs.identifyTarget === album.id && (

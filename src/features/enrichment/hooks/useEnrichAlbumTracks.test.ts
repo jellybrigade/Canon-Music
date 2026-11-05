@@ -24,7 +24,6 @@ import { createElement, type ReactNode } from "react";
 import { fetchTrackTags } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { __resetSettingCache } from "../../../hooks/useSetting";
-import { QK } from "../../../lib/queryKeys";
 import { createMigratedTestDb, type FakeDatabase, holdSettingReads } from "../../../test/sqlite";
 import { useEnrichAlbumTracks } from "./useEnrichAlbumTracks";
 
@@ -79,18 +78,6 @@ function trackTagRows(): { track_id: string; raw_value: string }[] {
   }[];
 }
 
-/**
- * Re-triggers the effect the way the app does: identifying the album rewrites `album_identity`
- * and invalidates its query, which is a dep of the effect. A bare refetch would not do it -
- * React Query's structural sharing hands back the same reference when the row is unchanged.
- */
-async function reidentifyAlbum() {
-  db.raw.prepare("UPDATE album_identity SET lastfm_album_name = 'loveless (deluxe)' WHERE album_id = ?").run(ALBUM_ID);
-  await act(async () => {
-    await queryClient.invalidateQueries({ queryKey: QK.albumIdentity(ALBUM_ID) });
-  });
-}
-
 beforeEach(async () => {
   __resetSettingCache();
   db = await createMigratedTestDb();
@@ -108,14 +95,6 @@ beforeEach(async () => {
        VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`,
     )
     .run("srv-a:t1", "Only Shallow", ALBUM_ID);
-  // A stored identity row, so the identity query resolves to an object that can later change.
-  // Without a row it resolves to a stable `null`, which can never re-trigger the effect.
-  db.raw
-    .prepare(
-      `INSERT INTO album_identity (album_id, lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed, auto_matched)
-       VALUES (?, 'my bloody valentine', 'loveless', 1, 0)`,
-    )
-    .run(ALBUM_ID);
 
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
@@ -128,7 +107,7 @@ afterEach(() => {
 
 describe("useEnrichAlbumTracks", () => {
   it("writes Last.fm tags for a stale track", async () => {
-    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine"), { wrapper });
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
     expect(trackTagRows()[0]).toMatchObject({ track_id: "srv-a:t1", raw_value: "shoegaze" });
@@ -137,9 +116,8 @@ describe("useEnrichAlbumTracks", () => {
   it("leaves tracks alone when track enrichment is off, even before the setting is read back", async () => {
     db.raw.prepare("INSERT INTO settings (key, value) VALUES ('tags.enrich_tracks', 'false')").run();
     const releaseSettings = holdSettingReads(db);
-    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine"), { wrapper });
 
-    await waitFor(() => expect(queryClient.getQueryState(QK.albumIdentity(ALBUM_ID))?.status).toBe("success"));
     await act(async () => releaseSettings());
     await act(async () => {});
     expect(fetchTrackTags).not.toHaveBeenCalled();
@@ -147,28 +125,29 @@ describe("useEnrichAlbumTracks", () => {
 
   it("enriches on a later run after a failed one, without leaving the album unenriched", async () => {
     failTrackRead();
-    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
+    const first = renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine"), { wrapper });
 
     await waitFor(() => expect(db.queryLog.some((q) => q.sql.startsWith(TRACKS_SELECT))).toBe(true));
     expect(trackTagRows()).toHaveLength(0);
 
-    // Database recovers, then re-identifying the album re-triggers the effect.
+    // Database recovers, then opening the album again re-runs it.
     restoreTrackRead();
-    await reidentifyAlbum();
+    first.unmount();
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine"), { wrapper });
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
   });
 
   it("enriches the second album when the view swaps albums without remounting", async () => {
     insertOtherAlbum();
-    const { rerender } = renderHook(
-      ({ id, name }: { id: string; name: string }) => useEnrichAlbumTracks(id, "my bloody valentine", name),
-      { wrapper, initialProps: { id: ALBUM_ID, name: "Loveless" } },
-    );
+    const { rerender } = renderHook(({ id }: { id: string }) => useEnrichAlbumTracks(id, "my bloody valentine"), {
+      wrapper,
+      initialProps: { id: ALBUM_ID },
+    });
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
 
-    rerender({ id: OTHER_ALBUM_ID, name: "Isn't Anything" });
+    rerender({ id: OTHER_ALBUM_ID });
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(2));
     expect(trackTagRows().map((r) => r.track_id)).toEqual(["srv-a:t1", "srv-a:t2"]);
@@ -176,7 +155,7 @@ describe("useEnrichAlbumTracks", () => {
 
   it("costs exactly one attempt per trigger after a failure, never a retry loop", async () => {
     failTrackRead();
-    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine"), { wrapper });
 
     await waitFor(() => expect(db.queryLog.filter((q) => q.sql.startsWith(TRACKS_SELECT))).toHaveLength(1));
     await act(async () => {

@@ -149,38 +149,13 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       await queryClient.invalidateQueries({ queryKey: QK.albumIdentityAll() });
     }
 
-    type FullRow = {
-      id: string;
-      artist: string | null;
-      name: string;
-      lastfm_artist_name: string | null;
-      lastfm_album_name: string | null;
-      combined_genres_json: string | null;
-      combined_tags_json: string | null;
-    };
-    const albums = await db.select<FullRow[]>(
-      `SELECT a.id, a.artist, a.name,
-              ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
-       FROM albums a
-       LEFT JOIN album_identity ai ON ai.album_id = a.id
-       ORDER BY a.name`,
-    );
+    type FullRow = { id: string; name: string };
+    const albums = await db.select<FullRow[]>("SELECT id, name FROM albums ORDER BY name");
     setPullProgress({ done: 0, total: albums.length });
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i]!;
       try {
-        const combinedMbGenres = album.combined_genres_json
-          ? (JSON.parse(album.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null;
-        const combinedMbTags = album.combined_tags_json
-          ? (JSON.parse(album.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null;
-        await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-          lastfmArtistName: album.lastfm_artist_name,
-          lastfmAlbumName: album.lastfm_album_name,
-          combinedMbGenres,
-          combinedMbTags,
-        });
+        await normalizeAlbum(album.id);
       } catch (e) {
         console.warn("Last.fm sync failed for:", album.name, e);
       }

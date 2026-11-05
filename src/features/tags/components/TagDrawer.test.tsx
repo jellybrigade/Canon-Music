@@ -31,7 +31,7 @@ function renderDrawer(onClose = vi.fn(), extra?: React.ReactNode) {
   render(
     <QueryClientProvider client={client}>
       {extra}
-      <TagDrawer albumId="srv:alb1" albumArtist="Artist" albumName="Album" onClose={onClose} />
+      <TagDrawer albumId="srv:alb1" onClose={onClose} />
     </QueryClientProvider>,
   );
   return onClose;
