@@ -102,7 +102,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
        )
-       ORDER BY a.name`,
+       ORDER BY a.name, a.id`,
     );
     if (unmatched.length > 0) {
       setPullProgress({ done: 0, total: unmatched.length });

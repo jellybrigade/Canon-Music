@@ -85,7 +85,7 @@ export function useConfirmedArtistMbid(artistName: string) {
         `SELECT ai.mb_artist_id FROM album_identity ai
          INNER JOIN albums a ON a.id = ai.album_id
          WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL AND ai.auto_matched = 0
-         ORDER BY ai.confirmed_at DESC
+         ORDER BY ai.confirmed_at DESC, ai.album_id
          LIMIT 1`,
         [artistName],
       );

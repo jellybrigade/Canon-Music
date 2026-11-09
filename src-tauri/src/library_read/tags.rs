@@ -13,12 +13,11 @@ pub fn get_unmapped_tag_count(
 fn query_unmapped_tag_count(conn: &Connection) -> Result<i64, String> {
     let sql = "SELECT COUNT(*) AS n
          FROM tag_vocab_cache c
-         LEFT JOIN (
-           SELECT norm_value, kind, canonical_id
-           FROM tag_mappings
-           GROUP BY norm_value, kind
-         ) tm ON tm.norm_value = c.norm_value AND tm.kind = c.kind
-         WHERE c.album_count > 0 AND tm.canonical_id IS NULL";
+         WHERE c.album_count > 0
+           AND NOT EXISTS (
+             SELECT 1 FROM tag_mappings tm
+             WHERE tm.norm_value = c.norm_value AND tm.kind = c.kind
+           )";
     conn.query_row(sql, [], |row| row.get::<_, i64>(0))
         .map_err(|e| e.to_string())
 }

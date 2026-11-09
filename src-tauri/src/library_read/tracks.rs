@@ -65,7 +65,7 @@ fn query_all_tracks(conn: &Connection) -> Result<Vec<AllTrackRowDto>, String> {
          FROM tracks t
          LEFT JOIN albums a ON a.id = t.album_id
          WHERE t.album_id IS NOT NULL
-         ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.disc_number, t.track_number";
+         ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.album_id, t.disc_number, t.track_number, t.id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
@@ -110,7 +110,7 @@ fn query_tracks(conn: &Connection, album_id: &str) -> Result<Vec<TrackRowDto>, S
     let sql = "SELECT id, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak
         FROM tracks
         WHERE album_id = ?
-        ORDER BY disc_number, track_number";
+        ORDER BY disc_number, track_number, title COLLATE NOCASE, id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([album_id], |row| {
@@ -226,6 +226,26 @@ mod tests {
         let rows = query_all_tracks(&conn).expect("query");
         let order: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(order, ["t1", "t2", "t3", "t4"]);
+    }
+
+    #[test]
+    fn two_same_named_albums_by_one_artist_list_their_tracks_apart() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO albums (id, server_id, name) VALUES
+               ('s1:a1', 's1', 'Greatest Hits'), ('s1:a2', 's1', 'Greatest Hits');
+             INSERT INTO tracks (id, server_id, title, artist, album_id, disc_number, track_number)
+               VALUES
+               ('t1', 's1', 'a', 'aa', 's1:a1', 1, 1),
+               ('t2', 's1', 'b', 'aa', 's1:a2', 1, 1),
+               ('t3', 's1', 'c', 'aa', 's1:a1', 1, 2),
+               ('t4', 's1', 'd', 'aa', 's1:a2', 1, 2)",
+        )
+        .expect("seed");
+
+        let rows = query_all_tracks(&conn).expect("query");
+        let order: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(order, ["t1", "t3", "t2", "t4"]);
     }
 
     #[test]

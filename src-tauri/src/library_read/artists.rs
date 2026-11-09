@@ -43,7 +43,7 @@ fn query_artists(conn: &Connection) -> Result<Vec<ArtistRowDto>, String> {
             ) WHERE rn = 1
         ) art ON art.artist = a.name AND art.server_id = a.server_id
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
-        ORDER BY a.name COLLATE NOCASE";
+        ORDER BY a.name COLLATE NOCASE, a.id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {

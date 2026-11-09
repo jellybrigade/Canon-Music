@@ -19,7 +19,7 @@ export function useSimilarArtistAlbums(artistNames: string[], serverId: string) 
          WHERE a.server_id = ?
            AND (a.artist IN (${placeholders})
             OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name IN (${placeholders})))
-         ORDER BY a.artist, a.year IS NULL, a.year DESC`,
+         ORDER BY a.artist, a.year IS NULL, a.year DESC, a.name COLLATE NOCASE, a.id`,
         [serverId, ...artistNames, ...artistNames],
       );
       const rank = new Map(artistNames.map((name, i) => [name, i]));

@@ -54,11 +54,12 @@ pub fn get_recent_genres(
 
 fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
     let recent_sql = "WITH recent_albums AS (
-            SELECT t.album_id, MAX(sh.scrobbled_at) AS last_played
+            SELECT t.album_id, MAX(sh.timestamp) AS last_played
             FROM scrobble_history sh
             JOIN tracks t ON t.id = sh.track_id
+            WHERE t.album_id IS NOT NULL
             GROUP BY t.album_id
-            ORDER BY last_played DESC
+            ORDER BY last_played DESC, t.album_id
             LIMIT 10
         )
         SELECT ag.canonical_id, MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS album_count
@@ -71,7 +72,7 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
           SELECT COUNT(DISTINCT ag2.album_id) FROM album_genres ag2
           WHERE ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
         ) >= 5
-        ORDER BY MAX(ra.last_played) DESC, name COLLATE NOCASE";
+        ORDER BY MAX(ra.last_played) DESC, name COLLATE NOCASE, ag.canonical_id";
     let mut stmt = conn.prepare(recent_sql).map_err(|e| e.to_string())?;
     let recent = stmt
         .query_map([], map_genre_row)
@@ -88,7 +89,7 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
          WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
          GROUP BY canonical_id
          HAVING COUNT(DISTINCT album_id) >= 5
-         ORDER BY album_count DESC, name COLLATE NOCASE
+         ORDER BY album_count DESC, name COLLATE NOCASE, canonical_id
          LIMIT 18";
     let mut stmt = conn.prepare(fallback_sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -174,6 +175,51 @@ mod tests {
             "the 11th-most-recent album must fall outside the LIMIT 10 window: {found:?}"
         );
         assert_eq!(found[0], "g10", "ordered by most recently played first");
+    }
+
+    #[test]
+    fn recent_genres_order_by_when_the_album_was_played_not_when_the_play_was_sent() {
+        let conn = fixture_conn();
+        for i in 0..2 {
+            seed_genre_with_library_weight(&conn, i, 4);
+        }
+        for (i, played, sent) in [(0, 200, "2026-01-01"), (1, 100, "2026-01-02")] {
+            conn.execute(
+                "INSERT INTO tracks (id, server_id, title, album_id) VALUES (?, 's1', 'T', ?)",
+                [&format!("t{i}"), &format!("a{i}")],
+            )
+            .expect("track");
+            conn.execute(
+                "INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at) VALUES (?, ?, ?)",
+                rusqlite::params![format!("t{i}"), played, sent],
+            )
+            .expect("scrobble");
+        }
+
+        let rows = query_recent_genres(&conn).expect("query");
+        assert_eq!(genre_ids(&rows), ["g0", "g1"]);
+    }
+
+    #[test]
+    fn plays_of_tracks_with_no_album_take_none_of_the_ten_recent_album_slots() {
+        let conn = fixture_conn();
+        for i in 0..10 {
+            seed_genre_with_library_weight(&conn, i, 4);
+            seed_scrobble(&conn, i, &format!("2026-01-{:02}", i + 1));
+        }
+        conn.execute(
+            "INSERT INTO tracks (id, server_id, title, album_id) VALUES ('loose', 's1', 'T', NULL)",
+            [],
+        )
+        .expect("track");
+        conn.execute(
+            "INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at) VALUES ('loose', 999, '2026-02-01')",
+            [],
+        )
+        .expect("scrobble");
+
+        let rows = query_recent_genres(&conn).expect("query");
+        assert_eq!(genre_ids(&rows).len(), 10);
     }
 
     #[test]

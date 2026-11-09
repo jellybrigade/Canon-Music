@@ -26,7 +26,7 @@ fn query_playlists(conn: &Connection) -> Result<Vec<PlaylistRowDto>, String> {
     let sql = "SELECT id, server_id, name, comment, track_count, cover_art_url,
                 custom_cover_data, is_smart, rules_json
          FROM playlists
-         ORDER BY name ASC";
+         ORDER BY name COLLATE NOCASE, id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {

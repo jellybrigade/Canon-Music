@@ -39,14 +39,17 @@ function probeImageLoads(url: string): Promise<boolean> {
 
 /** Looks up the artist's native (unprefixed) id on the given server, for the
  * getArtistInfo2 portrait fallback. Returns null if the artist isn't synced locally. */
-async function findNativeArtistId(artistName: string, serverId: string): Promise<string | null> {
+export async function findNativeArtistId(artistName: string, serverId: string): Promise<string | null> {
   const db = await getDb();
   const rows = await db.select<{ id: string }[]>(
-    `SELECT id FROM artists WHERE server_id = ? AND name = ?
-     UNION
-     SELECT a.id FROM artists a
-     JOIN artist_aliases al ON al.canonical_name = a.name
-     WHERE a.server_id = ? AND al.alias_name = ?
+    `SELECT id FROM (
+       SELECT id, 0 AS priority FROM artists WHERE server_id = ? AND name = ?
+       UNION ALL
+       SELECT a.id, 1 AS priority FROM artists a
+       JOIN artist_aliases al ON al.canonical_name = a.name
+       WHERE a.server_id = ? AND al.alias_name = ?
+     )
+     ORDER BY priority, id
      LIMIT 1`,
     [serverId, artistName, serverId, artistName],
   );
@@ -129,6 +132,7 @@ async function disambiguateArtistByLocalAlbums(
     `SELECT name FROM albums
      WHERE artist = ?
         OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+     ORDER BY name COLLATE NOCASE, id
      LIMIT 50`,
     [artistName, artistName],
   );

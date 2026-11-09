@@ -55,7 +55,9 @@ export function useUserTreeChangelog() {
     queryKey: QK.userTreeChangelog(),
     queryFn: async (): Promise<ChangelogEntry[]> => {
       const db = await getDb();
-      return db.select<ChangelogEntry[]>("SELECT * FROM user_tree_changelog ORDER BY created_at DESC LIMIT 100");
+      return db.select<ChangelogEntry[]>(
+        "SELECT * FROM user_tree_changelog ORDER BY created_at DESC, id DESC LIMIT 100",
+      );
     },
   });
 }
