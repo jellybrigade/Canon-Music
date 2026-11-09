@@ -5,6 +5,10 @@ description: Work the top item of instructions/donow.md (or, if donow is empty, 
 
 Paths are relative to the repo root, never this skill's dir.
 
+## Standing rule: announce the item first
+
+Before any other work (verification, investigators, edits), tell the user which item(s) this run works on, by their donow/what-to-do title. Research mode: name the 3-5 backlog items picked. Item swapped mid-run (already fixed, rewritten): announce the new one too.
+
 ## Standing rule: file every finding
 
 Any problem you hit that is not your item (failing/flaky test, red check, bug noticed in passing, stale donow entry) goes into `instructions/donow.md` before the run ends. Don't silently fix or ignore it. Stash and re-run to say whether it reproduces on a clean tree. File it under the right tier in donow's item format; a class gets its grep.
