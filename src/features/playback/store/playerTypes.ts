@@ -34,6 +34,24 @@ export type ReplayGainMode = "off" | "track" | "album";
 
 export type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
+/** What Clear threw away, so Undo can put it back. */
+export interface ClearedQueue {
+  // The empty list Clear left behind. Every queue writer sets a new array, so the snapshot is
+  // only current while this exact one is still the queue; anything queued since retires it.
+  emptied: CurrentTrack[];
+  queue: CurrentTrack[];
+  queueIndex: number;
+  isShuffled: boolean;
+  shuffleOrder: number[];
+  radioActive: boolean;
+  radioSeed: CurrentTrack | null;
+  radioLabel: string | null;
+}
+
+export function canUndoClearQueue(state: Pick<PlayerState, "clearedQueue" | "queue">): boolean {
+  return state.clearedQueue !== null && state.clearedQueue.emptied === state.queue;
+}
+
 // Both player surfaces and the keyboard shortcut have to agree on when "next" does nothing,
 // otherwise the button greys out on a track the shortcut will happily skip. Repeat-all wraps,
 // and radio-on-queue-end starts a new session off the last track, so neither is a dead end.
@@ -119,6 +137,7 @@ export interface PlayerState {
   radioMode: RadioMode;
   radioLabel: string | null;
   radioSimilarityScale: number;
+  clearedQueue: ClearedQueue | null;
 
   isQueueOpen: boolean;
   accentColor: string | null;
@@ -188,6 +207,7 @@ export interface PlayerState {
   removeFromQueue: (position: number) => Promise<void>;
   removeManyFromQueue: (positions: number[]) => Promise<void>;
   clearQueue: () => void;
+  undoClearQueue: () => void;
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;

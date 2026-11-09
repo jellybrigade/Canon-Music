@@ -88,3 +88,16 @@ export function buildShuffleOrder(length: number, anchorQueueIndex: number, next
   }
   return indices;
 }
+
+export interface QueueRow {
+  position: number;
+  track: CurrentTrack;
+}
+
+export function queueInPlayOrder(queue: CurrentTrack[], isShuffled: boolean, shuffleOrder: number[]): QueueRow[] {
+  if (!isShuffled) return queue.map((track, position) => ({ position, track }));
+  return normalizeShuffleOrder(shuffleOrder, queue.length).flatMap((index, position) => {
+    const track = queue[index];
+    return track ? [{ position, track }] : [];
+  });
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bitrateCell, durationCell, formatDuration, trackNumberColumn } from "./trackCells";
+import { bitrateCell, durationCell, formatDuration, formatTotalDuration, trackNumberColumn } from "./trackCells";
 
 describe("track cells", () => {
   it("prints a zero and leaves only a missing value blank", () => {
@@ -71,5 +71,14 @@ describe("trackNumberColumn", () => {
     expect(trackNumberColumn(12000)).toBe(
       "calc(5ch + var(--track-number-padding-start) + var(--track-number-padding-end))",
     );
+  });
+});
+
+describe("formatTotalDuration", () => {
+  it("counts minutes under an hour and hours with minutes above", () => {
+    expect(formatTotalDuration(59)).toBe("0 min");
+    expect(formatTotalDuration(45 * 60)).toBe("45 min");
+    expect(formatTotalDuration(2 * 3600)).toBe("2 hr");
+    expect(formatTotalDuration(3600 + 32 * 60 + 10)).toBe("1 hr 32 min");
   });
 });

@@ -66,10 +66,12 @@ export async function createNavidromePlaylist(
   username: string,
   credential: NavidromeCredential,
   name: string,
+  nativeTrackIds: readonly string[],
   altUrl?: string,
 ): Promise<NavidromePlaylist> {
   const params = buildAuthParams(username, credential);
   params.set("name", name);
+  for (const id of nativeTrackIds) params.append("songId", id);
   const res = await apiPost(baseUrl, "createPlaylist", params, altUrl);
   if (!res.ok) throw new Error(`createPlaylist returned ${res.status}`);
   const data = (await res.json()) as {

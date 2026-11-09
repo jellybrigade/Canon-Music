@@ -1,7 +1,7 @@
 import type { PlayerEngine } from "./playerEngine";
 import type { PlayerPersistence } from "./playerPersistence";
 import { runtime } from "./playerRuntime";
-import type { CurrentTrack, PlayerGet, PlayerSet, PlayerState } from "./playerTypes";
+import { type CurrentTrack, canUndoClearQueue, type PlayerGet, type PlayerSet, type PlayerState } from "./playerTypes";
 import {
   adjustIndexAfterMove,
   buildShuffleOrder,
@@ -23,6 +23,7 @@ type QueueActions = Pick<
   | "removeFromQueue"
   | "removeManyFromQueue"
   | "clearQueue"
+  | "undoClearQueue"
   | "playFromQueueIndex"
   | "moveQueueItem"
 >;
@@ -242,11 +243,43 @@ export function createQueueActions(
       // Unlike stop(), this is an explicit request to throw the queue away, so the queue and
       // its shuffle order go too. streamUrlFor is kept: App re-supplies it per server, and
       // dropping it here would leave a later addToQueue with no way to build a stream URL.
+      const { queue, queueIndex, isShuffled, shuffleOrder, radioActive, radioSeed, radioLabel } = get();
       get().stop();
-      set({ queue: [], queueIndex: 0, shuffleOrder: [] });
+      const emptied: CurrentTrack[] = [];
+      set({
+        queue: emptied,
+        queueIndex: 0,
+        shuffleOrder: [],
+        clearedQueue:
+          queue.length > 0
+            ? { emptied, queue, queueIndex, isShuffled, shuffleOrder, radioActive, radioSeed, radioLabel }
+            : null,
+      });
       // A radio session survives an empty queue and would silently start appending again the
       // next time something plays. Clearing the queue is an explicit "stop feeding me tracks".
       if (get().radioActive) get().setRadioActive(false);
+      void persistQueueState();
+    },
+
+    // State only, like restoreQueue: the track comes back paused and resume() starts it fresh.
+    undoClearQueue: () => {
+      const state = get();
+      const cleared = state.clearedQueue;
+      if (!cleared || !canUndoClearQueue(state)) return;
+      set({
+        queue: cleared.queue,
+        queueIndex: cleared.queueIndex,
+        isShuffled: cleared.isShuffled,
+        shuffleOrder: cleared.shuffleOrder,
+        currentTrack: resolveTrack(cleared.queue, cleared.shuffleOrder, cleared.isShuffled, cleared.queueIndex) ?? null,
+        streamUrl: null,
+        isPlaying: false,
+        elapsed: 0,
+        radioActive: cleared.radioActive,
+        radioSeed: cleared.radioSeed,
+        radioLabel: cleared.radioLabel,
+        clearedQueue: null,
+      });
       void persistQueueState();
     },
 

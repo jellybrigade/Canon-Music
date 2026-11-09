@@ -1,0 +1,25 @@
+.save-queue-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.save-queue-form-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.save-queue-form-input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-md);
+  padding: 0.4em 0.75em;
+  box-shadow: none;
+}
+
+.save-queue-form-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--danger);
+}

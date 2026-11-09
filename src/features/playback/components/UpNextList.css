@@ -126,3 +126,29 @@
   color: var(--accent);
   flex-shrink: 0;
 }
+
+.now-playing-empty-action {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-3xs);
+  font: inherit;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.now-playing-empty-action:hover {
+  background: var(--tint-2);
+}
+
+.now-playing-empty-action:active {
+  background: var(--tint-3);
+}
+
+.now-playing-empty-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

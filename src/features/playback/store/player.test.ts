@@ -10,7 +10,7 @@ import { runQuitFlushes } from "../../../lib/quitFlush";
 import { emitTauriEvent, invoke, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { usePlayerStore } from "./player";
 import { runtime } from "./playerRuntime";
-import { type CurrentTrack, isNextDisabled } from "./playerTypes";
+import { type CurrentTrack, canUndoClearQueue, isNextDisabled } from "./playerTypes";
 import { buildShuffleOrder, normalizeShuffleOrder } from "./queueOrder";
 
 // Boundary mock for getDb(): tests configure `select`/`execute` per case, never a real DB.
@@ -59,6 +59,8 @@ function resetStore() {
     currentTrack: null,
     radioActive: false,
     radioSeed: null,
+    radioLabel: null,
+    clearedQueue: null,
     streamUrl: null,
     isPlaying: false,
     isLoading: false,
@@ -351,6 +353,51 @@ describe("player store - queue/shuffle invariants", () => {
       const b = isNextDisabled("off", 2, 3, false);
       expect(a).toBe(b);
     });
+  });
+});
+
+describe("player store - undo clear queue", () => {
+  it("puts back the queue, its place, its shuffle and its radio, paused", async () => {
+    usePlayerStore.setState({ isShuffled: true });
+    await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor, 2);
+    usePlayerStore.setState({ radioActive: true, radioSeed: makeTrack("seed"), radioLabel: "Seeded" });
+    const before = usePlayerStore.getState();
+
+    usePlayerStore.getState().clearQueue();
+    expect(usePlayerStore.getState().queue).toEqual([]);
+    expect(usePlayerStore.getState().radioActive).toBe(false);
+    expect(canUndoClearQueue(usePlayerStore.getState())).toBe(true);
+
+    usePlayerStore.getState().undoClearQueue();
+    const after = usePlayerStore.getState();
+    expect(after.queue.map((t) => t.id)).toEqual(before.queue.map((t) => t.id));
+    expect(after.queueIndex).toBe(before.queueIndex);
+    expect(after.isShuffled).toBe(true);
+    expect(after.shuffleOrder).toEqual(before.shuffleOrder);
+    expect(after.currentTrack?.id).toBe(before.currentTrack?.id);
+    expect(after.isPlaying).toBe(false);
+    expect(after.radioActive).toBe(true);
+    expect(after.radioSeed?.id).toBe("seed");
+    expect(after.radioLabel).toBe("Seeded");
+    expect(canUndoClearQueue(after)).toBe(false);
+  });
+
+  it("is withdrawn once the queue changes after the clear", async () => {
+    await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
+    usePlayerStore.getState().clearQueue();
+    usePlayerStore.getState().addToQueue(makeTrack("x"), streamUrlFor);
+    await usePlayerStore.getState().removeFromQueue(0);
+    expect(usePlayerStore.getState().queue).toEqual([]);
+    expect(canUndoClearQueue(usePlayerStore.getState())).toBe(false);
+
+    usePlayerStore.getState().undoClearQueue();
+    expect(usePlayerStore.getState().queue).toEqual([]);
+  });
+
+  it("does nothing when nothing was cleared", () => {
+    expect(canUndoClearQueue(usePlayerStore.getState())).toBe(false);
+    usePlayerStore.getState().undoClearQueue();
+    expect(usePlayerStore.getState().queue).toEqual([]);
   });
 });
 

@@ -48,6 +48,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioSeed: null,
     radioMode: "curated",
     radioLabel: null,
+    clearedQueue: null,
     radioSimilarityScale: 0.5,
     isQueueOpen: false,
     accentColor: null,

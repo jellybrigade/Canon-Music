@@ -409,6 +409,11 @@
 
 .now-playing-tab-refresh-btn:disabled {
   cursor: default;
+  opacity: var(--opacity-50);
+}
+
+.now-playing-tab-refresh-btn:active:not(:disabled) {
+  color: var(--text-primary);
 }
 
 .now-playing-tab-refresh-btn .spin {

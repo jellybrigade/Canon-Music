@@ -1,0 +1,69 @@
+.up-next-header {
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs) var(--space-xs);
+  margin-bottom: var(--space-2xs);
+  border-bottom: 1px solid var(--border);
+}
+
+.up-next-header--summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.up-next-header-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.up-next-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+.up-next-header-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
+}
+
+.up-next-header-btn--quiet {
+  color: var(--text-tertiary);
+}
+
+.up-next-header-btn:hover:not(:disabled) {
+  background: var(--tint-2);
+  color: var(--text-primary);
+}
+
+.up-next-header-btn:active:not(:disabled) {
+  background: var(--tint-3);
+}
+
+.up-next-header-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.up-next-header-btn:disabled {
+  cursor: default;
+  opacity: var(--opacity-50);
+}

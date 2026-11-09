@@ -134,3 +134,36 @@ describe("UpNextList context menu", () => {
     expect(storeStartRadio).not.toHaveBeenCalled();
   });
 });
+
+describe("UpNextList after Clear", () => {
+  function renderList() {
+    render(
+      <UpNextList
+        serverWithCredential={serverWithCredential}
+        lovedTrackIds={new Set()}
+        onSelectAlbum={vi.fn()}
+        onSelectArtist={vi.fn()}
+      />,
+    );
+  }
+  const undoButton = () =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((el) => el.textContent === "Undo");
+
+  it("offers Undo and brings the queue back", () => {
+    usePlayerStore.getState().clearQueue();
+    renderList();
+    expect(document.querySelector(".now-playing-empty")?.textContent).toContain("Queue cleared.");
+    const undo = undoButton();
+    if (!undo) throw new Error("no Undo button");
+    fireEvent.click(undo);
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual([withAlbum.id, bare.id]);
+    expect(document.querySelectorAll(".now-playing-up-next-row")).toHaveLength(2);
+  });
+
+  it("says how to fill an empty queue that wasn't just cleared", () => {
+    usePlayerStore.setState({ queue: [], clearedQueue: null });
+    renderList();
+    expect(document.querySelector(".now-playing-empty")?.textContent).toContain("Nothing queued.");
+    expect(undoButton()).toBeUndefined();
+  });
+});

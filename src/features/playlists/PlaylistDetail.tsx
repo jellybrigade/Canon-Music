@@ -53,23 +53,14 @@ import {
   DURATION_COLUMN,
   durationCell,
   FORMAT_COLUMN,
+  formatTotalDuration,
   trackNumberColumn,
   YEAR_COLUMN,
 } from "../../lib/trackCells";
 import { SortHeaderButton } from "../../ui/SortIndicator";
 import { useClickOutside } from "../../ui/useClickOutside";
 
-const SECONDS_PER_MINUTE = 60;
-const MINUTES_PER_HOUR = 60;
 const PLAYLIST_ROW_HEIGHT = 40;
-
-function formatTotalDuration(totalSeconds: number): string {
-  const totalMinutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
-  if (totalMinutes < MINUTES_PER_HOUR) return `${totalMinutes} min`;
-  const h = Math.floor(totalMinutes / MINUTES_PER_HOUR);
-  const m = totalMinutes % MINUTES_PER_HOUR;
-  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
-}
 
 interface Props {
   playlist: PlaylistRow;

@@ -26,6 +26,7 @@ vi.mock("../hooks/useNowPlayingArtist", () => ({
 }));
 vi.mock("../../enrichment/hooks/useTourEvents", () => ({ useTourEvents: () => ({ events: [], isLoading: false }) }));
 vi.mock("./UpNextList", () => ({ UpNextList: () => <div data-panel="up-next" /> }));
+vi.mock("./UpNextHeader", () => ({ UpNextHeader: () => null }));
 vi.mock("./NowPlayingAbout", () => ({ NowPlayingAbout: () => <div data-panel="about" /> }));
 vi.mock("./LyricsTabPanel", () => ({ LyricsTabPanel: () => <div data-panel="lyrics" /> }));
 vi.mock("./NowPlayingControls", () => ({ NowPlayingControls: () => null }));
@@ -209,5 +210,17 @@ describe("NowPlayingView narrow expand", () => {
     expect(document.querySelector(".now-playing-mini-bar [role='alert']")?.textContent).toContain(
       "The track never started playing",
     );
+  });
+});
+
+describe("NowPlayingView tab row", () => {
+  it("holds only the tabs on Up Next", () => {
+    renderView();
+    const row = document.querySelector(".now-playing-tabs");
+    expect(Array.from(row?.querySelectorAll("button") ?? []).map((b) => b.textContent)).toEqual([
+      "Up Next",
+      "About",
+      "Lyrics",
+    ]);
   });
 });

@@ -19,7 +19,7 @@ import { buildSmartQuery, parseSmartFilters, type SmartFilters } from "./smartPl
 async function insertPlaylistTracksBatch(
   db: Database,
   playlistId: string,
-  trackIds: string[],
+  trackIds: readonly string[],
   startPos: number,
 ): Promise<void> {
   if (trackIds.length === 0) return;
@@ -43,6 +43,30 @@ export interface PlaylistRow {
   custom_cover_data: string | null;
   is_smart: number;
   rules_json: string | null;
+}
+
+export async function createPlaylist(
+  name: string,
+  swc: ServerWithCredential,
+  trackIds: readonly string[] = [],
+): Promise<void> {
+  const { server, credential } = swc;
+  const created = await createNavidromePlaylist(
+    server.url,
+    server.username,
+    credential,
+    name,
+    trackIds.map((id) => stripServerPrefix(id, server.id)),
+    server.alt_url ?? undefined,
+  );
+  const db = await getDb();
+  const plDbId = `${server.id}:${created.id}`;
+  await db.execute(
+    "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
+    [plDbId, server.id, created.name, created.comment ?? null, created.songCount],
+  );
+  await insertPlaylistTracksBatch(db, plDbId, trackIds, 0);
+  usePlaylistSessionStore.getState().bumpPlaylists();
 }
 
 // Reads go through rusqlite (src-tauri/src/library_read/playlists.rs); mutations below
@@ -84,24 +108,6 @@ export function usePlaylists() {
       cancelled = true;
     };
   }, [refreshTick]);
-
-  async function createPlaylist(name: string, swc: ServerWithCredential): Promise<void> {
-    const { server, credential } = swc;
-    const created = await createNavidromePlaylist(
-      server.url,
-      server.username,
-      credential,
-      name,
-      server.alt_url ?? undefined,
-    );
-    const db = await getDb();
-    const plDbId = `${server.id}:${created.id}`;
-    await db.execute(
-      "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
-      [plDbId, server.id, created.name, created.comment ?? null, created.songCount],
-    );
-    usePlaylistSessionStore.getState().bumpPlaylists();
-  }
 
   async function deletePlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
     const { server, credential } = swc;
@@ -191,6 +197,7 @@ export function usePlaylists() {
       server.username,
       credential,
       filters.name,
+      [],
       server.alt_url ?? undefined,
     );
     const plDbId = `${server.id}:${created.id}`;

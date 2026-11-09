@@ -7,16 +7,22 @@ vi.mock("../../clients/navidromePlaylists", async () => {
   const actual = await vi.importActual<typeof import("../../clients/navidromePlaylists")>(
     "../../clients/navidromePlaylists",
   );
-  return { ...actual, addTrackToNavidromePlaylist: vi.fn(), addTracksToNavidromePlaylist: vi.fn() };
+  return {
+    ...actual,
+    addTrackToNavidromePlaylist: vi.fn(),
+    addTracksToNavidromePlaylist: vi.fn(),
+    createNavidromePlaylist: vi.fn(),
+  };
 });
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { createMigratedTestDb } from "../../test/sqlite";
-import { type PlaylistRow, usePlaylists } from "./usePlaylists";
+import { createPlaylist, type PlaylistRow, usePlaylists } from "./usePlaylists";
 
 function playlist(id: string): PlaylistRow {
   return {
@@ -109,5 +115,25 @@ describe("adding to a playlist", () => {
       playlistId: "s1:p",
       trackIds: ["s1:t1", "s1:t2"],
     });
+  });
+
+  it("creates a playlist with its tracks in one request and stores them in that order", async () => {
+    vi.mocked(createNavidromePlaylist).mockResolvedValue({ id: "q", name: "Queue", songCount: 2 } as never);
+    await createPlaylist("Queue", swc, ["s1:t2", "s1:t1"]);
+
+    expect(createNavidromePlaylist).toHaveBeenCalledTimes(1);
+    expect(createNavidromePlaylist).toHaveBeenCalledWith(
+      "https://music.example",
+      "marcel",
+      swc.credential,
+      "Queue",
+      ["t2", "t1"],
+      undefined,
+    );
+    const db = await getDb();
+    const rows = await db.select<{ track_id: string }[]>(
+      "SELECT track_id FROM playlist_tracks WHERE playlist_id = 's1:q' ORDER BY position",
+    );
+    expect(rows.map((r) => r.track_id)).toEqual(["s1:t2", "s1:t1"]);
   });
 });

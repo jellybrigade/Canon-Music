@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronLeft, ListX, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseLrc } from "../../../clients/lrclib";
@@ -27,6 +27,7 @@ import { NowPlayingControls } from "./NowPlayingControls";
 import { NowPlayingProgress } from "./NowPlayingProgress";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { PlayPauseButton } from "./PlayPauseButton";
+import { UpNextHeader } from "./UpNextHeader";
 import { UpNextList } from "./UpNextList";
 import "./NowPlayingView.css";
 
@@ -60,7 +61,6 @@ export function NowPlayingView({
   const error = usePlayerStore((s) => s.error);
   const retryCurrent = usePlayerStore((s) => s.retryCurrent);
   const seek = usePlayerStore((s) => s.seek);
-  const clearQueue = usePlayerStore((s) => s.clearQueue);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
@@ -320,16 +320,6 @@ export function NowPlayingView({
                 {TAB_LABELS[t]}
               </button>
             ))}
-            {tab === "up-next" && queue.length > 0 && (
-              <button
-                className="now-playing-tab-refresh-btn"
-                title="Clear queue"
-                aria-label="Clear queue"
-                onClick={() => clearQueue()}
-              >
-                <ListX size={14} />
-              </button>
-            )}
             {tab === "lyrics" && (
               <div className="now-playing-tab-lyric-actions">
                 {lyricsLines && (
@@ -387,6 +377,7 @@ export function NowPlayingView({
           </div>
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>
+            {tab === "up-next" && <UpNextHeader serverWithCredential={serverWithCredential} />}
             {tab === "up-next" && (
               <UpNextList
                 serverWithCredential={serverWithCredential}

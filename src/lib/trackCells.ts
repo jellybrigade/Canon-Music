@@ -1,4 +1,5 @@
 const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
 
 /** Shared m:ss formatter for transport rows and track lists. */
 export function formatDuration(seconds: number): string {
@@ -6,6 +7,15 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor(total / SECONDS_PER_MINUTE);
   const s = total % SECONDS_PER_MINUTE;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Whole-list length for headers: "45 min", "2 hr", "1 hr 32 min". */
+export function formatTotalDuration(totalSeconds: number): string {
+  const totalMinutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  if (totalMinutes < MINUTES_PER_HOUR) return `${totalMinutes} min`;
+  const h = Math.floor(totalMinutes / MINUTES_PER_HOUR);
+  const m = totalMinutes % MINUTES_PER_HOUR;
+  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
 }
 
 // A zero is a reading and prints; only a missing value leaves the cell blank.

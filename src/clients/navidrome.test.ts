@@ -31,7 +31,12 @@ import {
   songExists,
   starTrack,
 } from "./navidrome";
-import { addTrackToNavidromePlaylist, fetchPlaylists, replaceNavidromePlaylistTracks } from "./navidromePlaylists";
+import {
+  addTrackToNavidromePlaylist,
+  createNavidromePlaylist,
+  fetchPlaylists,
+  replaceNavidromePlaylistTracks,
+} from "./navidromePlaylists";
 import { SubsonicError } from "./navidromeTransport";
 import type { NavidromeCredential } from "./navidromeUrls";
 
@@ -601,6 +606,21 @@ describe("a newer write to the same thing", () => {
     await expect(settle(older)).resolves.toBeUndefined();
     await settle(newer);
     expect(bodies().map((b) => b.get("current"))).toEqual(["old", "new"]);
+  });
+});
+
+describe("createNavidromePlaylist", () => {
+  it("creates the playlist with its tracks in order in one request", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(ok({ status: "ok", playlist: { id: "pl-9", name: "Mix", songCount: 3 } })),
+    );
+
+    const created = await settle(createNavidromePlaylist(BASE, "alice", cred, "Mix", ["c", "a", "b"]));
+
+    expect(urls()).toEqual([`${BASE}/rest/createPlaylist`]);
+    expect(body().get("name")).toBe("Mix");
+    expect(body().getAll("songId")).toEqual(["c", "a", "b"]);
+    expect(created.id).toBe("pl-9");
   });
 });
 
