@@ -124,6 +124,7 @@ export function AlbumDetail({
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
     [similarArtistNames, similarInLibrarySet],
   );
+  // Decorative: an unreadable shelf stays hidden.
   const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary, server.id);
   const fansAlsoLikeAlbums = useMemo(
     () => fansAlsoLikeAlbumsRaw.slice(0, RELATED_SHELF_LIMIT),

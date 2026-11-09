@@ -1,13 +1,4 @@
 // @vitest-environment jsdom
-/**
- * Coverage for `src/hooks/useGenreDisplay.ts`.
- *
- * The canon tree is read through an un-abortable promise, so the unmount case cannot be
- * asserted through rendered output: React 18 no-ops a state write on a dead hook without
- * warning, and an unmounted tree renders nothing either way. The witness is instead the
- * work the settle handler does - `tree.nodes` is a counting getter, so a handler that
- * runs after unmount is visible as a read that a guarded handler never performs.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
@@ -37,41 +28,13 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client: queryClient }, children);
 }
 
-/** A tree whose `nodes` read is counted, so post-unmount work has a witness. */
-function countingTree(nodes: TreeNode[]) {
-  let reads = 0;
-  const tree = {
-    get nodes() {
-      reads += 1;
-      return nodes;
-    },
-    byKey: new Map(nodes.map((n) => [n.canonical_key, n])),
-    byId: new Map(nodes.map((n) => [n.id, n])),
-  } as unknown as CanonTree;
-  return { tree, readCount: () => reads };
-}
-
-/** Holds `getCanonTree` open until the returned `resolve` is called. */
-function deferredTree(tree: CanonTree) {
-  let release!: () => void;
-  const gate = new Promise<void>((r) => {
-    release = r;
-  });
-  vi.mocked(getCanonTree).mockImplementation(() => gate.then(() => tree));
-  return async () => {
-    release();
-    await gate;
-    await Promise.resolve();
-  };
-}
-
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mappingRows = [];
   vi.mocked(getDb).mockResolvedValue({
     select: vi.fn(async () => mappingRows),
   } as unknown as Awaited<ReturnType<typeof getDb>>);
-  vi.mocked(getCanonTree).mockResolvedValue(countingTree([SHOEGAZE]).tree);
+  vi.mocked(getCanonTree).mockResolvedValue({ nodes: [SHOEGAZE] } as CanonTree);
 });
 
 afterEach(() => {
@@ -86,7 +49,7 @@ describe("useGenreMappings", () => {
 
     const { result } = renderHook(() => useGenreMappings(), { wrapper });
 
-    await waitFor(() => expect(result.current.get("shoe gaze")).toBe("Shoegaze"));
+    await waitFor(() => expect(result.current?.get("shoe gaze")).toBe("Shoegaze"));
   });
 
   it("falls back to the raw value when the canonical id is not in the tree", async () => {
@@ -94,7 +57,7 @@ describe("useGenreMappings", () => {
 
     const { result } = renderHook(() => useGenreMappings(), { wrapper });
 
-    await waitFor(() => expect(result.current.get("vaporwave")).toBe("vaporwave"));
+    await waitFor(() => expect(result.current?.get("vaporwave")).toBe("vaporwave"));
   });
 
   it("maps an ignored raw value to null and an accepted one to itself", async () => {
@@ -105,32 +68,30 @@ describe("useGenreMappings", () => {
 
     const { result } = renderHook(() => useGenreMappings(), { wrapper });
 
-    await waitFor(() => expect(result.current.size).toBe(2));
-    expect(result.current.get("misc")).toBeNull();
-    expect(result.current.get("Dream Pop")).toBe("Dream Pop");
+    await waitFor(() => expect(result.current?.size).toBe(2));
+    expect(result.current?.get("misc")).toBeNull();
+    expect(result.current?.get("Dream Pop")).toBe("Dream Pop");
   });
 
-  it("does no tree work after unmount", async () => {
-    const { tree, readCount } = countingTree([SHOEGAZE]);
-    const resolveTree = deferredTree(tree);
+  it("reports a failed mapping read as null rather than an empty map", async () => {
+    vi.mocked(getDb).mockResolvedValue({
+      select: vi.fn(async () => {
+        throw new Error("database is locked");
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDb>>);
 
-    const { unmount } = renderHook(() => useGenreMappings(), { wrapper });
-    unmount();
-    await resolveTree();
+    const { result } = renderHook(() => useGenreMappings(), { wrapper });
 
-    expect(readCount()).toBe(0);
+    await waitFor(() => expect(result.current).toBeNull());
   });
 
-  it("still reads the tree when the hook is alive when it settles", async () => {
-    const { tree, readCount } = countingTree([SHOEGAZE]);
-    const resolveTree = deferredTree(tree);
+  it("keeps the raw value as the name when the tree read fails", async () => {
+    vi.mocked(getCanonTree).mockRejectedValue(new Error("database is locked"));
     mappingRows = [{ raw_value: "shoe gaze", canonical_id: "shoegaze" }];
 
     const { result } = renderHook(() => useGenreMappings(), { wrapper });
-    await resolveTree();
 
-    await waitFor(() => expect(result.current.get("shoe gaze")).toBe("Shoegaze"));
-    expect(readCount()).toBe(1);
+    await waitFor(() => expect(result.current?.get("shoe gaze")).toBe("shoe gaze"));
   });
 });
 
@@ -138,6 +99,10 @@ describe("applyGenreMappings", () => {
   it("returns nothing for a null or empty raw string", () => {
     expect(applyGenreMappings(null, new Map())).toEqual([]);
     expect(applyGenreMappings("", new Map())).toEqual([]);
+  });
+
+  it("shows the raw values when the mappings could not be read", () => {
+    expect(applyGenreMappings("shoe gaze; misc, shoe gaze", null)).toEqual(["shoe gaze", "misc"]);
   });
 
   it("drops raw values with no mapping decision", () => {

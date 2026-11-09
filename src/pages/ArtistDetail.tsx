@@ -70,6 +70,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { server, credential } = serverWithCredential;
   const { data: albums } = useArtistAlbums(artist.name, server.id);
   const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name, server.id);
+  // Decorative: an unreadable genre line stays hidden.
   const { data: canonGenres = [] } = useArtistGenres(artist.name, server.id);
   const { data: rawTracks } = useArtistTopTracks(artist.name, server.id);
   const {
@@ -95,6 +96,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { events: tourEvents, isLoading: tourLoading } = useTourEvents(artist.name, bandsintownEnabled);
 
   const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
+  // Decorative: unreadable aliases hide the badge and chip row.
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
   const removeAlias = useRemoveArtistAlias();
 

@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
+import { LoadError } from "../../../components/LoadError";
 import {
   BUILTIN_PATTERNS,
   extractSuffix,
@@ -8,6 +9,7 @@ import {
   useDisabledBuiltinIds,
 } from "../../../hooks/useAlbumDisplayName";
 import { useAlbums } from "../../../hooks/useAlbums";
+import { useAlbumBrowseSessionStore } from "../../../store/albumBrowseSessionStore";
 import "./TitleCleanupTab.css";
 import { plural } from "../../../lib/plural";
 
@@ -214,7 +216,8 @@ export function TitleCleanupTab() {
   const [inputError, setInputError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [builtinsOpen, setBuiltinsOpen] = useState(false);
-  const { data: allAlbums = [] } = useAlbums();
+  const { data: albumRows, error: albumsError } = useAlbums();
+  const allAlbums = useMemo(() => albumRows ?? [], [albumRows]);
 
   const suffixAlbumMap = useMemo(() => {
     const map = new Map<string, { id: string; name: string; artist: string | null }[]>();
@@ -285,6 +288,14 @@ export function TitleCleanupTab() {
           When "Hide album suffixes" is on, Canon strips known edition labels like <em>(Deluxe Edition)</em> from album
           titles. Turn off any built-in rule or add your own.
         </p>
+
+        {albumsError && (
+          <LoadError
+            title="Couldn't read your albums, so no rule shows its matches"
+            error={albumsError}
+            onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}
+          />
+        )}
 
         <div className="title-cleanup-filter-row">
           <input

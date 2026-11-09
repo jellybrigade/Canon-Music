@@ -1,6 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LoadError } from "../../../components/LoadError";
 import { QK } from "../../../lib/queryKeys";
+import { useCanonTreeNodes } from "../hooks/useCanonTreeNodes";
 import { useDanglingGenreIds } from "../hooks/useDanglingGenreIds";
 import { useAutoMapExact, useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { UserTreeNode } from "../hooks/useUserTree";
@@ -11,8 +13,7 @@ import {
   useUpdateUserNode,
   useUserNodes,
 } from "../hooks/useUserTree";
-import type { TagKind, TreeNode } from "../lib/canonicalize";
-import { getCanonTree } from "../lib/canonicalize";
+import type { TagKind } from "../lib/canonicalize";
 import { TagDecidedTab } from "./TagDecidedTab";
 import { TagReviewTab } from "./TagReviewTab";
 import type { NodeFormState } from "./TagTreeTab";
@@ -31,7 +32,8 @@ interface PendingCreate {
 
 // fallow-ignore-next-line complexity
 export function TagsView() {
-  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
+  const { data: treeNodeRows, error: treeError, refetch: refetchTree } = useCanonTreeNodes();
+  const treeNodes = useMemo(() => treeNodeRows ?? [], [treeNodeRows]);
   const [tab, setTab] = useState<TabId>("review");
 
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
@@ -40,8 +42,11 @@ export function TagsView() {
   const [deletingNode, setDeletingNode] = useState<UserTreeNode | null>(null);
 
   const queryClient = useQueryClient();
+  // Decorative: these three only feed the tab badges, which an unreadable read hides.
   const { data: vocab = [] } = useTagVocab();
+  // Decorative: see above.
   const { data: userNodes = [] } = useUserNodes();
+  // Decorative: see above.
   const { data: dangling = [] } = useDanglingGenreIds();
   const { saveMapping } = useTagMappings();
   const autoMapExact = useAutoMapExact();
@@ -64,21 +69,10 @@ export function TagsView() {
   const updateUserNode = useUpdateUserNode();
   const deleteUserNode = useDeleteUserNode();
 
-  useEffect(() => {
-    getCanonTree()
-      .then((tree) => setTreeNodes(tree.nodes))
-      .catch(console.error);
-  }, []);
-
-  async function refreshTree() {
-    const tree = await getCanonTree();
-    setTreeNodes(tree.nodes);
-  }
-
   function handleRefresh() {
     void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+    // Under userTreeNodes, so the genre tree is read again too.
     void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
-    void refreshTree();
   }
 
   const reviewCount = vocab.filter((r) => !r.canonical_id && r.album_count > 0).length + dangling.length;
@@ -120,7 +114,6 @@ export function TagsView() {
           type: state.type,
           parentIds: state.parentId ? [state.parentId] : [],
         });
-        await refreshTree();
         closeNodeModal();
       } else if (pendingCreate) {
         const newId = await createUserNode.mutateAsync({
@@ -128,7 +121,6 @@ export function TagsView() {
           type: state.type,
           parentIds: state.parentId ? [state.parentId] : [],
         });
-        await refreshTree();
         if (pendingCreate.rawValue && pendingCreate.rawKind) {
           saveMapping.mutate({
             rawValue: pendingCreate.rawValue,
@@ -148,7 +140,6 @@ export function TagsView() {
     if (!deletingNode) return;
     try {
       await deleteUserNode.mutateAsync({ id: deletingNode.id, name: deletingNode.name });
-      await refreshTree();
     } catch (e) {
       console.error(e);
     }
@@ -182,7 +173,10 @@ export function TagsView() {
       </div>
 
       <div className="tags-tab-panel">
-        {tab === "review" && (
+        {treeError && tab !== "title-cleanup" && (
+          <LoadError title="Couldn't load the genre tree" error={treeError} onRetry={() => void refetchTree()} />
+        )}
+        {tab === "review" && !treeError && (
           <TagReviewTab
             treeNodes={treeNodes}
             autoNote={autoNote}
@@ -190,9 +184,9 @@ export function TagsView() {
             onCreateNode={openCreateModal}
           />
         )}
-        {tab === "decided" && <TagDecidedTab treeNodes={treeNodes} />}
+        {tab === "decided" && !treeError && <TagDecidedTab treeNodes={treeNodes} />}
         {tab === "title-cleanup" && <TitleCleanupTab />}
-        {tab === "tree" && (
+        {tab === "tree" && !treeError && (
           <TagTreeTab
             treeNodes={treeNodes}
             supersededCount={supersededCount}

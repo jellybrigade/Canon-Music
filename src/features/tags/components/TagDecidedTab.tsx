@@ -1,5 +1,6 @@
 import { Lock, Unlock } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { LoadError } from "../../../components/LoadError";
 import type { TagVocabRow } from "../hooks/useTagMappings";
 import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { TagKind, TreeNode } from "../lib/canonicalize";
@@ -99,7 +100,8 @@ interface TagDecidedTabProps {
 
 // fallow-ignore-next-line complexity
 export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
-  const { data: vocab = [] } = useTagVocab();
+  const { data: vocabRows, error: vocabError, refetch: refetchVocab } = useTagVocab();
+  const vocab = useMemo(() => vocabRows ?? [], [vocabRows]);
   const { deleteMapping, lockMapping } = useTagMappings();
 
   const [filter, setFilter] = useState<DecidedFilter>("all");
@@ -187,6 +189,12 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
     { id: "accepted", label: "Accepted" },
     { id: "ignored", label: "Ignored" },
   ];
+
+  if (vocabError) {
+    return (
+      <LoadError title="Couldn't load your tag decisions" error={vocabError} onRetry={() => void refetchVocab()} />
+    );
+  }
 
   const isEmpty = mappedGroups.length === 0 && filteredAccepted.length === 0 && filteredIgnored.length === 0;
 

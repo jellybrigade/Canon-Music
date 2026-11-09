@@ -116,6 +116,8 @@ export const QK = {
     ["suggested-tracks", artistName, trackId, serverId] as const,
 
   userTreeNodes: () => ["user-tree-nodes"] as const,
+  /** Under `userTreeNodes`: every user node write busts the tree and refreshes that key. */
+  canonTreeNodes: () => ["user-tree-nodes", "canon-tree"] as const,
   userTreeChangelog: () => ["user-tree-changelog"] as const,
 
   settingsLastfmMinTagCount: () => ["settings", "lastfm.min_tag_count"] as const,

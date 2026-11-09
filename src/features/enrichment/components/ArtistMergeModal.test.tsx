@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
-vi.mock("../../../hooks/useArtists", () => ({
-  useArtists: () => ({ data: [{ name: "Ye", album_count: 3 }] }),
-}));
+const artistsRead = vi.fn();
+vi.mock("../../../hooks/useArtists", () => ({ useArtists: () => artistsRead() }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
 import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { ArtistMergeModal } from "./ArtistMergeModal";
 
@@ -20,7 +20,10 @@ function mount(onClose = vi.fn()) {
   return onClose;
 }
 
-beforeEach(() => resetTauriMocks());
+beforeEach(() => {
+  resetTauriMocks();
+  artistsRead.mockReturnValue({ data: [{ name: "Ye", album_count: 3 }], isLoading: false, error: null });
+});
 afterEach(cleanup);
 
 describe("ArtistMergeModal", () => {
@@ -35,5 +38,18 @@ describe("ArtistMergeModal", () => {
 
     await waitFor(() => expect(screen.getByText(/database is locked/)).toBeInTheDocument());
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("says the artists could not be read instead of that none match", async () => {
+    artistsRead.mockReturnValue({ data: undefined, isLoading: false, error: "database is locked" });
+    mount();
+    const tickBefore = useArtistBrowseSessionStore.getState().refreshTick;
+
+    expect(screen.getByText("Couldn't load your artists")).toBeInTheDocument();
+    expect(screen.queryByText("No artists match.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    // The artist refresh is debounced, so the new read lands after it settles.
+    await waitFor(() => expect(useArtistBrowseSessionStore.getState().refreshTick).toBe(tickBefore + 1));
   });
 });

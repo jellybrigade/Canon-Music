@@ -46,6 +46,7 @@ export function AlbumArtStrip({
 }) {
   const { data: servers } = useServers();
   const serverId = servers?.[0]?.id;
+  // Decorative: an unreadable cover strip stays hidden.
   const { data: albums = [] } = useTagAlbums(rawValue, kind, serverId);
   const { data: swc } = useServerWithCredential(serverId);
 

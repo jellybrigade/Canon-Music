@@ -1,14 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { LoadError } from "../../../components/LoadError";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import { useCanonTreeNodes } from "../hooks/useCanonTreeNodes";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useTagMappings } from "../hooks/useTagMappings";
-import type { TreeNode } from "../lib/canonicalize";
-import { getCanonTree } from "../lib/canonicalize";
 import type { NormalizedTag } from "../lib/tagNormalize";
 import { normalizeAlbum } from "../lib/tagNormalize";
 import { ACCEPTED, CanonCombobox, IGNORED } from "./TagsViewHelpers";
@@ -170,16 +169,11 @@ interface UnmatchedSectionProps {
 }
 
 export function UnmatchedSection({ albumId }: UnmatchedSectionProps) {
+  // Decorative: an unreadable section stays hidden.
   const { data: unmatched = [] } = useAlbumUnmatchedGenres(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
-  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
-
-  useEffect(() => {
-    getCanonTree()
-      .then((t) => setTreeNodes(t.nodes))
-      .catch(console.error);
-  }, []);
+  const { data: treeNodes, error: treeError, refetch: refetchTree } = useCanonTreeNodes();
 
   if (unmatched.length === 0) return null;
 
@@ -201,6 +195,9 @@ export function UnmatchedSection({ albumId }: UnmatchedSectionProps) {
   return (
     <div className="tag-drawer-section">
       <h3 className="tag-drawer-section-title">Unmatched genres</h3>
+      {treeError && (
+        <LoadError title="Couldn't load the genre tree" error={treeError} onRetry={() => void refetchTree()} />
+      )}
       {unmatched.map(({ raw_value, source }) => (
         <div key={raw_value} className="td-unmatched-row">
           <div className="td-unmatched-top">
@@ -224,7 +221,7 @@ export function UnmatchedSection({ albumId }: UnmatchedSectionProps) {
             </button>
           </div>
           <CanonCombobox
-            treeNodes={treeNodes}
+            treeNodes={treeNodes ?? []}
             currentId={null}
             onSelect={(id) => void handleDecision(raw_value, id)}
             onClear={() => {}}
