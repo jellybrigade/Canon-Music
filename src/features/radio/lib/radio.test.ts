@@ -2,7 +2,7 @@
  * Coverage for `radio.ts`'s candidate scoring: the pure weighting math (`scaleWeights`,
  * `buildAncestorWeights`) needs no DB at all; `getCuratedCandidates` and every `RadioMode`
  * branch of `getRadioCandidates` run real SQL against the real migrated schema via
- * `createMigratedTestDb`, since the SAFE_ID filter, the sqrt(tag_count) damping and the
+ * `createMigratedTestDb`, since the bound genre weights, the sqrt(tag_count) damping and the
  * CANDIDATE_LIMIT are all properties of the query, not of a mock.
  *
  * `useRadio.test.ts` mocks this module out entirely and covers orchestration (guards,
@@ -209,13 +209,16 @@ describe("getRadioCandidates", () => {
       expect(result).toEqual([]);
     });
 
-    it("returns [] when every weighted ancestor id fails the SAFE_ID filter", async () => {
+    it("matches genre ids holding any character, bound rather than written into the query", async () => {
       const db = holder.db!;
       await insertAlbum(db, "alb");
       await insertTrack(db, { id: "seed", albumId: "alb" });
-      await insertTrack(db, { id: "cand", albumId: "alb" });
+      await insertTrack(db, { id: "rnb", albumId: "alb" });
+      await insertTrack(db, { id: "quoted", albumId: "alb" });
+      await insertTag(db, "seed", "r&b");
+      await insertTag(db, "rnb", "r&b");
       await insertTag(db, "seed", "bad'id;drop table tracks;--");
-      await insertTag(db, "cand", "bad'id;drop table tracks;--");
+      await insertTag(db, "quoted", "bad'id;drop table tracks;--");
 
       const result = await getRadioCandidates({
         seedTrackId: "seed",
@@ -224,7 +227,7 @@ describe("getRadioCandidates", () => {
         artistSimilarity: new Map(),
         trackSimilarity: new Map(),
       });
-      expect(result).toEqual([]);
+      expect(result.map((r) => r.id).sort()).toEqual(["quoted", "rnb"]);
     });
 
     it("scores a genre-tagged candidate above an equally-weighted mood-tagged one", async () => {

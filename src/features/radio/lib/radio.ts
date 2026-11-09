@@ -157,13 +157,8 @@ async function getCuratedCandidates(
 
   if (combinedWeights.size === 0) return [];
 
-  const SAFE_ID = /^[a-zA-Z0-9_\- :.]+$/;
-  const cteParts = Array.from(combinedWeights.entries())
-    .filter(([id]) => SAFE_ID.test(id))
-    .map(([id, w]) => `('${id.replace(/'/g, "''")}', ${w.toFixed(6)})`)
-    .join(", ");
-
-  if (!cteParts) return [];
+  const weightRows = Array.from(combinedWeights.entries());
+  const weightValues = weightRows.map(() => "(?, ?)").join(", ");
 
   // sum_score + tag_count kept separate so raw tag-count can't inflate score:
   // heavily-tagged (usually mainstream) tracks otherwise dominate purely by tag volume.
@@ -171,7 +166,7 @@ async function getCuratedCandidates(
 
   const rows = await db.select<ScoredRow[]>(
     `WITH seed_weights(canonical_id, weight) AS (
-       VALUES ${cteParts}
+       VALUES ${weightValues}
      )
      SELECT ${TRACK_PROJECTION},
             SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS sum_score,
@@ -185,7 +180,7 @@ async function getCuratedCandidates(
      GROUP BY t.id
      ORDER BY sum_score DESC, t.id
      LIMIT ?`,
-    [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
+    [...weightRows.flat(), seed.serverId, seedTrackId, CANDIDATE_LIMIT],
   );
 
   // Dampen by sqrt(tag_count) in JS, not SQL, since target SQLite builds may lack SQRT().
