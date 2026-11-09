@@ -1,4 +1,5 @@
 import { getDb } from "../../../db";
+import { selectRandomSample } from "../../../db/randomSample";
 import type { RadioMode } from "../../playback/store/playerTypes";
 import { getCanonTree } from "../../tags/lib/canonicalize";
 
@@ -47,6 +48,15 @@ const TRACK_PROJECTION = `
   a.artwork_url, t.album_id, a.name AS album_name
 `;
 
+const TRACKS_WITH_ALBUM = "tracks t JOIN albums a ON t.album_id = a.id";
+
+/** Artist equality through the NOCASE artist index; `lower()` would scan the server's tracks. */
+export const ARTIST_MATCH = "t.artist = ? COLLATE NOCASE";
+
+export function similarArtistsMatch(count: number): string {
+  return `t.artist COLLATE NOCASE IN (${Array.from({ length: count }, () => "?").join(", ")})`;
+}
+
 type TrackRow = {
   id: string;
   title: string;
@@ -56,6 +66,23 @@ type TrackRow = {
   album_id: string | null;
   album_name: string | null;
 };
+
+type DbHandle = Awaited<ReturnType<typeof getDb>>;
+
+function sampleSeedPool<T extends TrackRow>(
+  db: DbHandle,
+  seedTrackId: string,
+  pool: { serverId: string; from?: string; where?: string; params?: unknown[]; columns?: string },
+): Promise<T[]> {
+  return selectRandomSample<T>(db, {
+    columns: `${TRACK_PROJECTION}${pool.columns ?? ""}`,
+    from: pool.from ?? TRACKS_WITH_ALBUM,
+    where: `t.server_id = ? AND t.id != ?${pool.where ? ` AND ${pool.where}` : ""}`,
+    params: [pool.serverId, seedTrackId, ...(pool.params ?? [])],
+    orderBy: "t.id",
+    limit: CANDIDATE_LIMIT,
+  });
+}
 
 function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   return {
@@ -114,14 +141,7 @@ async function getCuratedCandidates(
   );
 
   if (seedTags.length === 0) {
-    // No canonical tags, random from same server
-    const fallback = await db.select<TrackRow[]>(
-      `SELECT ${TRACK_PROJECTION}
-       FROM tracks t JOIN albums a ON t.album_id = a.id
-       WHERE t.server_id = ? AND t.id != ?
-       ORDER BY RANDOM() LIMIT ?`,
-      [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-    );
+    const fallback = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
     return fallback.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 0.1));
   }
 
@@ -222,15 +242,11 @@ export async function getRadioCandidates({
     case "similar-artists": {
       if (artistSimilarity.size === 0) return [];
       const similarArtistNames = Array.from(artistSimilarity.keys());
-      const placeholders = similarArtistNames.map(() => "?").join(", ");
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-           AND lower(t.artist) IN (${placeholders})
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        where: similarArtistsMatch(similarArtistNames.length),
+        params: similarArtistNames,
+      });
       return rows
         .filter((r) => !excludeIds.has(r.id))
         .map((r) => {
@@ -242,13 +258,11 @@ export async function getRadioCandidates({
 
     case "same-artist": {
       if (!seed.artist) return [];
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ? AND lower(t.artist) = lower(?)
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, seed.artist, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        where: ARTIST_MATCH,
+        params: [seed.artist],
+      });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
 
@@ -271,27 +285,18 @@ export async function getRadioCandidates({
 
     case "era": {
       if (seed.year === null) {
-        // No year, fall back to random
-        const rows = await db.select<TrackRow[]>(
-          `SELECT ${TRACK_PROJECTION}
-           FROM tracks t JOIN albums a ON t.album_id = a.id
-           WHERE t.server_id = ? AND t.id != ?
-           ORDER BY RANDOM() LIMIT ?`,
-          [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-        );
+        const rows = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
         return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
       }
       const decadeStart = Math.floor(seed.year / 10) * 10;
       const decadeEnd = decadeStart + 9;
       type EraRow = TrackRow & { year: number | null };
-      const rows = await db.select<EraRow[]>(
-        `SELECT ${TRACK_PROJECTION}, t.year
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-           AND t.year BETWEEN ? AND ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, decadeStart, decadeEnd, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool<EraRow>(db, seedTrackId, {
+        serverId: seed.serverId,
+        columns: ", t.year",
+        where: "t.year BETWEEN ? AND ?",
+        params: [decadeStart, decadeEnd],
+      });
       return rows
         .filter((r) => !excludeIds.has(r.id))
         .map((r) => {
@@ -302,26 +307,15 @@ export async function getRadioCandidates({
     }
 
     case "loved": {
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t
-         JOIN albums a ON t.album_id = a.id
-         JOIN loved_tracks lt ON lt.track_id = t.id
-         WHERE t.server_id = ? AND t.id != ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        from: `${TRACKS_WITH_ALBUM} JOIN loved_tracks lt ON lt.track_id = t.id`,
+      });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
 
     case "random": {
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
   }

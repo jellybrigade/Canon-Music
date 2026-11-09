@@ -349,7 +349,8 @@ describe("useRadio auto-advance", () => {
         // stamp is the only record of it.
         const call = db.select.mock.calls.find((c) => String(c[0]).includes("played_at"))!;
         expect(call[1]).toEqual([
-          "srv:%",
+          "srv:",
+          "srv;",
           Math.floor(new Date("2026-08-10T12:00:00Z").getTime() / 1000) - 3600,
           "srv",
           "2026-08-10T11:00:00.000Z",

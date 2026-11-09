@@ -419,15 +419,10 @@ export function useRecordFailedLookup() {
   });
 }
 
-/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. Needs `ALBUM_SHAPE_JOIN`. */
-export const ALBUM_SHAPE_COLUMNS =
-  "COALESCE(shape.track_count, 0) AS track_count, COALESCE(shape.duration_seconds, 0) AS duration_seconds";
-
-export const ALBUM_SHAPE_JOIN = `LEFT JOIN (
-    SELECT album_id, server_id, COUNT(*) AS track_count,
-      CASE WHEN COUNT(*) = COUNT(NULLIF(duration, 0)) THEN SUM(duration) ELSE 0 END AS duration_seconds
-    FROM tracks GROUP BY album_id, server_id
-  ) shape ON shape.album_id = a.id AND shape.server_id = a.server_id`;
+/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. Counted per album, not over the whole tracks table. */
+export const ALBUM_SHAPE_COLUMNS = `(SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count,
+  (SELECT CASE WHEN COUNT(*) = COUNT(NULLIF(t.duration, 0)) THEN COALESCE(SUM(t.duration), 0) ELSE 0 END
+     FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS duration_seconds`;
 
 export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
@@ -444,7 +439,6 @@ export async function readFailedLookupAlbums(
     `SELECT a.*, ${ALBUM_SHAPE_COLUMNS}
      FROM albums a
      INNER JOIN album_identity ai ON ai.album_id = a.id
-     ${ALBUM_SHAPE_JOIN}
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
      ORDER BY a.artist, a.name, a.id`,
     [serverId],

@@ -675,6 +675,54 @@ describe("getRadioCandidates", () => {
     });
   });
 
+  it.each([
+    ["curated", "no tags"],
+    ["similar-artists", "artists"],
+    ["same-artist", "artist"],
+    ["era", "no year"],
+    ["era", "decade"],
+    ["loved", "loved"],
+    ["random", "library"],
+  ] as const)("draws the %s pool (%s) from a counted window, not a sort by RANDOM()", async (mode, pool) => {
+    const db = holder.db!;
+    await insertAlbum(db, "alb");
+    const year = pool === "no year" ? null : 1995;
+    await insertTrack(db, { id: "seed", albumId: "alb", artist: "Sting", year });
+    for (let i = 0; i < 5; i++) await insertTrack(db, { id: `c${i}`, albumId: "alb", artist: "STING", year: 1991 });
+    await db.execute("INSERT INTO loved_tracks (track_id) SELECT id FROM tracks WHERE id != 'seed'");
+    db.queryLog.length = 0;
+
+    const result = await getRadioCandidates({
+      seedTrackId: "seed",
+      mode,
+      excludeIds: new Set(),
+      artistSimilarity: new Map([["sting", 1]]),
+      trackSimilarity: new Map(),
+    });
+    expect(result.map((r) => r.id).sort()).toEqual(["c0", "c1", "c2", "c3", "c4"]);
+    expect(db.queryLog.filter((q) => /RANDOM\(\)/i.test(q.sql))).toEqual([]);
+  });
+
+  it("caps a random pool at CANDIDATE_LIMIT distinct tracks however the window falls", async () => {
+    const db = holder.db!;
+    await insertAlbum(db, "alb");
+    await insertTrack(db, { id: "seed", albumId: "alb" });
+    for (let i = 0; i < CANDIDATE_LIMIT + 25; i++) await insertTrack(db, { id: `t${i}`, albumId: "alb" });
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.99);
+    try {
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "random",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map(),
+      });
+      expect(new Set(result.map((r) => r.id)).size).toBe(CANDIDATE_LIMIT);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   describe("random", () => {
     it("excludes the seed and excludeIds, scopes to the server, fixed score 1.0", async () => {
       const db = holder.db!;

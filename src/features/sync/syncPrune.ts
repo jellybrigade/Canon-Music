@@ -1,5 +1,5 @@
 import type Database from "@tauri-apps/plugin-sql";
-import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
+import { deleteTrackRowsSql, prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { forYouLocksKey } from "../../lib/forYouGroups";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
@@ -10,11 +10,7 @@ import { escapeLike } from "../../lib/sql";
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
-    ...prunedTrackIdTables().map(
-      ({ table, column }) =>
-        (ph: string) =>
-          `DELETE FROM ${table} WHERE ${column} IN (${ph})`,
-    ),
+    ...prunedTrackIdTables().map((entry) => (ph: string) => deleteTrackRowsSql(entry, ph)),
     (ph: string) => `DELETE FROM tracks WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -62,12 +58,10 @@ export async function carryPinnedArtistCase(db: Database, serverId: string): Pro
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
   await carryPinnedAlbums(db, albumIds);
-  const viaTracks =
-    ({ table, column }: { table: string; column: string }) =>
-    (ph: string) =>
-      `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
   const statements = [
-    ...prunedTrackIdTables().map(viaTracks),
+    ...prunedTrackIdTables().map(
+      (entry) => (ph: string) => deleteTrackRowsSql(entry, `SELECT id FROM tracks WHERE album_id IN (${ph})`),
+    ),
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM pinned_albums WHERE album_id IN (${ph})`,

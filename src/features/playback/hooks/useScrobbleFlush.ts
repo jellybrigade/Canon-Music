@@ -6,17 +6,12 @@ import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { stripServerPrefix } from "../../../lib/ids";
 import { QK } from "../../../lib/queryKeys";
-import { escapeLike } from "../../../lib/sql";
+import { ownedByServer } from "../../../lib/sql";
 
 const FLUSH_INTERVAL_MS = 60_000;
 
 // Only "not found" is permanent; auth failures must keep the offline backlog.
 const PERMANENT_SUBSONIC_CODES = new Set([70]);
-
-/** Rows are owned by the server whose id prefixes their `track_id`; scope the read in SQL, not the loop. */
-function ownerPattern(serverId: string): string {
-  return `${escapeLike(serverId)}:%`;
-}
 
 /** Servers with a flush pass running. Module-scoped: a per-effect guard would let a
  * credential refetch's new pass re-SELECT an undeleted row and send it twice. */
@@ -28,9 +23,11 @@ const flushRefusedWhileBusy = new Map<string, () => void>();
 /** Queued rows the currently selected server could send, i.e. what a backlog count may claim. */
 export async function getScrobbleQueueCount(serverId: string): Promise<number> {
   const db = await getDb();
+  // Rows are owned by the server whose id prefixes their `track_id`; scope the read in SQL, not the loop.
+  const owned = ownedByServer("track_id", serverId);
   const rows = await db.select<{ n: number }[]>(
-    "SELECT COUNT(*) as n FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\'",
-    [ownerPattern(serverId)],
+    `SELECT COUNT(*) as n FROM scrobble_queue WHERE ${owned.sql}`,
+    owned.params,
   );
   return rows[0]?.n ?? 0;
 }
@@ -57,9 +54,10 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
       try {
         const db = await getDb();
         type ScrobbleRow = { id: number; track_id: string; timestamp: number };
+        const owned = ownedByServer("track_id", server.id);
         const rows = await db.select<ScrobbleRow[]>(
-          "SELECT id, track_id, timestamp FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\' ORDER BY timestamp",
-          [ownerPattern(server.id)],
+          `SELECT id, track_id, timestamp FROM scrobble_queue WHERE ${owned.sql} ORDER BY timestamp`,
+          owned.params,
         );
 
         for (const row of rows) {

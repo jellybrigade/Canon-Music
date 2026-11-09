@@ -1037,6 +1037,15 @@ export const migrations: Migration[] = [
         WHERE norm_value IS NOT LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '));
     `,
   },
+  {
+    version: 74,
+    sql: `
+      DELETE FROM tracks_fts;
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre)
+        SELECT t.rowid, t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
+        FROM tracks t JOIN albums a ON t.album_id = a.id;
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

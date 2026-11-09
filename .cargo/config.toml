@@ -1,3 +1,6 @@
 [env]
 # Homebrew's pkg-config doesn't search system paths; point it at system .pc files
 PKG_CONFIG_PATH = "/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+# synchronous is per connection and sqlx's pool can't set it, so build the one bundled SQLite
+# (shared by sqlx and rusqlite) to default WAL connections to NORMAL instead of FULL.
+LIBSQLITE3_FLAGS = "SQLITE_DEFAULT_WAL_SYNCHRONOUS=1"

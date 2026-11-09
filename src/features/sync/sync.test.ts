@@ -52,7 +52,7 @@ import { album, CRED, OTHER, SRV, server, track } from "../../test/navidromeFixt
 import type { SyncProgress } from "./sync";
 import { syncLibrary } from "./sync";
 import { purgeServerData, purgeStrandedServers } from "./syncPrune";
-import { repairAlbumTrackIds, syncAlbumTracks } from "./syncTracks";
+import { repairAlbumTrackIds, syncAlbumTracks, UNINDEXED_ALBUMS_SQL } from "./syncTracks";
 import { clearSyncWatermark } from "./syncWatermark";
 import { subscribeTrackIdRemaps } from "./trackIdRemapEvents";
 import type { TrackIdRemap } from "./trackRemap";
@@ -575,8 +575,12 @@ describe("syncLibrary idempotence", () => {
     // What quitting mid-pass leaves: tracks stored, the FTS rebuild at the end never reached.
     await db().execute("DELETE FROM tracks_fts WHERE id IN (?, ?)", [`${SRV}:t1`, `${SRV}:t2`]);
     mAlbumTracks.mockClear();
+    const select = vi.spyOn(db(), "select");
 
     await syncLibrary(server(), CRED);
+
+    // Positive control for the probes below that assert this lookup is skipped.
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(1);
 
     expect(mAlbumTracks).not.toHaveBeenCalled();
     expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`]);
@@ -604,7 +608,7 @@ describe("syncLibrary idempotence", () => {
 
     await syncLibrary(server(), CRED);
 
-    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(0);
   });
 
   it("does not rescan the index every sync for a track with no album row to index it under", async () => {
@@ -618,7 +622,7 @@ describe("syncLibrary idempotence", () => {
 
     await syncLibrary(server(), CRED);
 
-    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(0);
   });
 
   it("does not rebuild the artists table when only a non-artist column changed", async () => {

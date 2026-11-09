@@ -177,7 +177,6 @@ export async function syncLibrary(
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
   const renamedAlbumIds: string[] = [];
-  const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
@@ -275,7 +274,7 @@ export async function syncLibrary(
   );
   // Right after the rename lands: a later failure would leave the old name indexed, and the
   // next sync sees no rename to rebuild for.
-  await rebuildTracksFts(db, renamedAlbumIds, []);
+  await rebuildTracksFts(db, renamedAlbumIds);
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
   // album is a real deletion. An empty list against a non-empty stored library still prunes nothing regardless.
@@ -346,10 +345,6 @@ export async function syncLibrary(
       tracks,
       hasStoredTracks: existingTrackCount > 0,
     });
-    // Collected whatever the carry reported: an id the carry declined keeps its own track
-    // row, which the prune then takes along with its FTS row, so clearing it here early is
-    // at worst a no-op and never leaves one behind.
-    for (const remap of written.remaps) renamedTrackIds.push(remap.oldId);
     remappedTracks += written.carried;
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
@@ -406,7 +401,7 @@ export async function syncLibrary(
 
   // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row
   // for a single changed album. Album ids are server-prefixed, so this is already scoped by server.
-  await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
+  await rebuildTracksFts(db, [...ftsDirtyAlbumIds]);
   await healTracksFts(db, server.id);
 
   stopIfAborted(signal);

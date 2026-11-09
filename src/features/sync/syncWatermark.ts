@@ -2,6 +2,7 @@ import type Database from "@tauri-apps/plugin-sql";
 import type { NavidromeScanStatus } from "../../clients/navidrome";
 import { songExists } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { selectRandomSample } from "../../db/randomSample";
 import type { Server } from "../../types/server";
 
 // How many mirrored track ids the skip fast-path checks against the server per sync.
@@ -24,10 +25,14 @@ export async function mirroredTrackIdsStillResolve(
   credential: NavidromeCredential,
   altUrl: string | undefined,
 ): Promise<boolean> {
-  const sampled = await db.select<{ id: string }[]>(
-    "SELECT id FROM tracks WHERE server_id = ? ORDER BY RANDOM() LIMIT ?",
-    [server.id, TRACK_ID_PROBE_COUNT],
-  );
+  const sampled = await selectRandomSample<{ id: string }>(db, {
+    columns: "id",
+    from: "tracks",
+    where: "server_id = ?",
+    params: [server.id],
+    orderBy: "id",
+    limit: TRACK_ID_PROBE_COUNT,
+  });
   if (sampled.length === 0) return true;
   const verdicts = await Promise.all(
     sampled.map((row) =>

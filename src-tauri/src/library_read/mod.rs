@@ -111,6 +111,24 @@ mod tests {
     }
 
     #[test]
+    fn every_wal_connection_syncs_at_normal_not_full() {
+        // synchronous is per connection and sqlx's pool has no per-connection hook, so the
+        // bundled SQLite is built with SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 (.cargo/config.toml).
+        let scratch = ScratchDir::new("synchronous");
+        let path = scratch.0.join("canon.db");
+        let writer = Connection::open(&path).expect("writer");
+        writer
+            .pragma_update(None, "journal_mode", "WAL")
+            .expect("wal");
+
+        let conn = open_read_conn_at(&path).expect("existing db must open");
+        let synchronous: i64 = conn
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .expect("read synchronous");
+        assert_eq!(synchronous, 1, "1 = NORMAL; 2 = FULL fsyncs every commit");
+    }
+
+    #[test]
     fn an_existing_database_opens_read_write_so_it_can_participate_in_wal() {
         let scratch = ScratchDir::new("wal");
         let path = scratch.0.join("canon.db");

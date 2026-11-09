@@ -1,7 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { fetchStarred2 } from "../../clients/navidrome";
 import { executeBatched } from "../../lib/dbBatch";
-import { escapeLike } from "../../lib/sql";
+import { ownedByServer } from "../../lib/sql";
 import type { SyncStageContext } from "./syncStage";
 
 async function insertIdColumnBatch(db: Database, table: string, column: string, ids: string[]): Promise<void> {
@@ -30,14 +30,17 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
 
     // Scoped by id prefix, matching the unscoped write below; a join-scoped read missed
     // starred ids with no local row and rewrote loved state every sync.
-    const idPrefix = `${escapeLike(server.id)}:%`;
+    const ownedAlbums = ownedByServer("album_id", server.id);
+    const ownedTracks = ownedByServer("track_id", server.id);
     const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
-      db.select<{ album_id: string }[]>("SELECT album_id FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [
-        idPrefix,
-      ]),
-      db.select<{ track_id: string }[]>("SELECT track_id FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [
-        idPrefix,
-      ]),
+      db.select<{ album_id: string }[]>(
+        `SELECT album_id FROM loved_albums WHERE ${ownedAlbums.sql}`,
+        ownedAlbums.params,
+      ),
+      db.select<{ track_id: string }[]>(
+        `SELECT track_id FROM loved_tracks WHERE ${ownedTracks.sql}`,
+        ownedTracks.params,
+      ),
     ]);
 
     const existingLovedAlbumIds = new Set(existingLovedAlbums.map((r) => r.album_id));
@@ -46,7 +49,7 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
       starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [idPrefix]);
+      await db.execute(`DELETE FROM loved_albums WHERE ${ownedAlbums.sql}`, ownedAlbums.params);
       await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
     }
 
@@ -56,7 +59,7 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
       starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [idPrefix]);
+      await db.execute(`DELETE FROM loved_tracks WHERE ${ownedTracks.sql}`, ownedTracks.params);
       await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
     }
   }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
-import { escapeLike } from "../../../lib/sql";
+import { ownedByServer } from "../../../lib/sql";
 import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
@@ -43,11 +43,12 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   // scrobble_history only holds what Canon itself sent, so a track played on the phone
   // or in the web UI an hour ago is invisible to it. tracks.played_at is the server's own
   // stamp and counts every client; it is ISO 8601, hence the second cutoff.
+  const owned = ownedByServer("track_id", serverId);
   const rows = await db.select<Row[]>(
-    `SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?
+    `SELECT track_id FROM scrobble_history WHERE ${owned.sql} AND timestamp > ?
      UNION
      SELECT id AS track_id FROM tracks WHERE server_id = ? AND played_at > ?`,
-    [`${escapeLike(serverId)}:%`, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()],
+    [...owned.params, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()],
   );
   return new Set(rows.map((r) => r.track_id));
 }

@@ -14,7 +14,6 @@ import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
 import {
   ALBUM_SHAPE_COLUMNS,
-  ALBUM_SHAPE_JOIN,
   mbReleaseFacts,
   persistAlbumIdentity,
   recordFailedLookup,
@@ -97,7 +96,6 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     const unmatched = await db.select<Row[]>(
       `SELECT a.id, a.artist, a.name, a.year, a.mb_release_id, ${ALBUM_SHAPE_COLUMNS}
        FROM albums a
-       ${ALBUM_SHAPE_JOIN}
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL

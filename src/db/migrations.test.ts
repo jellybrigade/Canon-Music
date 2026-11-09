@@ -203,6 +203,30 @@ describe("runMigrations", () => {
     expect(mappings[0]?.norm_value).toBe("hip hop");
   });
 
+  it("re-keys every search row by its track's row and drops rows no track backs", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 73);
+    db.raw.exec(`
+      INSERT INTO albums (id, server_id, server_type, name) VALUES ('s1:al', 's1', 'navidrome', 'Album');
+      INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('s1:t1', 's1', 'navidrome', 'One', 's1:al');
+      INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('s1:t2', 's1', 'navidrome', 'Two', 's1:al');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (900, 's1:t2', 'Two', '', 'Album', '');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (901, 's1:t1', 'One', '', 'Album', '');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (902, 's1:gone', 'Gone', '', 'Album', '');
+    `);
+    await runMigrations(db);
+
+    const rows = db.raw
+      .prepare(
+        "SELECT f.id, f.rowid = t.rowid AS keyed FROM tracks_fts f LEFT JOIN tracks t ON t.id = f.id ORDER BY f.id",
+      )
+      .all();
+    expect(rows).toEqual([
+      { id: "s1:t1", keyed: 1 },
+      { id: "s1:t2", keyed: 1 },
+    ]);
+  });
+
   it("points every chained artist alias at the end of its chain", async () => {
     const db = createTestDb();
     await migrateThrough(db, 57);
