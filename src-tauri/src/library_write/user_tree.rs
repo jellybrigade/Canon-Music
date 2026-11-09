@@ -1,3 +1,4 @@
+use super::genre_carry::mark_albums_holding;
 use super::LibraryWriteStore;
 use rusqlite::Connection;
 #[tauri::command]
@@ -36,6 +37,7 @@ fn delete_user_node(conn: &mut Connection, id: &str, name: &str) -> Result<(), S
         rusqlite::params![id, name, before.to_string()],
     )
     .map_err(|e| e.to_string())?;
+    mark_albums_holding(&tx, &[id])?;
     // Between these statements the tree still holds a node nothing maps to, and then tags
     // pointing at a node that is gone. Neither is a state the app can be started in.
     tx.execute("DELETE FROM tag_mappings WHERE canonical_id = ?", [id])
@@ -81,6 +83,7 @@ mod tests {
         CREATE TABLE album_genres (album_id TEXT NOT NULL, canonical_id TEXT NOT NULL,
           relation TEXT NOT NULL, section TEXT, name TEXT NOT NULL,
           PRIMARY KEY (album_id, canonical_id));
+        CREATE TABLE albums (id TEXT PRIMARY KEY, computed_at INTEGER);
     ";
 
     fn user_tree_conn() -> Connection {
@@ -98,7 +101,11 @@ mod tests {
              INSERT INTO album_genre_exclusions VALUES ('a2', 'user:doom');
              INSERT INTO album_genre_exclusions VALUES ('a2', 'user:keep');
              INSERT INTO album_genres VALUES ('a1', 'user:doom', 'direct', 'genres', 'Doom Jazz');
-             INSERT INTO album_genres VALUES ('a1', 'user:keep', 'direct', 'genres', 'Sludge');",
+             INSERT INTO album_genres VALUES ('a1', 'user:keep', 'direct', 'genres', 'Sludge');
+             INSERT INTO album_genres VALUES ('a3', 'user:doom', 'direct', 'genres', 'Doom Jazz');
+             INSERT INTO album_genres VALUES ('a3', 'jazz', 'ancestor', 'genres', 'Jazz');
+             INSERT INTO albums VALUES ('a1', 100), ('a2', 100), ('a3', 100), ('a4', 100);
+             INSERT INTO album_genres VALUES ('a4', 'user:keep', 'direct', 'genres', 'Sludge');",
         )
         .expect("seed");
         conn
@@ -177,7 +184,7 @@ mod tests {
         assert_eq!(
             scalar_count(
                 &conn,
-                "SELECT COUNT(*) FROM album_genres WHERE canonical_id = 'user:keep'"
+                "SELECT COUNT(*) FROM album_genres WHERE album_id = 'a1' AND canonical_id = 'user:keep'"
             ),
             1
         );
@@ -194,6 +201,32 @@ mod tests {
                 "SELECT COUNT(*) FROM album_genre_exclusions WHERE canonical_id = 'user:keep'"
             ),
             1
+        );
+    }
+
+    #[test]
+    fn deleting_a_user_node_renormalizes_every_album_that_held_it() {
+        // Ancestor rows derived from the node name its parents, not the node, so only a
+        // re-derivation against the new tree drops them.
+        let mut conn = user_tree_conn();
+
+        delete_user_node(&mut conn, "user:doom", "Doom Jazz").expect("delete");
+
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM albums WHERE computed_at IS NULL AND id IN ('a1', 'a2', 'a3')"
+            ),
+            3,
+            "an album keeping the jazz ancestor of a deleted Doom Jazz must be re-derived"
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM albums WHERE id = 'a4' AND computed_at = 100"
+            ),
+            1,
+            "an album never holding the node keeps its genres"
         );
     }
 
