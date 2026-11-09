@@ -56,13 +56,11 @@ function useAlbumRawGenreMap(albumId: string) {
            AND tt.canonical_id NOT IN ('__accepted__', '__ignored__')`,
         [albumId],
       );
-      const map = new Map<string, string[]>();
+      const rawValuesByGenre: Record<string, string[]> = {};
       for (const { canonical_id, raw_value } of rows) {
-        const arr = map.get(canonical_id) ?? [];
-        arr.push(raw_value);
-        map.set(canonical_id, arr);
+        rawValuesByGenre[canonical_id] = [...(rawValuesByGenre[canonical_id] ?? []), raw_value];
       }
-      return map;
+      return rawValuesByGenre;
     },
     staleTime: Infinity,
   });
@@ -113,7 +111,7 @@ function TagSection({
   tags: NormalizedTag[];
   level: "album" | "track";
   emptyMessage?: string;
-  rawMap?: Map<string, string[]>;
+  rawMap?: Record<string, string[]>;
   onIgnore?: (rawName: string) => void;
 }) {
   if (tags.length === 0) {
@@ -135,7 +133,7 @@ function TagSection({
         <span className={`tag-level-badge tag-level-badge--${level}`}>{level}</span>
       </h3>
       {tags.map((tag) => {
-        const originals = tag.id ? rawMap?.get(tag.id) : undefined;
+        const originals = tag.id ? rawMap?.[tag.id] : undefined;
         const remapped = originals?.filter((r) => r.toLowerCase() !== tag.name.toLowerCase());
         const tooltip = remapped?.length ? `Original: ${remapped.join(", ")}` : undefined;
         const isUnmapped = tag.id === null;
