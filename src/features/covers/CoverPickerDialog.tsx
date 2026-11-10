@@ -253,11 +253,10 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
                 Could not read which cover is in use: {errorMessage(override.error)}
               </p>
             ) : (
-              override.isSuccess && (
+              override.data && (
                 <p className="identify-hint">
-                  {override.data
-                    ? `Showing a cover you picked${describeChoice(override.data)}. Canon keeps it to itself; the server and your files still have their own.`
-                    : "Showing the server's cover. A cover you pick stays in Canon; the server and your files keep theirs."}
+                  Showing a cover you picked{describeChoice(override.data)}. Canon keeps it to itself; the server and
+                  your files still have their own.
                 </p>
               )
             )}
