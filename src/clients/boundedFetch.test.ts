@@ -43,7 +43,7 @@ function tricklingBody(gapMs: number, count: number, signal?: AbortSignal | null
 describe("boundedFetch", () => {
   it("rejects when the server never sends headers", async () => {
     vi.stubGlobal("fetch", vi.fn(abortableNever));
-    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("aborted");
+    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
   });
@@ -60,7 +60,7 @@ describe("boundedFetch", () => {
         return Promise.resolve(new Response(body, { status: 200 }));
       }),
     );
-    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("aborted");
+    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
   });
@@ -159,11 +159,27 @@ describe("boundedNativeFetch", () => {
     vi.mocked(tauriFetch).mockImplementation((_url, init) => abortableNever("", init));
     const pending = expect(
       boundedNativeFetch("https://example.test", { headers: { "User-Agent": "Canon" } }),
-    ).rejects.toThrow("aborted");
+    ).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
     expect(tauriFetch).toHaveBeenCalledTimes(1);
     expect(vi.mocked(tauriFetch).mock.calls[0]?.[1]?.headers).toEqual({ "User-Agent": "Canon" });
+  });
+
+  it("says a request it gave up on timed out, not that it was canceled", async () => {
+    // The native client rejects an aborted request with a bare "Request canceled".
+    vi.mocked(tauriFetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject("Request canceled"));
+        }),
+    );
+    const failure = boundedNativeFetch("https://coverartarchive.org/release/x").catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    const err = await failure;
+    expect(err).toBeInstanceOf(DOMException);
+    expect((err as DOMException).name).toBe("AbortError");
+    expect((err as DOMException).message).toBe("timed out after 12s");
   });
 
   it("keeps an API key in the failed request's URL out of the error it rejects with", async () => {

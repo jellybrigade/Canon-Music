@@ -50,9 +50,13 @@ async function boundedRequest(
     reader?.cancel().catch(() => {});
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOutAfterMs: number | null = null;
   const arm = (ms: number) => {
     clearTimeout(timer);
-    timer = setTimeout(abort, ms);
+    timer = setTimeout(() => {
+      timedOutAfterMs = ms;
+      abort();
+    }, ms);
   };
   const callerSignal = init.signal;
   if (callerSignal?.aborted) controller.abort();
@@ -77,6 +81,8 @@ async function boundedRequest(
       headers: res.headers,
     });
   } catch (err) {
+    // The native client reports its own abort as "Request canceled", which reads as if someone stopped it.
+    if (timedOutAfterMs !== null) throw new DOMException(`timed out after ${timedOutAfterMs / 1000}s`, "AbortError");
     throw withoutCredentials(err);
   } finally {
     clearTimeout(timer);
