@@ -1,0 +1,14 @@
+/* A cover still loading shows its frame's background, not a half-drawn image. */
+img[data-cover="loading"] {
+  opacity: 0;
+}
+
+img[data-cover="entering"] {
+  animation: cover-enter var(--duration-slow) var(--ease-standard);
+}
+
+@keyframes cover-enter {
+  from {
+    opacity: 0;
+  }
+}

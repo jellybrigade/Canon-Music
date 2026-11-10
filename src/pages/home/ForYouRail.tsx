@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
+import { useHeldCoverSet } from "../../hooks/useHeldCoverSet";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import {
   FOR_YOU_PER_TAB_MAX,
@@ -113,6 +114,10 @@ export function ForYouRail({
   const [addArtist, setAddArtist] = useState("");
   // Typing is held locally so a half-typed "1" on the way to "12" doesn't reshuffle every tab.
   const [perTabDraft, setPerTabDraft] = useState<string | null>(null);
+  const coverUrlOf = (album: AlbumRow) =>
+    coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 300) : null);
+  const activeAlbums = (groups.find((g) => g.key === activeTabKey) ?? groups[0])?.albums ?? [];
+  const shownAlbums = useHeldCoverSet(activeAlbums, coverUrlOf);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -413,9 +418,8 @@ export function ForYouRail({
       )}
 
       <div className="foryou-v2-grid" role="tabpanel">
-        {activeTabGroup.albums.map((album) => {
-          const artUrl =
-            coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 300) : null);
+        {shownAlbums.map((album) => {
+          const artUrl = coverUrlOf(album);
           return (
             <div
               key={album.id}
