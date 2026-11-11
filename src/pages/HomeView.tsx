@@ -1,5 +1,4 @@
-import { Search, X } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { PinMenuItem } from "../features/pins/components/PinMenuItem";
@@ -30,6 +29,7 @@ import { AlbumCarousel } from "./home/AlbumCarousel";
 import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, ForYouRail, mergeForYouConfig } from "./home/ForYouRail";
 import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { GenreChipsLine } from "./home/GenreChipsLine";
+import { HomeSearchBox } from "./home/HomeSearchBox";
 import {
   buildSpotlightCandidates,
   dedupePicks,
@@ -112,7 +112,6 @@ export function HomeView({
     setContextMenu({ x: e.clientX, y: e.clientY, album });
   }, []);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const { data: searchResults, isError: searchError } = useSearch(homeSearchQuery, server.id);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
@@ -332,38 +331,11 @@ export function HomeView({
             <CanonIcon size={38} className="home-greeting__logo" />
             <h1 className="home-greeting__text">{getGreeting()}</h1>
           </div>
-          <div className="home-search-bar">
-            <Search size={13} className="search-bar-icon" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="search-bar-input"
-              placeholder="Search…"
-              value={homeSearchRaw}
-              onChange={(e) => onHomeSearchRawChange(e.target.value)}
-            />
-            {homeSearchRaw ? (
-              <button
-                className="search-bar-clear"
-                onClick={(e) => {
-                  searchInputRef.current?.blur();
-                  e.currentTarget.blur();
-                  onHomeSearchRawChange("");
-                }}
-                title="Clear"
-              >
-                <X size={13} />
-              </button>
-            ) : (
-              <button
-                className="home-search-palette-hint"
-                onClick={onOpenCommandPalette}
-                title="Command palette: search tracks, artists, albums, and navigate anywhere"
-              >
-                <kbd>⌘K</kbd>
-              </button>
-            )}
-          </div>
+          <HomeSearchBox
+            value={homeSearchRaw}
+            onChange={onHomeSearchRawChange}
+            onOpenCommandPalette={onOpenCommandPalette}
+          />
           {allAlbums != null && !isSearching && (
             <span className="home-greeting__sub">
               {allAlbums.length.toLocaleString()} {plural(allAlbums.length, "album")}
