@@ -15,7 +15,14 @@ import { bustCanonTreeCache } from "../../tags/lib/canonicalize";
 const holder: { db: FakeDatabase | null } = { db: null };
 vi.mock("../../../db", () => ({ getDb: async () => holder.db }));
 
-import { buildAncestorWeights, CANDIDATE_LIMIT, getRadioCandidates, MOOD_WEIGHT, scaleWeights } from "./radio";
+import {
+  ALBUM_GENRE_WEIGHT,
+  buildAncestorWeights,
+  CANDIDATE_LIMIT,
+  getRadioCandidates,
+  MOOD_WEIGHT,
+  scaleWeights,
+} from "./radio";
 
 const SRV = "srv-a";
 const OTHER = "srv-b";
@@ -66,6 +73,20 @@ async function insertTag(
     "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES (?, ?, ?, ?, 'server')",
     [trackId, kind, canonicalId, canonicalId],
   );
+}
+
+async function insertAlbumGenre(
+  db: FakeDatabase,
+  albumId: string,
+  canonicalId: string,
+  relation: "direct" | "ancestor" = "direct",
+): Promise<void> {
+  await db.execute("INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES (?, ?, ?, ?)", [
+    albumId,
+    canonicalId,
+    relation,
+    canonicalId,
+  ]);
 }
 
 async function insertTreeNode(db: FakeDatabase, id: string, parents: string[] = []): Promise<void> {
@@ -329,6 +350,110 @@ describe("getRadioCandidates", () => {
 
       expect(result.map((r) => r.id)).toEqual(["pure", "broad"]);
       expect(result[1]!.score).toBeCloseTo(0.4 * (1 / Math.sqrt(5)), 6);
+    });
+
+    it("gives a featured credit its primary artist's similarity", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTrack(db, { id: "seed", albumId: "alb" });
+      await insertTag(db, "seed", "x-rap");
+      await insertTrack(db, { id: "featured", albumId: "alb", artist: "Drake feat. Sampha" });
+      await insertTag(db, "featured", "x-rap");
+      await insertTrack(db, { id: "unrelated", albumId: "alb", artist: "Nobody" });
+      await insertTag(db, "unrelated", "x-rap");
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "curated",
+        excludeIds: new Set(),
+        artistSimilarity: new Map([["drake", 1]]),
+        trackSimilarity: new Map(),
+      });
+
+      const scoreOf = (id: string) => result.find((r) => r.id === id)?.score ?? Number.NaN;
+      expect(scoreOf("featured") - scoreOf("unrelated")).toBeCloseTo(scaleWeights(0.5).artistCfW, 6);
+    });
+
+    it("gives a featured credit its primary artist's similar-track match", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTrack(db, { id: "seed", albumId: "alb" });
+      await insertTag(db, "seed", "x-rap");
+      await insertTrack(db, { id: "featured", albumId: "alb", artist: "Drake feat. Sampha" });
+      await insertTag(db, "featured", "x-rap");
+      await insertTrack(db, { id: "unrelated", albumId: "alb", artist: "Nobody" });
+      await insertTag(db, "unrelated", "x-rap");
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "curated",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map([["drake|||title featured", 1]]),
+      });
+
+      const scoreOf = (id: string) => result.find((r) => r.id === id)?.score ?? Number.NaN;
+      expect(scoreOf("featured") - scoreOf("unrelated")).toBeCloseTo(scaleWeights(0.5).trackCfW, 6);
+    });
+
+    describe("a seed track with one genre", () => {
+      async function seedLcdAlbum(db: FakeDatabase) {
+        await insertAlbum(db, "sound-of-silver");
+        await insertAlbum(db, "other");
+        await insertTrack(db, { id: "seed", albumId: "sound-of-silver" });
+        await insertTag(db, "seed", "x-electronic");
+        await insertAlbumGenre(db, "sound-of-silver", "x-electronic");
+        await insertAlbumGenre(db, "sound-of-silver", "x-dance-punk");
+        await insertAlbumGenre(db, "sound-of-silver", "raw:lcd");
+        await insertAlbumGenre(db, "sound-of-silver", "x-rock", "ancestor");
+
+        await insertTrack(db, { id: "dance-punk", albumId: "other" });
+        await insertTag(db, "dance-punk", "x-electronic");
+        await insertTag(db, "dance-punk", "x-dance-punk");
+        await insertTrack(db, { id: "techno", albumId: "other" });
+        await insertTag(db, "techno", "x-electronic");
+        await insertTag(db, "techno", "x-techno");
+        await insertTrack(db, { id: "rock", albumId: "other" });
+        await insertTag(db, "rock", "x-rock");
+      }
+
+      const curated = (seedTrackId = "seed") =>
+        getRadioCandidates({
+          seedTrackId,
+          mode: "same-genre",
+          excludeIds: new Set(),
+          artistSimilarity: new Map(),
+          trackSimilarity: new Map(),
+        });
+
+      it("leans on its album's own genres", async () => {
+        await seedLcdAlbum(holder.db!);
+
+        const result = await curated();
+
+        expect(result.map((r) => r.id)).toEqual(["dance-punk", "techno"]);
+        expect(result[1]!.score / result[0]!.score).toBeCloseTo(1 / (1 + ALBUM_GENRE_WEIGHT), 6);
+      });
+
+      it("takes its album's genres when it has no genre of its own", async () => {
+        const db = holder.db!;
+        await seedLcdAlbum(db);
+        await insertTrack(db, { id: "untagged-seed", albumId: "sound-of-silver" });
+
+        const result = await curated("untagged-seed");
+
+        expect(result.map((r) => r.id)).toEqual(["dance-punk", "seed", "techno"]);
+      });
+
+      it("ignores its album's genres once the track carries several", async () => {
+        const db = holder.db!;
+        await seedLcdAlbum(db);
+        await insertTag(db, "seed", "x-techno");
+
+        const result = await curated();
+
+        expect(result.map((r) => r.id)).toEqual(["techno", "dance-punk"]);
+      });
     });
 
     it("keeps a focused match past the candidate cap that broadly tagged matches would fill", async () => {

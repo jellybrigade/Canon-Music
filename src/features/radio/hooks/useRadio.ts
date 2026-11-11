@@ -6,6 +6,7 @@ import { ownedByServer } from "../../../lib/sql";
 import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
+import { creditedArtistKeys } from "../lib/artistCredit";
 import { getRadioCandidates } from "../lib/radio";
 
 const LOOKAHEAD_THRESHOLD = 10;
@@ -14,6 +15,7 @@ const RECENT_PLAYED_WINDOW_S = 3600;
 // Artist/album repetition is penalized on a decay curve (recently played = near-zero
 // multiplier, fully recovered after N radio picks) rather than a hard cap, avoids
 // walls that starve thin-library genres and avoids the cap "resetting" as the queue scrolls.
+// The curve is quadratic: a linear one let a thin pool's strongest artist back in every ~4 picks.
 const ARTIST_DECAY_TRACKS = 18;
 const ARTIST_DECAY_TRACKS_NARROW = 8; // similar-artists: pool is naturally few artists
 const ALBUM_DECAY_TRACKS = 8;
@@ -51,6 +53,10 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
     [...owned.params, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()],
   );
   return new Set(rows.map((r) => r.track_id));
+}
+
+function recoveryMultiplier(gap: number, decay: number): number {
+  return Math.max(0, Math.min(1, gap / decay)) ** 2;
 }
 
 function pickFromTop(
@@ -115,7 +121,7 @@ export function useRadio() {
 
   function recordPick(artist: string | null, albumId: string | null | undefined, trackId: string) {
     sessionCounterRef.current += 1;
-    if (artist) artistLastPlayedRef.current.set(artist.toLowerCase(), sessionCounterRef.current);
+    for (const key of creditedArtistKeys(artist)) artistLastPlayedRef.current.set(key, sessionCounterRef.current);
     if (albumId) albumLastPlayedRef.current.set(albumId, sessionCounterRef.current);
     // Not pruned: this is a hard exclusion set, so dropping entries would let already
     // played tracks repeat. It grows one id per track played, which is negligible.
@@ -153,7 +159,7 @@ export function useRadio() {
         ]);
 
         const artistSimilarity = new Map<string, number>();
-        if (currentTrack.artist) artistSimilarity.set(currentTrack.artist.toLowerCase(), 1.0);
+        for (const key of creditedArtistKeys(currentTrack.artist)) artistSimilarity.set(key, 1.0);
         for (const a of similarArtistsFull) artistSimilarity.set(a.name.toLowerCase(), a.match);
 
         const trackSimilarity = new Map<string, number>();
@@ -227,13 +233,16 @@ export function useRadio() {
           const counter = sessionCounterRef.current;
           capped = candidates
             .map((c) => {
-              const ak = (c.artist ?? "").toLowerCase();
-              const artistGap = ak ? counter - (artistLastPlayedRef.current.get(ak) ?? -Infinity) : Infinity;
+              const artistGap = Math.min(
+                ...creditedArtistKeys(c.artist).map(
+                  (key) => counter - (artistLastPlayedRef.current.get(key) ?? Number.NEGATIVE_INFINITY),
+                ),
+              );
               const albumGap = c.albumId
-                ? counter - (albumLastPlayedRef.current.get(c.albumId) ?? -Infinity)
-                : Infinity;
-              const artistMult = Math.max(0, Math.min(1, artistGap / artistDecay));
-              const albumMult = Math.max(0, Math.min(1, albumGap / ALBUM_DECAY_TRACKS));
+                ? counter - (albumLastPlayedRef.current.get(c.albumId) ?? Number.NEGATIVE_INFINITY)
+                : Number.POSITIVE_INFINITY;
+              const artistMult = recoveryMultiplier(artistGap, artistDecay);
+              const albumMult = recoveryMultiplier(albumGap, ALBUM_DECAY_TRACKS);
               return { ...c, score: c.score * artistMult * albumMult };
             })
             .sort((a, b) => b.score - a.score);

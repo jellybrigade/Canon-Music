@@ -2,6 +2,7 @@ import { getDb } from "../../../db";
 import { selectRandomSample } from "../../../db/randomSample";
 import type { RadioMode } from "../../playback/store/playerTypes";
 import { getCanonTree } from "../../tags/lib/canonicalize";
+import { creditedArtistKeys } from "./artistCredit";
 
 export interface RadioCandidate {
   id: string;
@@ -15,6 +16,11 @@ export interface RadioCandidate {
 }
 
 export const MOOD_WEIGHT = 0.4;
+// A seed track tagged with fewer genres than this also seeds on its album's genres, at this weight:
+// LCD Soundsystem's "45:33 (intro)" carries only Electronic, which alone seeds on all of it.
+const THIN_SEED_GENRE_COUNT = 2;
+export const ALBUM_GENRE_WEIGHT = 0.75;
+const SEED_TAG_WEIGHT: Partial<Record<string, number>> = { mood: MOOD_WEIGHT, album: ALBUM_GENRE_WEIGHT };
 export const CANDIDATE_LIMIT = 200;
 
 export function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
@@ -82,6 +88,10 @@ function sampleSeedPool<T extends TrackRow>(
     orderBy: "t.id",
     limit: CANDIDATE_LIMIT,
   });
+}
+
+function bestMatch(keys: string[], scoreOf: (key: string) => number | undefined): number {
+  return Math.max(0, ...keys.map((key) => scoreOf(key) ?? 0));
 }
 
 function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
@@ -172,10 +182,21 @@ async function getCuratedCandidates(
   const tree = await getCanonTree();
 
   type TagRow = { canonical_id: string; kind: string };
-  const seedTags = await db.select<TagRow[]>(
-    "SELECT canonical_id, kind FROM track_tags WHERE track_id = ? AND canonical_id IS NOT NULL",
+  const trackTags = await db.select<TagRow[]>(
+    "SELECT DISTINCT canonical_id, kind FROM track_tags WHERE track_id = ? AND canonical_id IS NOT NULL",
     [seedTrackId],
   );
+  const trackGenreCount = trackTags.filter((tag) => tag.kind === "genre").length;
+  const albumTags =
+    seed.albumId && trackGenreCount < THIN_SEED_GENRE_COUNT
+      ? await db.select<TagRow[]>(
+          `SELECT canonical_id, 'album' AS kind FROM album_genres
+           WHERE album_id = ? AND relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
+           ORDER BY canonical_id`,
+          [seed.albumId],
+        )
+      : [];
+  const seedTags = [...trackTags, ...albumTags];
 
   if (seedTags.length === 0) {
     const fallback = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
@@ -184,7 +205,7 @@ async function getCuratedCandidates(
 
   const combinedWeights = new Map<string, number>();
   for (const tag of seedTags) {
-    const baseWeight = tag.kind === "mood" ? MOOD_WEIGHT : 1.0;
+    const baseWeight = SEED_TAG_WEIGHT[tag.kind] ?? 1.0;
     const aw = buildAncestorWeights(tag.canonical_id, tree.byId);
     for (const [nodeId, w] of aw) {
       const existing = combinedWeights.get(nodeId) ?? 0;
@@ -231,10 +252,10 @@ async function getCuratedCandidates(
     .filter(({ r }) => !excludeIds.has(r.id))
     .map(({ r, d }) => {
       const normalizedTree = maxTree > 0 ? d / maxTree : 0;
-      const artistKey = (r.artist ?? "").toLowerCase();
-      const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
-      const artistCf = artistSimilarity.get(artistKey) ?? 0;
-      const trackCf = trackSimilarity.get(trackKey) ?? 0;
+      const artistKeys = creditedArtistKeys(r.artist);
+      const title = r.title.toLowerCase();
+      const artistCf = bestMatch(artistKeys, (key) => artistSimilarity.get(key));
+      const trackCf = bestMatch(artistKeys, (key) => trackSimilarity.get(`${key}|||${title}`));
       const score = tagW * normalizedTree + trackCfW * trackCf + artistCfW * artistCf;
       return rowToCandidate(r, score);
     })
@@ -283,8 +304,10 @@ export async function getRadioCandidates({
       return rows
         .filter((r) => !excludeIds.has(r.id))
         .map((r) => {
-          const artistKey = (r.artist ?? "").toLowerCase();
-          return rowToCandidate(r, artistSimilarity.get(artistKey) ?? 0);
+          return rowToCandidate(
+            r,
+            bestMatch(creditedArtistKeys(r.artist), (key) => artistSimilarity.get(key)),
+          );
         })
         .sort((a, b) => b.score - a.score);
     }
