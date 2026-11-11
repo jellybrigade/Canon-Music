@@ -10,6 +10,7 @@ import {
   sqlNorm,
   sqlNormExpression,
   type TreeNode,
+  tagMatchKey,
 } from "./canonicalize";
 
 function node(over: Partial<TreeNode> & { id: string; name: string }): TreeNode {
@@ -65,6 +66,21 @@ describe("canonicalKey", () => {
 
   it("returns empty string for empty input", () => {
     expect(canonicalKey("")).toBe("");
+  });
+});
+
+describe("tagMatchKey", () => {
+  it("is the canonical key when the tag has Latin letters or digits", () => {
+    expect(tagMatchKey("Hip-Hop")).toBe(canonicalKey("Hip-Hop"));
+  });
+
+  it("keeps tags with no Latin letters apart instead of collapsing them all to one key", () => {
+    expect(tagMatchKey("ロック")).not.toBe(tagMatchKey("!!!"));
+    expect(tagMatchKey("ロック")).not.toBe("");
+  });
+
+  it("is empty for a blank tag", () => {
+    expect(tagMatchKey("   ")).toBe("");
   });
 });
 

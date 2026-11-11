@@ -8,12 +8,12 @@ import { currentLookupSql } from "../../../lib/releaseLookupSql";
 import { isArtistNameTag } from "./artistNameTag";
 import {
   type CanonTree,
-  canonicalKey,
   findCanonicalSync,
   getAncestorIds,
   getCanonTree,
   rawGenreId,
   sqlNormExpression,
+  tagMatchKey,
 } from "./canonicalize";
 import { getManualGenreMappings } from "./manualMappings";
 import { bucketize } from "./tagBuckets";
@@ -56,7 +56,7 @@ export const APPLY_TAG_MAPPINGS_SQL = `
     WHERE tm.norm_value = ${sqlNormExpression("track_tags.raw_value")}
       AND tm.kind = track_tags.kind
       AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
-    ORDER BY tm.source = 'manual' DESC, tm.raw_value
+    ORDER BY tm.locked DESC, tm.source = 'manual' DESC, tm.raw_value
     LIMIT 1
   )
   WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
@@ -151,7 +151,7 @@ export interface GenreResolutionInput {
   tree: CanonTree;
   userGenres: { canonical_id: string; name: string }[];
   entries: { name: string; source: TagSource }[];
-  manualMap: Map<string, string>;
+  manualMap: ReadonlyMap<string, string>;
   excludedIds: Set<string>;
 }
 
@@ -176,7 +176,7 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
   }
 
   for (const entry of entries) {
-    const manualId = manualMap.get(canonicalKey(entry.name));
+    const manualId = manualMap.get(tagMatchKey(entry.name));
     const confidence = SOURCE_CONFIDENCE[entry.source];
 
     if (manualId === "__ignored__") continue;
@@ -342,33 +342,33 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
     if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
-    byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
+    byKey.set(tagMatchKey(row.raw_value), { name: row.raw_value, source: "file" });
   }
   for (const raw of lastfmRaw) {
     if (!isGenreCandidate(raw)) continue;
-    const k = canonicalKey(raw);
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
   for (const raw of mbRaw) {
     if (!isGenreCandidate(raw)) continue;
-    const k = canonicalKey(raw);
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
   for (const raw of discogsRaw) {
     if (!isGenreCandidate(raw)) continue;
-    const k = canonicalKey(raw);
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "discogs" });
   }
   for (const raw of mbFolkRaw) {
     if (!isGenreCandidate(raw)) continue;
-    const k = canonicalKey(raw);
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
   // Inject consensus-promoted per-track genres (≥50% of tracks share them) at lastfm confidence.
   for (const canonId of consensusPromoted) {
     const node = tree.byId.get(canonId);
     if (!node) continue;
-    const k = canonicalKey(node.name);
+    const k = tagMatchKey(node.name);
     if (!byKey.has(k)) byKey.set(k, { name: node.name, source: "lastfm" });
   }
 

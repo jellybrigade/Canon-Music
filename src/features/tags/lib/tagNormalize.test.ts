@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type CanonTree, canonicalKey, type TreeNode } from "./canonicalize";
+import { type CanonTree, canonicalKey, type TreeNode, tagMatchKey } from "./canonicalize";
 import { isStale, isYearLikeGenre, type NormalizedTags, resolveGenreTags } from "./tagNormalize";
 
 describe("isYearLikeGenre", () => {
@@ -145,6 +145,14 @@ describe("resolveGenreTags", () => {
     });
     expect(mapped).toEqual([]);
     expect(unmapped).toEqual([{ id: null, name: "Doom-Jazz", source: "file", confidence: 1.0 }]);
+  });
+
+  it("doesn't let an ignored tag with no Latin letters drop every other such tag", () => {
+    const { unmapped } = resolve({
+      entries: [{ name: "ロック", source: "file" }],
+      manualMap: new Map([[tagMatchKey("!!!"), "__ignored__"]]),
+    });
+    expect(unmapped.map((t) => t.name)).toEqual(["ロック"]);
   });
 
   it("keeps a manual mapping to an excluded or already-seen node silent", () => {

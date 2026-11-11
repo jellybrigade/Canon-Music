@@ -22,51 +22,91 @@ export interface TagVocabRow {
   locked: number;
 }
 
+type SaveMappingInput = {
+  rawValue: string;
+  kind: TagKind;
+  canonicalId: string;
+  source?: "auto" | "manual";
+  matchType?: "exact" | "fuzzy" | null;
+};
+
+async function refuseIfGroupLocked(db: Awaited<ReturnType<typeof getDb>>, rawValue: string, kind: TagKind) {
+  const existing = await db.select<{ locked: number }[]>(
+    "SELECT locked FROM tag_mappings WHERE norm_value = ? AND kind = ?",
+    [sqlNorm(rawValue), kind],
+  );
+  if (existing.some((r) => r.locked === 1)) {
+    throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
+  }
+}
+
+/** Every write keys on the spelling group (`norm_value`), the unit the Tags list shows one decision for. */
+export async function saveTagMapping({
+  rawValue,
+  kind,
+  canonicalId,
+  source = "manual",
+  matchType = null,
+}: SaveMappingInput): Promise<void> {
+  const db = await getDb();
+  const norm = sqlNorm(rawValue);
+  await refuseIfGroupLocked(db, rawValue, kind);
+  await db.execute(
+    `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
+     VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
+    [rawValue, kind, canonicalId, source, matchType, norm],
+  );
+  // Written after the new row, so a failure here leaves the old decision beside the new one.
+  await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ? AND raw_value != ?", [
+    norm,
+    kind,
+    rawValue,
+  ]);
+  invalidateManualMappings();
+  // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
+  const trackTagId = canonicalId === ACCEPTED || canonicalId === IGNORED ? null : canonicalId;
+  await db.execute(`UPDATE track_tags SET canonical_id = ? WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`, [
+    trackTagId,
+    norm,
+    kind,
+  ]);
+}
+
+export async function deleteTagMapping({ rawValue, kind }: { rawValue: string; kind: TagKind }): Promise<void> {
+  const db = await getDb();
+  const norm = sqlNorm(rawValue);
+  await refuseIfGroupLocked(db, rawValue, kind);
+  await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
+  invalidateManualMappings();
+  await db.execute(
+    `UPDATE track_tags SET canonical_id = NULL WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`,
+    [norm, kind],
+  );
+}
+
+export async function lockTagMapping({
+  rawValue,
+  kind,
+  locked,
+}: {
+  rawValue: string;
+  kind: TagKind;
+  locked: boolean;
+}): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE tag_mappings SET locked = ? WHERE norm_value = ? AND kind = ?", [
+    locked ? 1 : 0,
+    sqlNorm(rawValue),
+    kind,
+  ]);
+  invalidateManualMappings();
+}
+
 export function useTagMappings() {
   const queryClient = useQueryClient();
 
   const saveMapping = useMutation({
-    mutationFn: async ({
-      rawValue,
-      kind,
-      canonicalId,
-      source = "manual",
-      matchType = null,
-    }: {
-      rawValue: string;
-      kind: TagKind;
-      canonicalId: string;
-      source?: "auto" | "manual";
-      matchType?: "exact" | "fuzzy" | null;
-    }) => {
-      const db = await getDb();
-      const existing = await db.select<{ locked: number }[]>(
-        "SELECT locked FROM tag_mappings WHERE raw_value = ? AND kind = ?",
-        [rawValue, kind],
-      );
-      if (existing[0]?.locked === 1) {
-        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
-      }
-      await db.execute(
-        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
-        [rawValue, kind, canonicalId, source, matchType, sqlNorm(rawValue)],
-      );
-      invalidateManualMappings();
-      // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
-      if (canonicalId === ACCEPTED || canonicalId === IGNORED) {
-        await db.execute("UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?", [
-          rawValue,
-          kind,
-        ]);
-      } else {
-        await db.execute("UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?", [
-          canonicalId,
-          rawValue,
-          kind,
-        ]);
-      }
-    },
+    mutationFn: saveTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
@@ -79,24 +119,7 @@ export function useTagMappings() {
   });
 
   const deleteMapping = useMutation({
-    mutationFn: async ({ rawValue, kind }: { rawValue: string; kind: TagKind }) => {
-      const db = await getDb();
-      const norm = sqlNorm(rawValue);
-      const existing = await db.select<{ locked: number }[]>(
-        "SELECT locked FROM tag_mappings WHERE norm_value = ? AND kind = ?",
-        [norm, kind],
-      );
-      if (existing.some((r) => r.locked === 1)) {
-        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
-      }
-      await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
-      invalidateManualMappings();
-      // Clear all raw variants that share the same norm_value, not just the one passed in
-      await db.execute(
-        `UPDATE track_tags SET canonical_id = NULL WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`,
-        [norm, kind],
-      );
-    },
+    mutationFn: deleteTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
@@ -106,15 +129,7 @@ export function useTagMappings() {
   });
 
   const lockMapping = useMutation({
-    mutationFn: async ({ rawValue, kind, locked }: { rawValue: string; kind: TagKind; locked: boolean }) => {
-      const db = await getDb();
-      await db.execute("UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?", [
-        locked ? 1 : 0,
-        rawValue,
-        kind,
-      ]);
-      invalidateManualMappings();
-    },
+    mutationFn: lockTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
@@ -303,6 +318,45 @@ export function useAutoMapExact() {
   });
 }
 
+const RAP_GROUP = sqlNorm("Rap");
+
+/** An automatic rule: it yields to a manual or locked decision on any spelling of Rap. */
+export async function setRapToHipHop(enable: boolean): Promise<void> {
+  const db = await getDb();
+  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)", [
+    enable ? "true" : "false",
+  ]);
+  const trackTagsOfGroup = `${sqlNormExpression("raw_value")} = ? AND kind = 'genre'`;
+  if (enable) {
+    const inserted = await db.execute(
+      `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
+       SELECT 'Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND (locked = 1 OR source = 'manual')
+       )`,
+      [RAP_GROUP, RAP_GROUP],
+    );
+    if (inserted.rowsAffected === 0) return;
+    await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND raw_value != 'Rap'", [
+      RAP_GROUP,
+    ]);
+    invalidateManualMappings();
+    await db.execute(`UPDATE track_tags SET canonical_id = 'hip-hop' WHERE ${trackTagsOfGroup}`, [RAP_GROUP]);
+    return;
+  }
+  const removed = await db.execute(
+    "DELETE FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND source = 'auto' AND canonical_id = 'hip-hop' AND locked = 0",
+    [RAP_GROUP],
+  );
+  if (removed.rowsAffected === 0) return;
+  invalidateManualMappings();
+  await db.execute(
+    `UPDATE track_tags SET canonical_id = NULL WHERE ${trackTagsOfGroup} AND canonical_id = 'hip-hop'
+       AND NOT EXISTS (SELECT 1 FROM tag_mappings WHERE norm_value = ? AND kind = 'genre')`,
+    [RAP_GROUP, RAP_GROUP],
+  );
+}
+
 export function useRapToHipHop() {
   const queryClient = useQueryClient();
 
@@ -316,30 +370,7 @@ export function useRapToHipHop() {
   });
 
   const toggle = useMutation({
-    mutationFn: async (enable: boolean) => {
-      const db = await getDb();
-      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)", [
-        enable ? "true" : "false",
-      ]);
-      if (enable) {
-        await db.execute(
-          "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), 'rap')",
-        );
-        invalidateManualMappings();
-        await db.execute("UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'");
-      } else {
-        const rows = await db.select<{ canonical_id: string }[]>(
-          "SELECT canonical_id FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'",
-        );
-        if (rows[0]?.canonical_id === "hip-hop") {
-          await db.execute("DELETE FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'");
-          invalidateManualMappings();
-          await db.execute(
-            "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id = 'hip-hop'",
-          );
-        }
-      }
-    },
+    mutationFn: setRapToHipHop,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagRapToHipHop() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });

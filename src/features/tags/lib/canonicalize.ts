@@ -152,6 +152,14 @@ export function canonicalKey(name: string): string {
 }
 
 /**
+ * The key a tag is deduped and manually mapped by. A tag with no Latin letters or digits has an
+ * empty `canonicalKey`, so it falls back to its spelling instead of meeting every other such tag.
+ */
+export function tagMatchKey(name: string): string {
+  return canonicalKey(name) || sqlNorm(name).trim();
+}
+
+/**
  * `norm_value`, the key tag_mappings and tag_vocab_cache join on. Mirrors `sqlNormExpression`
  * exactly: SQLite's TRIM strips only spaces and its LOWER folds only ASCII.
  */
