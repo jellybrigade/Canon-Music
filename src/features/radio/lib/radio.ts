@@ -97,28 +97,65 @@ function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   };
 }
 
+type AncestorNode = { id: string; parents: string[] };
+
+function subtreeSizer(byId: Map<string, AncestorNode>): (id: string) => number {
+  const children = new Map<string, string[]>();
+  for (const node of byId.values()) {
+    for (const parentId of node.parents) {
+      const list = children.get(parentId);
+      if (list) list.push(node.id);
+      else children.set(parentId, [node.id]);
+    }
+  }
+  return (id) => {
+    const seen = new Set([id]);
+    const stack = [id];
+    for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+      for (const childId of children.get(current) ?? []) {
+        if (seen.has(childId)) continue;
+        seen.add(childId);
+        stack.push(childId);
+      }
+    }
+    return seen.size;
+  };
+}
+
+/**
+ * Halves per hop, then scales each ancestor by the narrowest direct parent's span over its own,
+ * so a root like rock sitting directly above hardcore punk counts for little beside punk rock.
+ */
 export function buildAncestorWeights(
   nodeId: string,
-  byId: Map<string, { id: string; parents: string[] }>,
+  byId: Map<string, AncestorNode>,
   maxDepth = 4,
 ): Map<string, number> {
-  const weights = new Map<string, number>();
-  weights.set(nodeId, 1.0);
+  const weights = new Map<string, number>([[nodeId, 1.0]]);
+  const found: Array<{ id: string; depth: number }> = [];
   const queue: Array<{ id: string; depth: number }> = [{ id: nodeId, depth: 0 }];
   const visited = new Set<string>([nodeId]);
-  while (queue.length > 0) {
-    const item = queue.shift()!;
+  for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
     if (item.depth >= maxDepth) continue;
     const node = byId.get(item.id);
     if (!node) continue;
     for (const parentId of node.parents) {
       if (visited.has(parentId)) continue;
       visited.add(parentId);
-      const w = 1 / 2 ** (item.depth + 1);
-      const existing = weights.get(parentId) ?? 0;
-      weights.set(parentId, Math.max(existing, w));
-      queue.push({ id: parentId, depth: item.depth + 1 });
+      const ancestor = { id: parentId, depth: item.depth + 1 };
+      found.push(ancestor);
+      queue.push(ancestor);
     }
+  }
+  if (found.length === 0) return weights;
+
+  const subtreeSize = subtreeSizer(byId);
+  const sizes = new Map(found.map(({ id }) => [id, subtreeSize(id)]));
+  const directParentSizes = found.filter(({ depth }) => depth === 1).map(({ id }) => sizes.get(id) ?? 1);
+  const nearestFamilySize = Math.min(...directParentSizes);
+  for (const { id, depth } of found) {
+    const breadth = Math.min(1, nearestFamilySize / (sizes.get(id) ?? 1));
+    weights.set(id, breadth / 2 ** depth);
   }
   return weights;
 }

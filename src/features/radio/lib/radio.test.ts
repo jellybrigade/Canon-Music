@@ -114,7 +114,7 @@ describe("buildAncestorWeights", () => {
     expect(buildAncestorWeights("a", byId)).toEqual(new Map([["a", 1.0]]));
   });
 
-  it("halves the weight per hop up a parent chain", () => {
+  it("halves the weight per hop, scaled by how much broader each ancestor is than the nearest parent", () => {
     const byId = new Map([
       ["c", { id: "c", parents: ["b"] }],
       ["b", { id: "b", parents: ["a"] }],
@@ -123,7 +123,22 @@ describe("buildAncestorWeights", () => {
     const weights = buildAncestorWeights("c", byId);
     expect(weights.get("c")).toBe(1.0);
     expect(weights.get("b")).toBeCloseTo(0.5, 10);
-    expect(weights.get("a")).toBeCloseTo(0.25, 10);
+    // b spans {b, c}, a spans {a, b, c}
+    expect(weights.get("a")).toBeCloseTo(0.25 * (2 / 3), 10);
+  });
+
+  it("weights a broad direct parent by its breadth against the seed's narrowest parent", () => {
+    // hardcore -> punk, hardcore -> rock, punk -> rock; rock also holds 8 unrelated genres.
+    const byId = new Map<string, { id: string; parents: string[] }>([
+      ["hardcore", { id: "hardcore", parents: ["punk", "rock"] }],
+      ["punk", { id: "punk", parents: ["rock"] }],
+      ["rock", { id: "rock", parents: [] }],
+    ]);
+    for (let i = 0; i < 8; i++) byId.set(`rock-${i}`, { id: `rock-${i}`, parents: ["rock"] });
+    const weights = buildAncestorWeights("hardcore", byId);
+    expect(weights.get("punk")).toBeCloseTo(0.5, 10);
+    // punk spans 2 genres, rock spans 11
+    expect(weights.get("rock")).toBeCloseTo(0.5 * (2 / 11), 10);
   });
 
   it("stops adding ancestors past maxDepth", () => {
@@ -409,6 +424,46 @@ describe("getRadioCandidates", () => {
       const viaTarget = result.find((r) => r.id === "via-target")!;
       const viaChild = result.find((r) => r.id === "via-child")!;
       expect(viaTarget.score).toBeCloseTo(viaChild.score, 6);
+    });
+
+    it("ranks every punk-family track above a track tagged only with rock, a broad direct parent", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTreeNode(db, "t-rock");
+      await insertTreeNode(db, "t-punk", ["t-rock"]);
+      await insertTreeNode(db, "t-hardcore", ["t-punk", "t-rock"]);
+      for (let i = 0; i < 30; i++) await insertTreeNode(db, `t-rock-${i}`, ["t-rock"]);
+      await insertTrack(db, { id: "seed", albumId: "alb", artist: "Hardcore A" });
+      await insertTag(db, "seed", "t-hardcore");
+      for (const { id, artist } of [
+        { id: "hc-1", artist: "Hardcore A" },
+        { id: "hc-2", artist: "Hardcore B" },
+      ]) {
+        await insertTrack(db, { id, albumId: "alb", artist });
+        await insertTag(db, id, "t-hardcore");
+      }
+      for (let i = 0; i < 6; i++) {
+        await insertTrack(db, { id: `punk-${i}`, albumId: "alb", artist: `Punk ${i}` });
+        await insertTag(db, `punk-${i}`, "t-punk");
+      }
+      for (let i = 0; i < 20; i++) {
+        await insertTrack(db, { id: `rock-${i}`, albumId: "alb", artist: `Rock ${i}` });
+        await insertTag(db, `rock-${i}`, "t-rock");
+      }
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "same-genre",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map(),
+      });
+
+      const scoreOf = (id: string) => result.find((r) => r.id === id)?.score ?? Number.NaN;
+      const weakestPunk = Math.min(...Array.from({ length: 6 }, (_, i) => scoreOf(`punk-${i}`)));
+      const strongestRock = Math.max(...Array.from({ length: 20 }, (_, i) => scoreOf(`rock-${i}`)));
+      expect(strongestRock).toBeLessThan(weakestPunk);
+      expect(strongestRock).toBeLessThan(scoreOf("hc-1") / 10);
     });
 
     it("scopes candidates to the seed's server", async () => {
