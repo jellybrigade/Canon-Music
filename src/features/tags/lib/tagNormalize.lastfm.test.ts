@@ -109,3 +109,34 @@ describe("normalizeAlbum when Last.fm doesn't answer", () => {
     expect(storedComputedAt()).toBe(EARLIER);
   });
 });
+
+describe("normalizeAlbum with a tag naming the artist", () => {
+  const swing: TreeNode = { ...shoegaze, id: "swing", name: "Swing", canonical_key: "swing" };
+
+  it("is no genre of the album and is not stored as one of its tags", async () => {
+    db.raw.prepare("UPDATE albums SET name = 'Ten Summoner''s Tales', artist = 'Sting'").run();
+    db.raw.prepare("UPDATE tracks SET title = 'Shape of My Heart', artist = 'Sting'").run();
+    db.raw.prepare("DELETE FROM track_tags").run();
+    vi.mocked(getCanonTree).mockResolvedValue(treeOf([shoegaze, swing]));
+    vi.mocked(fetchAlbumTags).mockResolvedValue({ genres: ["sting", "shoegaze"], moods: [] });
+
+    await normalizeAlbum(ALBUM_ID);
+
+    expect(albumGenreIds()).toEqual(["shoegaze"]);
+    expect(db.raw.prepare("SELECT raw_value FROM track_tags ORDER BY raw_value").all()).toEqual([
+      { raw_value: "shoegaze" },
+    ]);
+  });
+
+  it("drops the artist's name from the artist tag fallback too", async () => {
+    db.raw.prepare("UPDATE albums SET artist = 'Sting'").run();
+    db.raw.prepare("DELETE FROM track_tags").run();
+    vi.mocked(getCanonTree).mockResolvedValue(treeOf([shoegaze, swing]));
+    vi.mocked(fetchAlbumTags).mockResolvedValue({ genres: [], moods: [] });
+    vi.mocked(fetchArtistGenreTags).mockResolvedValue(["Sting"]);
+
+    await normalizeAlbum(ALBUM_ID);
+
+    expect(albumGenreIds()).toEqual([]);
+  });
+});

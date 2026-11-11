@@ -227,6 +227,40 @@ describe("runMigrations", () => {
     ]);
   });
 
+  it("drops fetched tags naming their track's artist and re-normalizes those albums only", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 74);
+    db.raw.exec(`
+      INSERT INTO albums (id, server_id, server_type, name, artist, computed_at)
+        VALUES ('s1:sting', 's1', 'navidrome', 'Ten Summoner''s Tales', 'Sting', 100),
+               ('s1:other', 's1', 'navidrome', 'Souvlaki', 'Slowdive', 100);
+      INSERT INTO tracks (id, server_id, server_type, title, artist, album_artist, album_id)
+        VALUES ('s1:t1', 's1', 'navidrome', 'Shape of My Heart', 'Sting', 'Sting', 's1:sting'),
+               ('s1:t2', 's1', 'navidrome', 'Alison', 'Slowdive', 'Slowdive', 's1:other'),
+               ('s1:t3', 's1', 'navidrome', 'Feat', 'Guest', 'STING', 's1:sting');
+      INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES
+        ('s1:t1', 'genre', 'sting', 'swing', 'lastfm-track'),
+        ('s1:t1', 'genre', 'sting', NULL, 'lastfm'),
+        ('s1:t1', 'genre', 'Sting', NULL, 'server'),
+        ('s1:t1', 'genre', 'rock', 'rock', 'lastfm'),
+        ('s1:t3', 'genre', ' Sting ', 'swing', 'lastfm-track'),
+        ('s1:t2', 'genre', 'shoegaze', 'shoegaze', 'lastfm');
+    `);
+    await runMigrations(db);
+
+    expect(
+      db.raw.prepare("SELECT track_id, raw_value, source FROM track_tags ORDER BY track_id, raw_value").all(),
+    ).toEqual([
+      { track_id: "s1:t1", raw_value: "Sting", source: "server" },
+      { track_id: "s1:t1", raw_value: "rock", source: "lastfm" },
+      { track_id: "s1:t2", raw_value: "shoegaze", source: "lastfm" },
+    ]);
+    expect(db.raw.prepare("SELECT id, computed_at FROM albums ORDER BY id").all()).toEqual([
+      { id: "s1:other", computed_at: 100 },
+      { id: "s1:sting", computed_at: null },
+    ]);
+  });
+
   it("points every chained artist alias at the end of its chain", async () => {
     const db = createTestDb();
     await migrateThrough(db, 57);

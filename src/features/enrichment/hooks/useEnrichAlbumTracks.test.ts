@@ -13,10 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../../clients/lastfm", () => ({ fetchTrackTags: vi.fn() }));
 vi.mock("../../tags/lib/tagNormalize", () => ({ normalizeAlbum: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("../../tags/lib/canonicalize", () => ({
-  getCanonTree: vi.fn().mockResolvedValue({ nodes: [] }),
-  findCanonicalSync: vi.fn().mockReturnValue({ node: null }),
-}));
+vi.mock("../../tags/lib/canonicalize", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../tags/lib/canonicalize")>();
+  return { ...actual, getCanonTree: vi.fn() };
+});
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
@@ -25,6 +25,7 @@ import { fetchTrackTags } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase, holdSettingReads } from "../../../test/sqlite";
+import { type CanonTree, getCanonTree, type TreeNode } from "../../tags/lib/canonicalize";
 import { useEnrichAlbumTracks } from "./useEnrichAlbumTracks";
 
 const ALBUM_ID = "srv-a:alb";
@@ -71,6 +72,21 @@ function insertOtherAlbum() {
     .run("srv-a:t2", "Soft As Snow", OTHER_ALBUM_ID);
 }
 
+function genreNode(id: string, name: string): TreeNode {
+  return { id, name, type: "genre", canonical_key: id, parents: [], sections: ["genres"] };
+}
+
+function treeOf(nodes: TreeNode[]): CanonTree {
+  const byKey = new Map(nodes.map((n) => [n.canonical_key, n]));
+  return {
+    nodes,
+    byKey,
+    byId: new Map(nodes.map((n) => [n.id, n])),
+    nodesByKind: new Map([["genre", nodes]]),
+    byKindAndKey: new Map([["genre", byKey]]),
+  };
+}
+
 function trackTagRows(): { track_id: string; raw_value: string }[] {
   return db.raw.prepare("SELECT track_id, raw_value FROM track_tags ORDER BY track_id, raw_value").all() as {
     track_id: string;
@@ -83,6 +99,7 @@ beforeEach(async () => {
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
   vi.mocked(fetchTrackTags).mockResolvedValue({ genres: ["shoegaze"], moods: [] });
+  vi.mocked(getCanonTree).mockResolvedValue(treeOf([]));
 
   db.raw
     .prepare(
@@ -111,6 +128,22 @@ describe("useEnrichAlbumTracks", () => {
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
     expect(trackTagRows()[0]).toMatchObject({ track_id: "srv-a:t1", raw_value: "shoegaze" });
+  });
+
+  it("drops a tag naming the track's artist, while a misspelt genre still maps", async () => {
+    db.raw.prepare("UPDATE tracks SET artist = 'Sting', title = 'Shape of My Heart'").run();
+    vi.mocked(getCanonTree).mockResolvedValue(treeOf([genreNode("swing", "Swing"), genreNode("shoegaze", "Shoegaze")]));
+    vi.mocked(fetchTrackTags).mockResolvedValue({ genres: ["sting", "shoegazee"], moods: [] });
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "Sting"), { wrapper });
+
+    await waitFor(() =>
+      expect(db.raw.prepare("SELECT tags_enriched_at FROM tracks WHERE id = 'srv-a:t1'").get()).not.toEqual({
+        tags_enriched_at: null,
+      }),
+    );
+    expect(db.raw.prepare("SELECT raw_value, canonical_id FROM track_tags ORDER BY raw_value").all()).toEqual([
+      { raw_value: "shoegazee", canonical_id: "shoegaze" },
+    ]);
   });
 
   it("leaves tracks alone when track enrichment is off, even before the setting is read back", async () => {

@@ -1046,6 +1046,20 @@ export const migrations: Migration[] = [
         FROM tracks t JOIN albums a ON t.album_id = a.id;
     `,
   },
+  {
+    version: 75,
+    sql: `
+      CREATE TEMP TABLE artist_name_tags AS
+        SELECT tt.id, t.album_id FROM track_tags tt
+        JOIN tracks t ON t.id = tt.track_id
+        LEFT JOIN albums a ON a.id = t.album_id
+        WHERE tt.source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
+          AND LOWER(TRIM(tt.raw_value)) IN (LOWER(TRIM(t.artist)), LOWER(TRIM(t.album_artist)), LOWER(TRIM(a.artist)));
+      UPDATE albums SET computed_at = NULL WHERE id IN (SELECT album_id FROM artist_name_tags);
+      DELETE FROM track_tags WHERE id IN (SELECT id FROM artist_name_tags);
+      DROP TABLE artist_name_tags;
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

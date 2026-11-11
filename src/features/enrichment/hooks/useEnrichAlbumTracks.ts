@@ -11,6 +11,7 @@ import { useSetting } from "../../../hooks/useSetting";
 import { parseStalenessDays } from "../../../lib/numberSetting";
 import { QK } from "../../../lib/queryKeys";
 import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
+import { isArtistNameTag } from "../../tags/lib/artistNameTag";
 import { findCanonicalSync, getCanonTree } from "../../tags/lib/canonicalize";
 import { normalizeAlbum } from "../../tags/lib/tagNormalize";
 
@@ -66,7 +67,7 @@ async function enrichAlbumTracks(albumId: string, albumArtist: string, staleDays
     const allTags: Array<{ raw: string; kind: "genre" | "mood" }> = [
       ...result.genres.map((r) => ({ raw: r, kind: "genre" as const })),
       ...result.moods.map((r) => ({ raw: r, kind: "mood" as const })),
-    ];
+    ].filter(({ raw }) => !isArtistNameTag(raw, [track.artist, track.album_artist, albumArtist]));
 
     for (const { raw, kind } of allTags) {
       const manualId = manualMap.get(`${raw}:${kind}`);

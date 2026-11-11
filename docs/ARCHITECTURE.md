@@ -145,7 +145,7 @@ Rust (`src-tauri/src/`):
 - DAG: a node may have several parents. `getAncestorIds` expands all parents for `album_genres` ancestor rows. User nodes live in `user_tree_nodes` and are resolved beside the canon tree, never merged into it.
 - Views read the tree through `useCanonTreeNodes` (key under `userTreeNodes`, so every user node write and `refreshGenreIdReads` reads it again); a failed read renders `LoadError`, never an empty picker. Genre cells with unreadable mappings show raw genres (`useGenreMappings` returns null).
 
-## 7. SQLite schema (v74)
+## 7. SQLite schema (v75)
 
 Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids of mirrored rows carry the server prefix.
 
@@ -169,7 +169,7 @@ WAL (set by `runMigrations`); every connection, sqlx pool and rusqlite alike, sy
 | `scrobble_history` | Sent scrobbles: track_id, timestamp; UNIQUE pair. |
 | `lyrics` | Cache: track_id PK, plain, synced, source, offset_ms. |
 | `waveform_cache` | track_id PK, peaks_json. Filled on play, for the next two queued tracks, and by Settings > Playback > Extract all waveforms (`waveformBackfill.ts`: two at a time, stops on any track start or resume and stops all but the playing track's extraction by run batch). |
-| `track_tags` | Raw tags per track: kind (genre/mood), raw_value, canonical_id (NULL = off-tree), source (`discogs` since v67); UNIQUE(track_id, kind, raw_value, source). |
+| `track_tags` | Raw tags per track: kind (genre/mood), raw_value, canonical_id (NULL = off-tree), source (`discogs` since v67); UNIQUE(track_id, kind, raw_value, source). A fetched tag naming the track's or album's artist is never stored (`isArtistNameTag`); v75 deleted stored ones and re-normalized their albums. |
 | `tag_mappings` | Raw value -> tree id or sentinel: PK (raw_value, kind), norm_value, source, match_type, locked. |
 | `tag_vocab_cache` | Distinct tag vocabulary: PK (norm_value, kind), raw_value, album_count, sources; rebuilt after sync. |
 | `tag_issues` | track_id, issue_type, details, dismissed_at; UNIQUE(track_id, issue_type). Written, never read. |

@@ -5,6 +5,7 @@ import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { executeBatched } from "../../../lib/dbBatch";
 import { currentLookupSql } from "../../../lib/releaseLookupSql";
+import { isArtistNameTag } from "./artistNameTag";
 import {
   type CanonTree,
   canonicalKey,
@@ -333,6 +334,10 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
     }
   }
 
+  const artistNames = [input.artist, input.lastfm_artist_name];
+  const isGenreCandidate = (raw: string) =>
+    !(skipYearGenres && isYearLikeGenre(raw)) && !isArtistNameTag(raw, artistNames);
+
   type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
@@ -340,22 +345,22 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
     byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
   }
   for (const raw of lastfmRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
+    if (!isGenreCandidate(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
   for (const raw of mbRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
+    if (!isGenreCandidate(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
   for (const raw of discogsRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
+    if (!isGenreCandidate(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "discogs" });
   }
   for (const raw of mbFolkRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
+    if (!isGenreCandidate(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
