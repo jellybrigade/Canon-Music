@@ -7,11 +7,31 @@ import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { stripServerPrefix } from "../../../lib/ids";
 import { QK } from "../../../lib/queryKeys";
+import { primaryArtistOf } from "../lib/nowPlayingQueries";
 import type { CurrentTrack } from "../store/playerTypes";
 
 // Distinguishes "asked every source, found nothing" from "row exists only for offset_ms";
 // both lyric columns are NOT NULL so the distinction must live in a value.
 const NO_LOOKUP_SOURCE = "cleared";
+
+/**
+ * Asks by the whole credit first (LRClib often stores it as tagged), then by the lead artist, since
+ * "Drake feat. Sampha" is often filed under Drake alone. `undefined` when nothing was found and an
+ * ask failed: that miss is not final.
+ */
+async function askEachSpelling<T>(
+  credit: string,
+  ask: (artist: string) => Promise<T | null>,
+  isFound: (answer: T) => boolean,
+): Promise<T | null | undefined> {
+  let anyAskFailed = false;
+  for (const artist of new Set([credit, primaryArtistOf(credit) ?? credit])) {
+    const answer = await ask(artist).catch(() => undefined);
+    if (answer === undefined) anyAskFailed = true;
+    else if (answer !== null && isFound(answer)) return answer;
+  }
+  return anyAskFailed ? undefined : null;
+}
 
 // Per track, so two quick offset changes can't reach the database's connection pool in the wrong order.
 const pendingOffsetWrites = new Map<string, Promise<void>>();
@@ -145,12 +165,12 @@ export function useLyrics(
 
       if (!track.artist || !track.album) return { plain: null, synced: null };
 
-      const lrclibResult = await fetchLyrics({
-        artist: track.artist,
-        album: track.album,
-        title: track.title,
-        durationSec: track.duration ?? null,
-      }).catch(() => undefined);
+      const album = track.album;
+      const lrclibResult = await askEachSpelling(
+        track.artist,
+        (artist) => fetchLyrics({ artist, album, title: track.title, durationSec: track.duration ?? null }),
+        (result) => Boolean(result.plain || result.synced),
+      );
       if (lrclibResult === undefined) everySourceAnswered = false;
 
       let plain = lrclibResult?.plain ?? null;
@@ -158,7 +178,11 @@ export function useLyrics(
       let source = "lrclib";
 
       if (!plain && !synced) {
-        const ovhPlain = await fetchLyricsOvh(track.artist, track.title).catch(() => undefined);
+        const ovhPlain = await askEachSpelling(
+          track.artist,
+          (artist) => fetchLyricsOvh(artist, track.title),
+          (lyrics) => lyrics.length > 0,
+        );
         if (ovhPlain === undefined) everySourceAnswered = false;
         if (ovhPlain) {
           plain = ovhPlain;
