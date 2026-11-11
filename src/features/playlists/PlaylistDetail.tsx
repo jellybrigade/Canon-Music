@@ -91,6 +91,7 @@ export function PlaylistDetail({
   const [chosenSort, setChosenSort] = useState<PlaylistSort | null>(null);
   const sort = activePlaylistSort(chosenSort, playlist.id);
   const tracks = useMemo(() => playlistTracks && sortPlaylistTracks(playlistTracks, sort), [playlistTracks, sort]);
+  const playableTracks = useMemo(() => tracks?.filter((track) => !track.is_unavailable), [tracks]);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -256,10 +257,10 @@ export function PlaylistDetail({
   }
 
   function handlePlayTrack(track: PlaylistTrackRow) {
-    if (!tracks) return;
-    const startIndex = tracks.findIndex((t) => t.id === track.id && t.position === track.position);
+    if (!playableTracks || track.is_unavailable) return;
+    const startIndex = playableTracks.findIndex((t) => t.id === track.id && t.position === track.position);
     const idx = startIndex >= 0 ? startIndex : 0;
-    playQueue(tracks.map(buildTrackObj), idx);
+    playQueue(playableTracks.map(buildTrackObj), idx);
     getDb()
       .then(async (db) => {
         await db.execute(
@@ -285,8 +286,8 @@ export function PlaylistDetail({
   }
 
   function handlePlayAll() {
-    if (!tracks || tracks.length === 0) return;
-    playQueue(tracks.map(buildTrackObj), 0);
+    if (!playableTracks || playableTracks.length === 0) return;
+    playQueue(playableTracks.map(buildTrackObj), 0);
   }
 
   async function handleRemoveTrack(track: PlaylistTrackRow) {
@@ -482,7 +483,7 @@ export function PlaylistDetail({
               <button
                 className="play-album-btn"
                 onClick={handlePlayAll}
-                disabled={!tracks || tracks.length === 0}
+                disabled={!playableTracks || playableTracks.length === 0}
                 aria-label="Play playlist"
               >
                 <Play size={16} /> Play All
@@ -629,19 +630,39 @@ export function PlaylistDetail({
               const track = tracks[virtualItem.index]!;
               const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
               const isCurrentTrack = currentTrack?.id === track.id;
+              const rowStyle = {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualItem.start}px)`,
+                gridTemplateColumns: gridTemplate,
+              } as const;
+              if (track.is_unavailable) {
+                return (
+                  <div
+                    key={`${track.id}-${track.position}`}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={rowStyle}
+                    className="playlist-vrow playlist-vrow--unavailable"
+                    title="This track is on the server but not in Canon's library yet. It appears after the next sync."
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, track });
+                    }}
+                  >
+                    <span className="playlist-vrow-num">{track.position + 1}</span>
+                    <span className="playlist-vrow-title">Not synced yet</span>
+                  </div>
+                );
+              }
               return (
                 <div
                   key={`${track.id}-${track.position}`}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualItem.start}px)`,
-                    gridTemplateColumns: gridTemplate,
-                  }}
+                  style={rowStyle}
                   className={`playlist-vrow${isCurrentTrack ? " playlist-vrow--active" : ""}`}
                   onClick={() => handlePlayTrack(track)}
                   onContextMenu={(e) => {
@@ -696,56 +717,60 @@ export function PlaylistDetail({
 
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          <button
-            onClick={() => {
-              handlePlayTrack(contextMenu.track);
-              setContextMenu(null);
-            }}
-          >
-            Play Now
-          </button>
-          <button
-            onClick={() => {
-              playNext(buildTrackObj(contextMenu.track));
-              setContextMenu(null);
-            }}
-          >
-            Play Next
-          </button>
-          <button
-            onClick={() => {
-              addToQueue(buildTrackObj(contextMenu.track));
-              setContextMenu(null);
-            }}
-          >
-            Add to Queue
-          </button>
-          <StartRadioSubmenu
-            onSelect={(mode) => {
-              const track = buildTrackObj(contextMenu.track);
-              void startRadio({ tracks: [track], mode });
-              setContextMenu(null);
-            }}
-          />
-          {onSelectAlbum && contextMenu.track.album_id && (
-            <button
-              onClick={() => {
-                onSelectAlbum(contextMenu.track.album_id!);
-                setContextMenu(null);
-              }}
-            >
-              Go to Album
-            </button>
-          )}
-          {onSelectArtist && contextMenu.track.artist && (
-            <button
-              onClick={() => {
-                onSelectArtist(contextMenu.track.artist!);
-                setContextMenu(null);
-              }}
-            >
-              Go to Artist
-            </button>
+          {!contextMenu.track.is_unavailable && (
+            <>
+              <button
+                onClick={() => {
+                  handlePlayTrack(contextMenu.track);
+                  setContextMenu(null);
+                }}
+              >
+                Play Now
+              </button>
+              <button
+                onClick={() => {
+                  playNext(buildTrackObj(contextMenu.track));
+                  setContextMenu(null);
+                }}
+              >
+                Play Next
+              </button>
+              <button
+                onClick={() => {
+                  addToQueue(buildTrackObj(contextMenu.track));
+                  setContextMenu(null);
+                }}
+              >
+                Add to Queue
+              </button>
+              <StartRadioSubmenu
+                onSelect={(mode) => {
+                  const track = buildTrackObj(contextMenu.track);
+                  void startRadio({ tracks: [track], mode });
+                  setContextMenu(null);
+                }}
+              />
+              {onSelectAlbum && contextMenu.track.album_id && (
+                <button
+                  onClick={() => {
+                    onSelectAlbum(contextMenu.track.album_id!);
+                    setContextMenu(null);
+                  }}
+                >
+                  Go to Album
+                </button>
+              )}
+              {onSelectArtist && contextMenu.track.artist && (
+                <button
+                  onClick={() => {
+                    onSelectArtist(contextMenu.track.artist!);
+                    setContextMenu(null);
+                  }}
+                >
+                  Go to Artist
+                </button>
+              )}
+            </>
           )}
           <button className="context-menu-danger" onClick={() => void handleRemoveTrack(contextMenu.track)}>
             Remove from Playlist

@@ -36,19 +36,21 @@ export function usePlaylistTracks(playlistId: string | null) {
     (async () => {
       try {
         const db = await getDb();
-        // LEFT JOIN, not inner: an inner join dropped tracks whose album row is missing
-        // (pruned or not yet mirrored), so the playlist rendered fewer tracks than it holds.
-        const rows = await db.select<PlaylistTrackRow[]>(
-          `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
-                  t.bit_rate, t.suffix, ${REPLAY_GAIN_COLUMNS},
-                  pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
+        // Both joins LEFT: an entry whose track or album isn't mirrored yet still holds its
+        // position, so the list matches the server's count and removal indexes stay right.
+        const selected = await db.select<(Omit<PlaylistTrackRow, "is_unavailable"> & { missing: number })[]>(
+          `SELECT COALESCE(t.id, pt.track_id) AS id, COALESCE(t.title, '') AS title, t.artist, t.duration,
+                  t.genre, t.year, t.track_number, t.bit_rate, t.suffix, ${REPLAY_GAIN_COLUMNS},
+                  pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id,
+                  t.id IS NULL AS missing
            FROM playlist_tracks pt
-           JOIN tracks t ON pt.track_id = t.id
+           LEFT JOIN tracks t ON pt.track_id = t.id
            LEFT JOIN albums a ON t.album_id = a.id
            WHERE pt.playlist_id = ?
            ORDER BY pt.position ASC`,
           [playlistId],
         );
+        const rows = selected.map(({ missing, ...row }) => ({ ...row, is_unavailable: missing === 1 }));
         if (!cancelled) setResult({ playlistId, rows, isLoading: false });
       } catch (err) {
         console.error("usePlaylistTracks: failed to load tracks", err);

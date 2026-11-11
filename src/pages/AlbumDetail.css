@@ -477,6 +477,15 @@
   color: var(--accent);
 }
 
+.playlist-vrow--unavailable {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+.playlist-vrow--unavailable:hover {
+  background-color: transparent;
+}
+
 .playlist-vrow > * {
   padding: var(--space-xs);
   overflow: hidden;
