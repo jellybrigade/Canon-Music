@@ -45,6 +45,7 @@ async function insertTrack(
     year?: number | null;
     discNumber?: number;
     trackNumber?: number;
+    isSearchIndexed?: boolean;
   },
 ): Promise<void> {
   await db.execute(
@@ -60,6 +61,12 @@ async function insertTrack(
       opts.discNumber ?? 1,
       opts.trackNumber ?? 1,
     ],
+  );
+  if (opts.isSearchIndexed === false) return;
+  await db.execute(
+    `INSERT INTO tracks_fts (rowid, id, title, artist, album, genre)
+     SELECT rowid, id, title, COALESCE(artist, ''), '', '' FROM tracks WHERE id = ?`,
+    [opts.id],
   );
 }
 
@@ -743,6 +750,91 @@ describe("getRadioCandidates", () => {
       expect(result.map((r) => r.id)).toEqual(["high", "low"]);
       expect(result[0]!.score).toBe(0.9);
       expect(result[1]!.score).toBe(0.2);
+    });
+    it("finds a similar artist's featured credits but not another artist sharing the name's start", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTrack(db, { id: "seed", albumId: "alb", artist: "Seed" });
+      await insertTrack(db, { id: "feat", albumId: "alb", artist: "Drake feat. Sampha" });
+      await insertTrack(db, { id: "ft", albumId: "alb", artist: "DRAKE ft. Ye" });
+      await insertTrack(db, { id: "featuring", albumId: "alb", artist: "drake featuring Rihanna" });
+      await insertTrack(db, { id: "bell", albumId: "alb", artist: "Drake Bell" });
+      await insertTrack(db, { id: "fan", albumId: "alb", artist: "Drake fans" });
+      await insertTrack(db, { id: "wildcard", albumId: "alb", artist: "D_ake feat. Sampha" });
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "similar-artists",
+        excludeIds: new Set(),
+        artistSimilarity: new Map([["drake", 0.8]]),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result.map((r) => r.id).sort()).toEqual(["feat", "featuring", "ft"]);
+      expect(result.every((r) => r.score === 0.8)).toBe(true);
+    });
+
+    it("finds a similar artist credited as a guest or joined by &, x, with or a comma", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTrack(db, { id: "seed", albumId: "alb", artist: "Seed" });
+      await insertTrack(db, { id: "guest", albumId: "alb", artist: "Drake feat. Sampha" });
+      await insertTrack(db, { id: "ampersand", albumId: "alb", artist: "Jessie Ware & Sampha" });
+      await insertTrack(db, { id: "x", albumId: "alb", artist: "SBTRKT x Sampha" });
+      await insertTrack(db, { id: "with", albumId: "alb", artist: "Kanye West with Sampha" });
+      await insertTrack(db, { id: "comma", albumId: "alb", artist: "Sampha, Little Simz" });
+      await insertTrack(db, { id: "longer", albumId: "alb", artist: "Sampha Lahai Sisay" });
+      await insertTrack(db, { id: "title", albumId: "alb", artist: "Nobody" });
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "similar-artists",
+        excludeIds: new Set(),
+        artistSimilarity: new Map([
+          ["sampha", 0.6],
+          ['"quoted" OR', 0.1],
+        ]),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result.map((r) => r.id).sort()).toEqual(["ampersand", "comma", "guest", "with", "x"]);
+      expect(result.every((r) => r.score === 0.6)).toBe(true);
+    });
+
+    it("still finds a similar artist's own tracks the search index hasn't reached", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTrack(db, { id: "seed", albumId: "alb", artist: "Seed" });
+      await insertTrack(db, { id: "unindexed", albumId: "alb", artist: "Sampha", isSearchIndexed: false });
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "similar-artists",
+        excludeIds: new Set(),
+        artistSimilarity: new Map([["sampha", 0.6]]),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result.map((r) => r.id)).toEqual(["unindexed"]);
+    });
+
+    it("keeps another server's credits out of the pool", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertAlbum(db, "other-alb", OTHER);
+      await insertTrack(db, { id: "seed", albumId: "alb", artist: "Seed" });
+      await insertTrack(db, { id: "here", albumId: "alb", artist: "Drake feat. Sampha" });
+      await insertTrack(db, { id: "there", serverId: OTHER, albumId: "other-alb", artist: "Drake feat. Sampha" });
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "similar-artists",
+        excludeIds: new Set(),
+        artistSimilarity: new Map([["sampha", 0.6]]),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result.map((r) => r.id)).toEqual(["here"]);
     });
   });
 

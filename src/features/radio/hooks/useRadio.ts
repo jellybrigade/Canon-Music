@@ -4,6 +4,7 @@ import { getDb } from "../../../db";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
 import { ownedByServer } from "../../../lib/sql";
 import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
+import { primaryArtistOf } from "../../playback/lib/nowPlayingQueries";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { creditedArtistKeys } from "../lib/artistCredit";
@@ -149,12 +150,13 @@ export function useRadio() {
         for (const id of playedTrackIdsRef.current) excludeIds.add(id);
 
         const needsSimilarArtists = radioMode === "curated" || radioMode === "similar-artists";
+        const seedArtist = primaryArtistOf(currentTrack.artist);
         const [similarArtistsFull, similarTracks] = await Promise.all([
-          needsSimilarArtists && currentTrack.artist
-            ? fetchSimilarArtistScores(currentTrack.artist).catch(() => [])
+          needsSimilarArtists && seedArtist
+            ? fetchSimilarArtistScores(seedArtist).catch(() => [])
             : Promise.resolve([]),
-          radioMode === "curated" && currentTrack.artist && currentTrack.title
-            ? fetchSimilarTracks(currentTrack.artist, currentTrack.title).catch(() => [])
+          radioMode === "curated" && seedArtist && currentTrack.title
+            ? fetchSimilarTracks(seedArtist, currentTrack.title).catch(() => [])
             : Promise.resolve([]),
         ]);
 

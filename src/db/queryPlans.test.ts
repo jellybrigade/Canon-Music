@@ -91,13 +91,19 @@ describe("query plans", () => {
     expect(plan).toContain("idx_tracks_artist_nocase (artist=? AND server_id=?)");
   });
 
-  it.each([
-    ["one artist", ARTIST_MATCH, ["Sting"]],
-    ["similar artists", similarArtistsMatch(2), ["sting", "the police"]],
-  ])("finds a radio pool of %s through the artist index", (_name, match, artists) => {
-    const plan = planOf(`SELECT t.id FROM tracks t WHERE t.server_id = ? AND ${match}`, ["s", ...artists]);
+  it("finds a radio pool of one artist through the artist index", () => {
+    const plan = planOf(`SELECT t.id FROM tracks t WHERE t.server_id = ? AND ${ARTIST_MATCH}`, ["s", "Sting"]);
     expect(plan).toContain("idx_tracks_artist_nocase");
     expect(plan).not.toMatch(/^SCAN t$/m);
+  });
+
+  it("finds similar artists and their featured credits through the artist index", () => {
+    const match = similarArtistsMatch("s", ["sting", "the police"]);
+    const plan = planOf(`SELECT t.id FROM tracks t WHERE t.server_id = ? AND ${match.sql}`, ["s", ...match.params]);
+    expect(plan).not.toMatch(/^SCAN t$/m);
+    expect(plan).not.toMatch(/SCAN tracks/);
+    expect(plan.match(/idx_tracks_artist_nocase \(artist>\? AND artist<\?\)/g)).toHaveLength(2);
+    expect(plan).toContain("idx_tracks_artist_nocase (artist=? AND server_id=?)");
   });
 
   it.each([

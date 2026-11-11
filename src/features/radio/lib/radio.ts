@@ -59,8 +59,23 @@ const TRACKS_WITH_ALBUM = "tracks t JOIN albums a ON t.album_id = a.id";
 /** Artist equality through the NOCASE artist index; `lower()` would scan the server's tracks. */
 export const ARTIST_MATCH = "t.artist = ? COLLATE NOCASE";
 
-export function similarArtistsMatch(count: number): string {
-  return `t.artist COLLATE NOCASE IN (${Array.from({ length: count }, () => "?").join(", ")})`;
+/** FTS5 phrase for one name: quotes doubled, so a name can't break out into query syntax. */
+function ftsPhrase(name: string): string {
+  return `"${name.split('"').join('""')}"`;
+}
+
+/**
+ * Tracks credited to any of `names`, alone or beside other artists in any position, through the
+ * artist index for exact credits and the search index's artist column for the rest. The token match
+ * also finds "Drake Bell" for "drake"; the caller drops credits no name scores.
+ */
+export function similarArtistsMatch(serverId: string, names: string[]): { sql: string; params: string[] } {
+  const exact = `SELECT rowid FROM tracks WHERE server_id = ? AND artist COLLATE NOCASE IN (${names.map(() => "?").join(", ")})`;
+  const credited = "SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?";
+  return {
+    sql: `t.rowid IN (${exact}\n  UNION ${credited})`,
+    params: [serverId, ...names, `artist : (${names.map(ftsPhrase).join(" OR ")})`],
+  };
 }
 
 type TrackRow = {
@@ -295,11 +310,11 @@ export async function getRadioCandidates({
 
     case "similar-artists": {
       if (artistSimilarity.size === 0) return [];
-      const similarArtistNames = Array.from(artistSimilarity.keys());
+      const match = similarArtistsMatch(seed.serverId, Array.from(artistSimilarity.keys()));
       const rows = await sampleSeedPool(db, seedTrackId, {
         serverId: seed.serverId,
-        where: similarArtistsMatch(similarArtistNames.length),
-        params: similarArtistNames,
+        where: match.sql,
+        params: match.params,
       });
       return rows
         .filter((r) => !excludeIds.has(r.id))
@@ -309,6 +324,7 @@ export async function getRadioCandidates({
             bestMatch(creditedArtistKeys(r.artist), (key) => artistSimilarity.get(key)),
           );
         })
+        .filter((c) => c.score > 0)
         .sort((a, b) => b.score - a.score);
     }
 

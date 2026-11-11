@@ -22,6 +22,7 @@ vi.mock("../../enrichment/lib/similarArtists", () => ({
 }));
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { trackRenders } from "../../../test/perf";
 import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
@@ -328,6 +329,16 @@ describe("useRadio auto-advance", () => {
 
       await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
       expect(candidateArgs().artistSimilarity.get("drake")).toBe(1);
+    });
+
+    it("asks for similar artists and tracks by the credit's lead artist", async () => {
+      const seed = { ...makeTrack("srv:1"), artist: "Drake feat. Sampha", title: "Too Much" };
+      usePlayerStore.setState({ radioMode: "curated", queue: [seed], currentTrack: seed });
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
+      expect(fetchSimilarArtistScores).toHaveBeenCalledWith("Drake");
+      expect(fetchSimilarTracks).toHaveBeenCalledWith("Drake", "Too Much");
     });
   });
 
