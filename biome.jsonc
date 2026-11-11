@@ -32,7 +32,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "a11y": {
         // Desktop app with no forms a stray button could submit.
         "useButtonType": "off",
