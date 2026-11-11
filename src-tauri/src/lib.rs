@@ -327,6 +327,7 @@ pub fn run() {
             cover_override::discard_album_cover_file,
             cover_override::clear_album_cover_override,
             net_probe::probe_server,
+            net_probe::diagnose_request,
             take_crash_report,
             settings_backup::save_settings_backup,
             library_read::albums::get_albums,

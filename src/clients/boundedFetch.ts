@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { redactCredentials } from "../lib/redactCredentials";
 
@@ -26,12 +27,29 @@ export function boundedFetch(
 
 /** `boundedFetch` through the native client: for headers the webview won't send (User-Agent) and
  *  hosts its CORS rules block. */
-export function boundedNativeFetch(
+export async function boundedNativeFetch(
   url: string,
   init: RequestInit = {},
   options: BoundedFetchOptions = {},
 ): Promise<Response> {
-  return boundedRequest(tauriFetch, url, init, options);
+  try {
+    return await boundedRequest(tauriFetch, url, init, options);
+  } catch (err) {
+    throw await explainSendFailure(url, err);
+  }
+}
+
+const SEND_FAILURE = "error sending request";
+
+// The native client passes on only reqwest's outermost message, the same for an untrusted
+// certificate, a failed lookup and a refused connection; Rust repeats the request to read which.
+async function explainSendFailure(url: string, err: unknown): Promise<unknown> {
+  if (typeof err !== "string" || !err.startsWith(SEND_FAILURE)) return err;
+  try {
+    return (await invoke<string | null>("diagnose_request", { url })) ?? err;
+  } catch {
+    return err;
+  }
 }
 
 async function boundedRequest(
