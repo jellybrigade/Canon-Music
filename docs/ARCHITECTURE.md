@@ -51,7 +51,7 @@ Rust (`src-tauri/src/`):
 | `settings_backup.rs` | `save_settings_backup`: opens the save dialog (`tauri-plugin-dialog`, Rust side only, no webview permission) and writes the backup JSON to the picked path; returns the path, or null on cancel. |
 | `tray.rs` | Tray menu, `tray_update`, `tray_set_visible`, `tray_set_close_to_tray`; emits `tray-action`. |
 | `quit.rs` | Quit handshake: window close (unless close-to-tray) and tray Quit emit `quit-requested`; `useQuitHandshake` runs `runQuitFlushes` (`src/lib/quitFlush.ts`, 3s cap: debounced queue/volume writes, server queue save) then `quit_ready`. Exits at once if no listener reported via `quit_listener_ready` (reset on page load); 5s watchdog otherwise. |
-| `library_read/` | `LibraryReadStore` (lazy rusqlite conn, READ_WRITE for WAL, no CREATE). `get_albums`, `get_artists`, `get_tracks`, `get_all_tracks`, `get_genres`, `get_recent_genres`, `get_loved`, `get_playlists`, `get_unmapped_tag_count`. |
+| `library_read/` | `LibraryReadStore` (lazy rusqlite conn, READ_WRITE for WAL, no CREATE). `get_albums`, `get_artists`, `get_tracks`, `get_all_tracks`, `get_genres`, `get_recent_genres`, `get_loved`, `get_playlists`, `get_unmapped_tag_count`. Albums, artists, all tracks, genres, recent genres and playlists show the active server only (`with_active_server`: oldest `servers` row, as `useServers()[0]`); `get_tracks`/`get_loved` are keyed by server-prefixed ids, tag vocab is global. |
 | `library_write/` | `LibraryWriteStore`. Transactions: `playlist_append_tracks`, `playlist_remove_track`, `delete_user_tree_node`, `carry_genre_renames`, `repair_dangling_genre_id`, `remap_track_ids`, `merge_artist`. |
 
 ## 3. Data flow
@@ -71,7 +71,7 @@ Rust (`src-tauri/src/`):
 ## 4. Invariants
 
 - Mirrored ids are `"{serverId}:{nativeId}"`; strip with `stripServerPrefix` (`src/lib/ids.ts`), never by slicing.
-- Every read of a mirrored table is scoped by `server_id`; `src/lib/serverScoping.test.ts` sweeps artist-filtered SQL.
+- Every read of a mirrored table is scoped by `server_id`; `src/lib/serverScoping.test.ts` sweeps artist-filtered SQL. "In library" for similar artists (`useSimilarInLibrary`) is scoped the same as the artist grid. Home rails (listening stats, Recently Released, the recommended spotlight from the playing album's server) and the genre tree's counts show the active server too; the tag vocabulary, its unmapped badge and background enrichment/normalizer passes read every server on purpose, since a tag decision applies to all of them.
 - Every LIKE binds through `escapeLike` (`src/lib/sql.ts`) with `ESCAPE '\\'`. A server's rows by id prefix use `ownedByServer` (an id index range), never `LIKE 'sid:%'`, which scans and ignores case.
 - Random pools read through `selectRandomSample` (`src/db/randomSample.ts`: count, window from a random offset that wraps, shuffled), not `ORDER BY RANDOM()`, which sorts every matching row; radio pools and the sync track-id probe use it.
 - Every read that becomes a playable track selects `REPLAY_GAIN_COLUMNS` and builds `replayGain` via `replayGainFromRow` (`src/lib/replayGainRow.ts`).

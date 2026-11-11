@@ -11,10 +11,16 @@ import { GenreView } from "./GenreView";
 
 let db: FakeDatabase;
 
-async function seedAlbums(canonicalId: string, count: number) {
+async function seedAlbums(canonicalId: string, count: number, serverId = "s") {
   for (let i = 0; i < count; i++) {
+    const albumId = `${serverId}:${canonicalId}-${i}`;
+    await db.execute(`INSERT INTO albums (id, server_id, server_type, name) VALUES (?, ?, 'navidrome', ?)`, [
+      albumId,
+      serverId,
+      albumId,
+    ]);
     await db.execute(`INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES (?, ?, 'direct', ?)`, [
-      `${canonicalId}-${i}`,
+      albumId,
       canonicalId,
       canonicalId,
     ]);
@@ -22,7 +28,7 @@ async function seedAlbums(canonicalId: string, count: number) {
 }
 
 async function mount() {
-  const utils = render(<GenreView onSelectGenre={vi.fn()} onPlayGenre={vi.fn()} />);
+  const utils = render(<GenreView serverId="s" onSelectGenre={vi.fn()} onPlayGenre={vi.fn()} />);
   await act(async () => {});
   return utils;
 }
@@ -53,6 +59,16 @@ describe("GenreView", () => {
 
     const counts = [...container.querySelectorAll(".genre-column .genre-col-count")];
     expect(counts.map((c) => c.textContent)).toEqual(["3 albums"]);
+  });
+
+  it("counts only the active server's albums, and hides a genre only another server has", async () => {
+    await seedAlbums("rock", 2);
+    await seedAlbums("rock", 5, "other");
+    await seedAlbums("shoegaze", 1, "other");
+    const { container } = await mount();
+
+    const counts = [...container.querySelectorAll(".genre-column .genre-col-count")];
+    expect(counts.map((c) => c.textContent)).toEqual(["2 albums"]);
   });
 
   it("shows a failed read as an error with a retry, not an endless loading line", async () => {

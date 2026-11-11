@@ -103,8 +103,8 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
 
       // Not gated on `cancelled`: the rows left the queue whichever effect sent them.
       if (sent > 0) {
-        void queryClient.invalidateQueries({ queryKey: QK.albumsListeningStats() });
-        void queryClient.invalidateQueries({ queryKey: QK.albumsPartiallyHeard() });
+        void queryClient.invalidateQueries({ queryKey: QK.albumsListeningStatsAll() });
+        void queryClient.invalidateQueries({ queryKey: QK.albumsPartiallyHeardAll() });
         void queryClient.invalidateQueries({ queryKey: QK.scrobbleQueueCount(server.id) });
       }
 

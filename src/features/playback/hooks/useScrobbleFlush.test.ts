@@ -549,8 +549,8 @@ describe("useScrobbleFlush invalidation", () => {
 
     expect(invalidate).toHaveBeenCalledTimes(3);
     expect(invalidate.mock.calls.map((c) => c[0]!.queryKey)).toEqual([
-      QK.albumsListeningStats(),
-      QK.albumsPartiallyHeard(),
+      QK.albumsListeningStatsAll(),
+      QK.albumsPartiallyHeardAll(),
       // Server-scoped: the count the Diagnostics tab shows is this server's backlog, so an
       // unscoped key here would refresh nothing that anyone reads.
       QK.scrobbleQueueCount(SRV.id),

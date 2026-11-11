@@ -119,7 +119,7 @@ export function HomeView({
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums();
+  const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums(server.id);
   const { genres: recentGenres, error: recentGenresError, retry: retryRecentGenres } = useRecentGenres();
   const {
     onRepeat,
@@ -130,7 +130,7 @@ export function HomeView({
     almostDone,
     playedAlbumIds,
     isLoading: statsLoading,
-  } = useListeningStats();
+  } = useListeningStats(server.id);
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
   const recentItems = useMemo(() => recentRaw?.map((a) => naviToAlbumRow(a, server.id)), [recentRaw, server.id]);

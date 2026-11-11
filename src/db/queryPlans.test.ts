@@ -115,7 +115,7 @@ describe("query plans", () => {
   });
 
   it("finds Recently Released from the newest years without sorting the whole library", () => {
-    const plan = planOf(RECENTLY_RELEASED_SQL, [19, 20]);
+    const plan = planOf(RECENTLY_RELEASED_SQL, ["s", 19, "s", 20]);
     expect(plan).not.toMatch(/^SCAN a$/m);
     expect(plan.match(/SEARCH a USING INDEX idx_albums_year/g)).toHaveLength(2);
   });

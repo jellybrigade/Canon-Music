@@ -183,7 +183,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
       return [];
     }
   }, [enrichment?.similar_json]);
-  const { data: inLibrarySet } = useSimilarInLibrary(similar);
+  const { data: inLibrarySet } = useSimilarInLibrary(similar, server.id);
   const similarInLibrary = useMemo(() => similar.filter((name) => inLibrarySet?.has(name)), [similar, inLibrarySet]);
   const similarNotInLibrary = useMemo(
     () => similar.filter((name) => !inLibrarySet?.has(name)),

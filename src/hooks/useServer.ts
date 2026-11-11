@@ -42,7 +42,7 @@ export function useServers() {
     retry: (failureCount, error) => !(error instanceof SchemaTooNewError) && failureCount < 3,
     queryFn: async () => {
       const db = await getDb();
-      return db.select<Server[]>("SELECT * FROM servers ORDER BY created_at ASC");
+      return db.select<Server[]>("SELECT * FROM servers ORDER BY created_at ASC, id");
     },
   });
 }

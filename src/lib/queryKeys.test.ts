@@ -41,7 +41,10 @@ describe("QK", () => {
     // React Query invalidates by prefix, so a partial key that is not a real prefix silently
     // invalidates nothing.
     expect(QK.albums("+name", null).slice(0, 1)).toEqual([...QK.albumsAll()]);
-    expect(QK.albumsListeningStats().slice(0, 1)).toEqual([...QK.albumsAll()]);
+    expect(QK.albumsListeningStats("s").slice(0, 1)).toEqual([...QK.albumsAll()]);
+    expect(QK.albumsListeningStats("s").slice(0, 2)).toEqual([...QK.albumsListeningStatsAll()]);
+    expect(QK.albumsPartiallyHeard("s").slice(0, 2)).toEqual([...QK.albumsPartiallyHeardAll()]);
+    expect(QK.recentlyReleased("s", 20).slice(0, 1)).toEqual([...QK.recentlyReleasedAll()]);
     expect(QK.albumIdentity("al-1").slice(0, 1)).toEqual([...QK.albumIdentityAll()]);
     expect(QK.trackTagsAlbum("al-1").slice(0, 1)).toEqual([...QK.trackTagsAll()]);
     expect(QK.normalizedTags("al-1").slice(0, 1)).toEqual([...QK.normalizedTagsAll()]);

@@ -52,10 +52,10 @@ pub fn get_all_tracks(
     app: tauri::AppHandle,
     state: tauri::State<LibraryReadStore>,
 ) -> Result<Vec<AllTrackRowDto>, String> {
-    state.with_conn(&app, query_all_tracks)
+    state.with_active_server(&app, query_all_tracks)
 }
 
-fn query_all_tracks(conn: &Connection) -> Result<Vec<AllTrackRowDto>, String> {
+fn query_all_tracks(conn: &Connection, server_id: &str) -> Result<Vec<AllTrackRowDto>, String> {
     let sql = "SELECT t.id, t.title, t.artist, t.album_artist, t.album_id,
                 a.name AS album_name, a.artwork_url AS album_artwork_url,
                 t.genre, t.track_number, t.disc_number, t.year, t.duration,
@@ -64,11 +64,11 @@ fn query_all_tracks(conn: &Connection) -> Result<Vec<AllTrackRowDto>, String> {
                 t.replay_gain_album_gain, t.replay_gain_album_peak
          FROM tracks t
          LEFT JOIN albums a ON a.id = t.album_id
-         WHERE t.album_id IS NOT NULL
+         WHERE t.server_id = ? AND t.album_id IS NOT NULL
          ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.album_id, t.disc_number, t.track_number, t.id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
+        .query_map([server_id], |row| {
             Ok(AllTrackRowDto {
                 id: row.get(0)?,
                 title: row.get(1)?,
@@ -174,7 +174,7 @@ mod tests {
         .expect("seed album");
         insert_sentinel_track(&conn, "s1:t1", Some("s1:al"));
 
-        let rows = query_all_tracks(&conn).expect("query");
+        let rows = query_all_tracks(&conn, "s1").expect("query");
         let t = &rows[0];
         assert_eq!(t.id, "s1:t1");
         assert_eq!(t.title, "the title");
@@ -203,9 +203,24 @@ mod tests {
         insert_sentinel_track(&conn, "s1:ok", Some("s1:al"));
         insert_sentinel_track(&conn, "s1:orphan", None);
 
-        let rows = query_all_tracks(&conn).expect("query");
+        let rows = query_all_tracks(&conn, "s1").expect("query");
         let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, ["s1:ok"]);
+    }
+
+    #[test]
+    fn all_tracks_lists_only_the_requested_servers_tracks() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO tracks (id, server_id, title, album_id) VALUES
+               ('s1:t', 's1', 'Mine', 's1:al'),
+               ('s2:t', 's2', 'Theirs', 's2:al')",
+        )
+        .expect("seed");
+
+        let rows = query_all_tracks(&conn, "s2").expect("query");
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["s2:t"]);
     }
 
     #[test]
@@ -223,7 +238,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_all_tracks(&conn).expect("query");
+        let rows = query_all_tracks(&conn, "s1").expect("query");
         let order: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(order, ["t1", "t2", "t3", "t4"]);
     }
@@ -243,7 +258,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_all_tracks(&conn).expect("query");
+        let rows = query_all_tracks(&conn, "s1").expect("query");
         let order: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(order, ["t1", "t3", "t2", "t4"]);
     }

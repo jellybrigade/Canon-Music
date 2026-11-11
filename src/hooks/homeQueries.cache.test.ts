@@ -51,14 +51,14 @@ afterEach(() => {
 });
 
 const cases: { name: string; key: readonly unknown[]; mount: () => unknown }[] = [
-  { name: "listening stats", key: QK.albumsListeningStats(), mount: () => useListeningStats() },
-  { name: "partially heard", key: QK.albumsPartiallyHeard(), mount: () => useListeningStats() },
+  { name: "listening stats", key: QK.albumsListeningStats("srv-a"), mount: () => useListeningStats("srv-a") },
+  { name: "partially heard", key: QK.albumsPartiallyHeard("srv-a"), mount: () => useListeningStats("srv-a") },
   {
     name: "carousel",
     key: QK.carousel("recent", "srv-a"),
     mount: () => useCarouselAlbums(SERVER, "recent"),
   },
-  { name: "recently released", key: QK.recentlyReleased(20), mount: () => useRecentlyReleasedAlbums() },
+  { name: "recently released", key: QK.recentlyReleased("srv-a", 20), mount: () => useRecentlyReleasedAlbums("srv-a") },
   {
     name: "recommended spotlight",
     key: QK.recommendedSpotlight("srv-a:alb1"),

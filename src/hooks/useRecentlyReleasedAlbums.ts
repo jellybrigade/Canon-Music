@@ -12,14 +12,14 @@ export const RECENTLY_RELEASED_SQL = `
   WITH cutoff AS (
     SELECT a.year FROM albums a
     LEFT JOIN album_identity ai ON ai.album_id = a.id
-    WHERE a.year IS NOT NULL AND NOT ${reissueSql("a", "ai")}
+    WHERE a.server_id = ? AND a.year IS NOT NULL AND NOT ${reissueSql("a", "ai")}
     ORDER BY a.year DESC
     LIMIT 1 OFFSET ?
   )
   SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url
   FROM albums a
   LEFT JOIN album_identity ai ON ai.album_id = a.id
-  WHERE a.year >= COALESCE((SELECT year FROM cutoff), -1) AND NOT ${reissueSql("a", "ai")}
+  WHERE a.server_id = ? AND a.year >= COALESCE((SELECT year FROM cutoff), -1) AND NOT ${reissueSql("a", "ai")}
   -- Most tags carry only a year, so a whole year's albums would tie. A full date from the
   -- tags (release, then original), else MusicBrainz, else a looked-up source, breaks the tie,
   -- but only if it agrees with the album's year.
@@ -29,12 +29,12 @@ export const RECENTLY_RELEASED_SQL = `
     a.id
   LIMIT ?`;
 
-export function useRecentlyReleasedAlbums(limit = 20) {
+export function useRecentlyReleasedAlbums(serverId: string, limit = 20) {
   return useQuery<AlbumRow[]>({
-    queryKey: QK.recentlyReleased(limit),
+    queryKey: QK.recentlyReleased(serverId, limit),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<AlbumRow[]>(RECENTLY_RELEASED_SQL, [limit - 1, limit]);
+      return db.select<AlbumRow[]>(RECENTLY_RELEASED_SQL, [serverId, limit - 1, serverId, limit]);
     },
     staleTime: HOME_STALE_TIME,
     gcTime: HOME_GC_TIME,

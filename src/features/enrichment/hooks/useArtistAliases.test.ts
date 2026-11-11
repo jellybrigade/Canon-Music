@@ -26,7 +26,7 @@ const aliasFoldedKeys = [
   QK.artistGenres("Kanye West", "s1"),
   QK.artistAppearsOn("Kanye West", "s1"),
   QK.similarArtistAlbums(["Kanye West"], "s1"),
-  QK.similarInLibrary(["kanye west"]),
+  QK.similarInLibrary(["kanye west"], "s1"),
   QK.artistByName("Kanye West", "s1"),
 ];
 

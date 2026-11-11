@@ -119,7 +119,7 @@ export function AlbumDetail({
     () => (artistEnrichment?.similar_json ? (JSON.parse(artistEnrichment.similar_json) as string[]) : []),
     [artistEnrichment?.similar_json],
   );
-  const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames);
+  const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames, server.id);
   const similarArtistNamesInLibrary = useMemo(
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
     [similarArtistNames, similarInLibrarySet],

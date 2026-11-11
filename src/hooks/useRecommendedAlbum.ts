@@ -30,12 +30,13 @@ export function useRecommendedAlbum(albumId: string | null) {
          )
          AND ag.relation = 'direct'
          AND ag.album_id != ?
+         AND a.server_id = (SELECT server_id FROM albums WHERE id = ?)
          AND a.artwork_url IS NOT NULL
          GROUP BY ag.album_id
          HAVING genre_match * 1.0 / genre_total >= 0.5
          ORDER BY genre_match DESC, RANDOM()
          LIMIT 1`,
-        [albumId, albumId],
+        [albumId, albumId, albumId],
       );
       return rows[0] ?? null;
     },

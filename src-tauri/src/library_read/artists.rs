@@ -17,10 +17,10 @@ pub fn get_artists(
     app: tauri::AppHandle,
     state: tauri::State<LibraryReadStore>,
 ) -> Result<Vec<ArtistRowDto>, String> {
-    state.with_conn(&app, query_artists)
+    state.with_active_server(&app, query_artists)
 }
 
-fn query_artists(conn: &Connection) -> Result<Vec<ArtistRowDto>, String> {
+fn query_artists(conn: &Connection, server_id: &str) -> Result<Vec<ArtistRowDto>, String> {
     let sql = "SELECT
             a.name,
             a.album_count,
@@ -42,11 +42,12 @@ fn query_artists(conn: &Connection) -> Result<Vec<ArtistRowDto>, String> {
                 WHERE artwork_url IS NOT NULL
             ) WHERE rn = 1
         ) art ON art.artist = a.name AND art.server_id = a.server_id
-        WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
+        WHERE a.server_id = ?
+          AND a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE, a.id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
+        .query_map([server_id], |row| {
             Ok(ArtistRowDto {
                 name: row.get(0)?,
                 album_count: row.get(1)?,
@@ -80,7 +81,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["Kanye West"]);
         assert_eq!(rows[0].album_count, 3);
@@ -97,7 +98,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://s1"));
     }
 
@@ -110,7 +111,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows.len(), 1);
         assert!(rows[0].artwork_url.is_none());
         assert!(rows[0].lastfm_image_url.is_none());
@@ -128,7 +129,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows[0].lastfm_image_url.as_deref(), Some("lfm"));
         assert_eq!(rows[0].wikidata_image_url.as_deref(), Some("wd"));
         assert_eq!(rows[0].navidrome_image_url.as_deref(), Some("nav"));
@@ -136,22 +137,22 @@ mod tests {
     }
 
     #[test]
-    fn one_artist_name_present_on_two_servers_returns_one_row_per_server() {
-        // Current behavior, pinned deliberately: `artists.id` is a random hex, not
-        // server-prefixed, and ArtistRowDto has no server_id, so the two rows are
-        // indistinguishable downstream. See instructions/donow.md.
+    fn one_artist_name_present_on_two_servers_lists_only_the_requested_servers_row() {
         let conn = fixture_conn();
         conn.execute_batch(
             "INSERT INTO artists (id, server_id, name, album_count) VALUES
                ('a1', 's1', 'Shared', 2),
-               ('a2', 's2', 'Shared', 5)",
+               ('a2', 's2', 'Shared', 5),
+               ('a3', 's2', 'Elsewhere', 1)",
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].name, "Shared");
-        assert_eq!(rows[1].name, "Shared");
+        let rows = query_artists(&conn, "s2").expect("query");
+        let listed: Vec<(&str, i64)> = rows
+            .iter()
+            .map(|r| (r.name.as_str(), r.album_count))
+            .collect();
+        assert_eq!(listed, [("Elsewhere", 1), ("Shared", 5)]);
     }
 
     #[test]
@@ -167,7 +168,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://new"));
     }
 
@@ -183,7 +184,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://2010a"));
     }
 
@@ -198,7 +199,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_artists(&conn).expect("query");
+        let rows = query_artists(&conn, "s1").expect("query");
         assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://dated"));
     }
 }

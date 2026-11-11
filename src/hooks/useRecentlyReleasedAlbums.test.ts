@@ -51,7 +51,7 @@ function seed(album: SeedAlbum): void {
 async function recentIds(limit?: number): Promise<string[]> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
-  const { result } = renderHook(() => useRecentlyReleasedAlbums(limit), { wrapper });
+  const { result } = renderHook(() => useRecentlyReleasedAlbums("s", limit), { wrapper });
   await waitFor(() => expect(result.current.data).toBeDefined());
   return (result.current.data ?? []).map((a) => a.id);
 }

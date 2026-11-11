@@ -3,9 +3,11 @@ export const QK = {
   serverCredential: (serverId: string | undefined) => ["server-credential", serverId] as const,
 
   albums: (sort?: string, canonicalIds?: unknown) => ["albums", sort, canonicalIds] as const,
-  albumsListeningStats: () => ["albums", "listening-stats"] as const,
+  albumsListeningStats: (serverId: string) => ["albums", "listening-stats", serverId] as const,
+  albumsListeningStatsAll: () => ["albums", "listening-stats"] as const,
   /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
-  albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
+  albumsPartiallyHeard: (serverId: string) => ["albums", "partially-heard", serverId] as const,
+  albumsPartiallyHeardAll: () => ["albums", "partially-heard"] as const,
   /** One album row for the detail route; nested under `albums` for broad invalidation,
    * scoped by server since the row alone doesn't guarantee the selected server. */
   albumById: (albumId: string | undefined, serverId: string | undefined) =>
@@ -44,7 +46,7 @@ export const QK = {
   albumsTagsRefreshedAt: (albumId: string) => ["albums", "tags_refreshed_at", albumId] as const,
   albumsStale: (staleDays: number) => ["albums", "stale", staleDays] as const,
 
-  recentlyReleased: (limit: number) => ["recently-released", limit] as const,
+  recentlyReleased: (serverId: string, limit: number) => ["recently-released", serverId, limit] as const,
   recentlyReleasedAll: () => ["recently-released"] as const,
   lookedUpFacts: (albumId: string, serverId: string) => ["looked-up-facts", albumId, serverId] as const,
   lookedUpFactsAll: () => ["looked-up-facts"] as const,
@@ -57,7 +59,7 @@ export const QK = {
   artistSeedTrack: (artistName: string, serverId: string) => ["artist-seed-track", artistName, serverId] as const,
   artistAppearsOn: (artistName: string, serverId: string) => ["artist-appears-on", artistName, serverId] as const,
   artistGenres: (artistName: string, serverId: string) => ["artist-genres", artistName, serverId] as const,
-  similarInLibrary: (names: string[]) => ["similar-in-library", names] as const,
+  similarInLibrary: (names: string[], serverId: string) => ["similar-in-library", names, serverId] as const,
   similarArtistAlbums: (names: string[], serverId: string) => ["similar-artist-albums", names, serverId] as const,
 
   trackRawTags: (trackId: string | undefined) => ["track-raw-tags", trackId] as const,
