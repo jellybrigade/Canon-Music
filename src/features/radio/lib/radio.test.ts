@@ -306,6 +306,59 @@ describe("getRadioCandidates", () => {
       expect(single.score).toBeCloseTo(0.4 * (1 / Math.sqrt(2)), 6);
     });
 
+    it("damps by every genre a candidate carries, so unmatched genres cost it score", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTreeNode(db, "jazz");
+      await insertTrack(db, { id: "seed", albumId: "alb" });
+      await insertTag(db, "seed", "jazz");
+
+      await insertTrack(db, { id: "pure", albumId: "alb" });
+      await insertTag(db, "pure", "jazz");
+
+      await insertTrack(db, { id: "broad", albumId: "alb" });
+      for (const genre of ["jazz", "black-metal", "drill", "shoegaze", "trance"]) await insertTag(db, "broad", genre);
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "same-genre",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result.map((r) => r.id)).toEqual(["pure", "broad"]);
+      expect(result[1]!.score).toBeCloseTo(0.4 * (1 / Math.sqrt(5)), 6);
+    });
+
+    it("keeps a focused match past the candidate cap that broadly tagged matches would fill", async () => {
+      const db = holder.db!;
+      await insertAlbum(db, "alb");
+      await insertTreeNode(db, "x");
+      await insertTreeNode(db, "y");
+      await insertTrack(db, { id: "seed", albumId: "alb" });
+      await insertTag(db, "seed", "x");
+      await insertTag(db, "seed", "y");
+      for (let i = 0; i < CANDIDATE_LIMIT; i++) {
+        await insertTrack(db, { id: `broad${i}`, albumId: "alb" });
+        for (const genre of ["x", "y", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"]) {
+          await insertTag(db, `broad${i}`, genre);
+        }
+      }
+      await insertTrack(db, { id: "focused", albumId: "alb" });
+      await insertTag(db, "focused", "x");
+
+      const result = await getRadioCandidates({
+        seedTrackId: "seed",
+        mode: "same-genre",
+        excludeIds: new Set(),
+        artistSimilarity: new Map(),
+        trackSimilarity: new Map(),
+      });
+
+      expect(result[0]!.id).toBe("focused");
+    });
+
     it("counts a tag once however many sources and spellings carry it", async () => {
       const db = holder.db!;
       await insertAlbum(db, "alb");

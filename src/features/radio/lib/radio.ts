@@ -197,8 +197,8 @@ async function getCuratedCandidates(
   const weightRows = Array.from(combinedWeights.entries());
   const weightValues = weightRows.map(() => "(?, ?)").join(", ");
 
-  // sum_score + tag_count kept separate so raw tag-count can't inflate score:
-  // heavily-tagged (usually mainstream) tracks otherwise dominate purely by tag volume.
+  // tag_count is every genre the candidate carries, matched or not, so a track tagged Jazz among
+  // ten other genres scores below a pure jazz track instead of level with it.
   type ScoredRow = TrackRow & { sum_score: number; tag_count: number };
 
   const rows = await db.select<ScoredRow[]>(
@@ -207,7 +207,8 @@ async function getCuratedCandidates(
      )
      SELECT ${TRACK_PROJECTION},
             SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS sum_score,
-            COUNT(DISTINCT tt.canonical_id) AS tag_count
+            (SELECT COUNT(DISTINCT all_tags.canonical_id) FROM track_tags all_tags
+             WHERE all_tags.track_id = t.id AND all_tags.canonical_id IS NOT NULL) AS tag_count
      FROM tracks t
      -- One row per source and spelling is stored; each tag counts once.
      JOIN (SELECT DISTINCT track_id, canonical_id, kind FROM track_tags) tt ON tt.track_id = t.id
@@ -215,13 +216,13 @@ async function getCuratedCandidates(
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY sum_score DESC, t.id
+     -- sum^2 / count orders like sum / sqrt(count) without SQRT(), so the cap keeps the damped best.
+     ORDER BY sum_score * sum_score / tag_count DESC, t.id
      LIMIT ?`,
     [...weightRows.flat(), seed.serverId, seedTrackId, CANDIDATE_LIMIT],
   );
 
   // Dampen by sqrt(tag_count) in JS, not SQL, since target SQLite builds may lack SQRT().
-  // The SQL ORDER BY above stays on raw sum_score, so LIMIT is a coarser pre-filter than this.
   const scored = rows.map((r) => ({ r, d: r.sum_score / Math.sqrt(r.tag_count) }));
   const maxTree = scored.length > 0 ? Math.max(...scored.map((s) => s.d)) : 1;
 
