@@ -43,7 +43,6 @@ import { useTracks } from "../hooks/useTracks";
 import { fetchAlbumTracks } from "../lib/albumTracks";
 import { QK } from "../lib/queryKeys";
 import { shuffleArray } from "../lib/shuffle";
-import { makeStreamUrlBuilder } from "../lib/track";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import type { AlbumRow, TrackRow } from "../types/library";
 import { AlbumBio } from "./album/AlbumBio";
@@ -89,7 +88,7 @@ export function AlbumDetail({
   onSelectArtist,
   onTagFilter,
 }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -245,25 +244,23 @@ export function AlbumDetail({
     };
   }
 
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
-
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
     const startIndex = tracks.findIndex((t) => t.id === track.id);
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+    playQueue(tracks.map(buildTrackObj), startIndex >= 0 ? startIndex : 0);
   }
 
   function handlePlayAlbum() {
     if (!tracks || tracks.length === 0) return;
     const trackObjs = tracks.map(buildTrackObj);
     if (playAction === "queue_last") {
-      addManyToQueue(trackObjs, streamUrlFor);
+      addManyToQueue(trackObjs);
     } else if (playAction === "queue_next") {
-      playNextMany(trackObjs, streamUrlFor);
+      playNextMany(trackObjs);
     } else if (playAction === "shuffle") {
-      void playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
+      void playQueue(shuffleArray(trackObjs), 0);
     } else {
-      void playQueue(trackObjs, streamUrlFor, 0);
+      void playQueue(trackObjs, 0);
     }
   }
 
@@ -375,11 +372,11 @@ export function AlbumDetail({
           playlists={playlists}
           onClose={() => setContextMenu(null)}
           onPlayNow={() => handlePlayTrack(contextMenu.track)}
-          onPlayNext={() => playNext(buildTrackObj(contextMenu.track), streamUrlFor)}
-          onAddToQueue={() => addToQueue(buildTrackObj(contextMenu.track), streamUrlFor)}
+          onPlayNext={() => playNext(buildTrackObj(contextMenu.track))}
+          onAddToQueue={() => addToQueue(buildTrackObj(contextMenu.track))}
           onStartRadio={(mode) => {
             const track = buildTrackObj(contextMenu.track);
-            void startRadio({ tracks: [track], streamUrlFor, mode });
+            void startRadio({ tracks: [track], mode });
           }}
           onToggleLove={() => void toggleTrackLove(contextMenu.track.id, serverWithCredential)}
           onShowTags={() => setDrawerState({ albumId: album.id, trackId: contextMenu.track.id })}

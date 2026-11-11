@@ -72,7 +72,6 @@ export function useRadio() {
   const radioMode = usePlayerStore((s) => s.radioMode);
   const radioSimilarityScale = usePlayerStore((s) => s.radioSimilarityScale);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
-  const streamUrlFor = usePlayerStore((s) => s.streamUrlFor);
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const fillingRef = useRef(false);
 
@@ -206,13 +205,12 @@ export function useRadio() {
             coverArtUrl: null,
             replayGain: replayGainFromRow(row2),
           };
-          const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
           // Re-read live state, not the closure's: this callback runs after several awaits,
           // and the closure can hold stale values from before the user paused or skipped.
           const live2 = usePlayerStore.getState();
           const wasAtEnd2 =
             hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
-          addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
+          addToQueue(track2);
           // Read the length back off the store: an append can trim played entries off the front
           // to stay under maxQueueSize, so the captured pre-append length is not the new track's
           // position any more.
@@ -277,12 +275,11 @@ export function useRadio() {
           coverArtUrl: null,
           replayGain: replayGainFromRow(row),
         };
-        const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
         // Same staleness concern as the same-album branch above: read live state, not closure.
         const live = usePlayerStore.getState();
         const wasAtEnd =
           hasPlayedRef.current && !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
-        addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
+        addToQueue(track);
         // See the note above: the append may have trimmed the front of the queue.
         if (wasAtEnd) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
         recordPick(track.artist, track.albumId, track.id);

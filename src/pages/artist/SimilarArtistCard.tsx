@@ -1,5 +1,5 @@
 import { Mic2 } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { CoverImg } from "../../components/CoverImg";
@@ -7,7 +7,6 @@ import { useEnrichArtist } from "../../features/enrichment/hooks/useEnrichArtist
 import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../../features/radio/hooks/useStartRadio";
 import { resolveArtistImageUrl, useArtistImageMap } from "../../hooks/useArtistImageCache";
-import { makeStreamUrlBuilder } from "../../lib/track";
 import type { Server } from "../../types/server";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { buildTrackObj, useArtistSeedTrack } from "./artistQueries";
@@ -55,7 +54,6 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({
 
   const { data: seedTrack } = useArtistSeedTrack(name, server.id, { enabled: inView });
   const startRadio = useStartRadio();
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   function handleContextMenu(e: React.MouseEvent) {
@@ -96,7 +94,7 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = buildTrackObj(seedTrack, server);
-              void startRadio({ tracks: [track], streamUrlFor, mode });
+              void startRadio({ tracks: [track], mode });
               setMenu(null);
             }}
           />

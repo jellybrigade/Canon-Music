@@ -130,7 +130,7 @@ describe("UpNextList context menu", () => {
     fireEvent.click(menuButton("Curated"));
     await waitFor(() => expect(startRadio).toHaveBeenCalledTimes(1));
     expect(playFromQueueIndex).toHaveBeenCalledWith(1);
-    expect(startRadio).toHaveBeenCalledWith({ tracks: [], seed: bare, streamUrlFor, mode: "curated" });
+    expect(startRadio).toHaveBeenCalledWith({ tracks: [], seed: bare, mode: "curated" });
     expect(storeStartRadio).not.toHaveBeenCalled();
   });
 });

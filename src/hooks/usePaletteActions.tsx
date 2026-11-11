@@ -6,7 +6,7 @@ import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import { loadRandomLibraryTrack } from "../features/radio/lib/librarySeed";
 import type { useLibrarySync } from "../features/sync/useLibrarySync";
 import { plural } from "../lib/plural";
-import { currentTrackFromRow, makeStreamUrlBuilder } from "../lib/track";
+import { currentTrackFromRow } from "../lib/track";
 import type { ServerWithCredential } from "./useServer";
 
 const SLEEP_TIMER_PRESET_MINUTES = 30;
@@ -16,7 +16,7 @@ export function usePaletteActions(
   runSync: ReturnType<typeof useLibrarySync>["runSync"],
   isSyncing: boolean,
 ): PaletteAction[] {
-  const hasTrack = usePlayerStore((s) => s.currentTrack !== null && s.streamUrlFor !== null);
+  const hasTrack = usePlayerStore((s) => s.currentTrack !== null);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const radioActive = usePlayerStore((s) => s.radioActive);
   const canSkip = usePlayerStore((s) => !isNextDisabled(s.repeat, s.queueIndex, s.queue.length, s.radioOnQueueEnd));
@@ -49,9 +49,9 @@ export function usePaletteActions(
         label: "Start radio from current track",
         icon: <Radio size={16} />,
         run: () => {
-          const { currentTrack, streamUrlFor } = usePlayerStore.getState();
-          if (!currentTrack || !streamUrlFor) return;
-          void startRadio({ tracks: [], seed: currentTrack, streamUrlFor });
+          const { currentTrack } = usePlayerStore.getState();
+          if (!currentTrack) return;
+          void startRadio({ tracks: [], seed: currentTrack });
         },
       });
     }
@@ -83,11 +83,11 @@ export function usePaletteActions(
 }
 
 async function shuffleLibrary(
-  { server, credential }: ServerWithCredential,
+  { server }: ServerWithCredential,
   startRadio: ReturnType<typeof useStartRadio>,
 ): Promise<void> {
   const row = await loadRandomLibraryTrack(server.id);
   if (!row) return;
   const track = currentTrackFromRow(row, server);
-  await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(server, credential), mode: "random" });
+  await startRadio({ tracks: [track], mode: "random" });
 }

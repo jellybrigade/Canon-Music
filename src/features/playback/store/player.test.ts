@@ -95,45 +95,42 @@ describe("player store - queue/shuffle invariants", () => {
   describe("shuffleOrder.length === queue.length after every mutation", () => {
     it("holds after playQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(5), streamUrlFor, 2);
+      await usePlayerStore.getState().playQueue(makeTracks(5), 2);
       expect(invariantHolds()).toBe(true);
       expect(usePlayerStore.getState().shuffleOrder).toHaveLength(5);
     });
 
     it("holds after addManyToQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor);
-      usePlayerStore.getState().addManyToQueue(
-        makeTracks(2).map((t) => makeTrack(`new-${t.id}`)),
-        streamUrlFor,
-      );
+      await usePlayerStore.getState().playQueue(makeTracks(3));
+      usePlayerStore.getState().addManyToQueue(makeTracks(2).map((t) => makeTrack(`new-${t.id}`)));
       expect(invariantHolds()).toBe(true);
     });
 
     it("holds after playNextMany under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor);
-      usePlayerStore.getState().playNextMany([makeTrack("n1"), makeTrack("n2")], streamUrlFor);
+      await usePlayerStore.getState().playQueue(makeTracks(3));
+      usePlayerStore.getState().playNextMany([makeTrack("n1"), makeTrack("n2")]);
       expect(invariantHolds()).toBe(true);
     });
 
     it("holds after removeFromQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(4), 0);
       await usePlayerStore.getState().removeFromQueue(2);
       expect(invariantHolds()).toBe(true);
     });
 
     it("holds after removeManyFromQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(6), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(6), 0);
       await usePlayerStore.getState().removeManyFromQueue([1, 3, 4]);
       expect(invariantHolds()).toBe(true);
     });
 
     it("holds after moveQueueItem under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(5), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(5), 0);
       usePlayerStore.getState().moveQueueItem(0, 3);
       expect(invariantHolds()).toBe(true);
       // moveQueueItem under shuffle moves the order, not the queue array itself
@@ -171,7 +168,7 @@ describe("player store - queue/shuffle invariants", () => {
 
     it("holds after clearQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor);
+      await usePlayerStore.getState().playQueue(makeTracks(4));
       usePlayerStore.getState().clearQueue();
       expect(usePlayerStore.getState().queue).toEqual([]);
       expect(usePlayerStore.getState().shuffleOrder).toEqual([]);
@@ -179,7 +176,7 @@ describe("player store - queue/shuffle invariants", () => {
 
     it("holds across a random sequence of mutations", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(3), 0);
       let nextId = 100;
 
       for (let i = 0; i < 200; i++) {
@@ -189,17 +186,17 @@ describe("player store - queue/shuffle invariants", () => {
 
         if (queueLen === 0) {
           // repopulate so subsequent ops have something to act on
-          await state.playQueue(makeTracks(3), streamUrlFor, 0);
+          await state.playQueue(makeTracks(3), 0);
           expect(invariantHolds()).toBe(true);
           continue;
         }
 
         switch (op) {
           case 0:
-            state.addManyToQueue([makeTrack(`r${nextId++}`)], streamUrlFor);
+            state.addManyToQueue([makeTrack(`r${nextId++}`)]);
             break;
           case 1:
-            state.playNextMany([makeTrack(`r${nextId++}`)], streamUrlFor);
+            state.playNextMany([makeTrack(`r${nextId++}`)]);
             break;
           case 2:
             await state.removeFromQueue(Math.floor(Math.random() * queueLen));
@@ -231,7 +228,7 @@ describe("player store - queue/shuffle invariants", () => {
 
   it("playQueue([oneTrack]) under shuffle writes [0], not []", async () => {
     usePlayerStore.setState({ isShuffled: true });
-    await usePlayerStore.getState().playQueue([makeTrack("solo")], streamUrlFor);
+    await usePlayerStore.getState().playQueue([makeTrack("solo")]);
     expect(usePlayerStore.getState().shuffleOrder).toEqual([0]);
   });
 
@@ -265,7 +262,7 @@ describe("player store - queue/shuffle invariants", () => {
   describe("moveQueueItem", () => {
     it("normalizes a short shuffleOrder before splicing (no length drift, no crash)", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(4), 0);
       // Simulate a stale/short order arriving via direct state write, as addManyToQueue's
       // pre-trim state or a restored session might produce.
       usePlayerStore.setState({ shuffleOrder: [2, 0] });
@@ -276,14 +273,14 @@ describe("player store - queue/shuffle invariants", () => {
 
     it("no-ops when from === to", async () => {
       usePlayerStore.setState({ isShuffled: true });
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(3), 0);
       const before = usePlayerStore.getState().shuffleOrder;
       usePlayerStore.getState().moveQueueItem(1, 1);
       expect(usePlayerStore.getState().shuffleOrder).toBe(before);
     });
 
     it("no-ops on out-of-range indices", async () => {
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(makeTracks(3), 0);
       const before = usePlayerStore.getState().queue;
       usePlayerStore.getState().moveQueueItem(0, 5);
       expect(usePlayerStore.getState().queue).toBe(before);
@@ -293,14 +290,11 @@ describe("player store - queue/shuffle invariants", () => {
   describe("queue trimming at maxQueueSize", () => {
     it("addManyToQueue trims to cap and shuffleOrder stays aligned", async () => {
       usePlayerStore.setState({ isShuffled: true, maxQueueSize: 5 });
-      await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor, 3);
+      await usePlayerStore.getState().playQueue(makeTracks(4), 3);
       // playQueue always anchors the shuffled position at 0; advance queueIndex to simulate
       // having already played partway through, which is what makes anything trimmable.
       usePlayerStore.setState({ queueIndex: 3 });
-      usePlayerStore.getState().addManyToQueue(
-        makeTracks(3).map((t) => makeTrack(`x${t.id}`)),
-        streamUrlFor,
-      );
+      usePlayerStore.getState().addManyToQueue(makeTracks(3).map((t) => makeTrack(`x${t.id}`)));
       const state = usePlayerStore.getState();
       expect(state.queue.length).toBe(5);
       expect(invariantHolds()).toBe(true);
@@ -311,11 +305,8 @@ describe("player store - queue/shuffle invariants", () => {
       // Start at the last position (queueIndex 4) so the full overflow (4) is droppable -
       // trim is capped at `queueIndex`, so a smaller starting position would only partially trim,
       // masking a regression that reused the pre-append queue length instead of the real one.
-      await usePlayerStore.getState().playQueue(makeTracks(5), streamUrlFor, 4);
-      usePlayerStore.getState().playNextMany(
-        makeTracks(3).map((t) => makeTrack(`y${t.id}`)),
-        streamUrlFor,
-      );
+      await usePlayerStore.getState().playQueue(makeTracks(5), 4);
+      usePlayerStore.getState().playNextMany(makeTracks(3).map((t) => makeTrack(`y${t.id}`)));
       const state = usePlayerStore.getState();
       expect(state.queue.length).toBe(4);
       expect(state.queueIndex).toBeGreaterThanOrEqual(0);
@@ -324,8 +315,8 @@ describe("player store - queue/shuffle invariants", () => {
 
     it("does not trim when queue is already within cap", async () => {
       usePlayerStore.setState({ maxQueueSize: 10 });
-      await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
-      usePlayerStore.getState().addManyToQueue([makeTrack("extra")], streamUrlFor);
+      await usePlayerStore.getState().playQueue(makeTracks(3), 0);
+      usePlayerStore.getState().addManyToQueue([makeTrack("extra")]);
       expect(usePlayerStore.getState().queue).toHaveLength(4);
     });
   });
@@ -359,7 +350,7 @@ describe("player store - queue/shuffle invariants", () => {
 describe("player store - undo clear queue", () => {
   it("puts back the queue, its place, its shuffle and its radio, paused", async () => {
     usePlayerStore.setState({ isShuffled: true });
-    await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor, 2);
+    await usePlayerStore.getState().playQueue(makeTracks(4), 2);
     usePlayerStore.setState({ radioActive: true, radioSeed: makeTrack("seed"), radioLabel: "Seeded" });
     const before = usePlayerStore.getState();
 
@@ -383,9 +374,9 @@ describe("player store - undo clear queue", () => {
   });
 
   it("is withdrawn once the queue changes after the clear", async () => {
-    await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(makeTracks(3), 0);
     usePlayerStore.getState().clearQueue();
-    usePlayerStore.getState().addToQueue(makeTrack("x"), streamUrlFor);
+    usePlayerStore.getState().addToQueue(makeTrack("x"));
     await usePlayerStore.getState().removeFromQueue(0);
     expect(usePlayerStore.getState().queue).toEqual([]);
     expect(canUndoClearQueue(usePlayerStore.getState())).toBe(false);
@@ -407,7 +398,7 @@ describe("player store - transport intent", () => {
     const { promise: loadPromise, resolve: resolveLoad } = deferred<undefined>();
     onInvoke("audio_play", () => loadPromise);
 
-    const playPromise = usePlayerStore.getState().play(track, () => "http://test/a");
+    const playPromise = usePlayerStore.getState().play(track);
     expect(usePlayerStore.getState().isLoading).toBe(true);
 
     // Pause races the in-flight load: this must not be lost by the async completion.
@@ -458,7 +449,7 @@ describe("player store - transport intent", () => {
     const { promise: loadA, resolve: resolveLoadA } = deferred<undefined>();
     onInvoke("audio_play", () => loadA);
 
-    const playA = usePlayerStore.getState().play(trackA, () => "http://test/a");
+    const playA = usePlayerStore.getState().play(trackA);
     usePlayerStore.getState().pause(); // sets pauseRequestedDuringLoad while trackA is loading
     resolveLoadA(undefined);
     await playA;
@@ -468,7 +459,7 @@ describe("player store - transport intent", () => {
 
     const trackB = makeTrack("b");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(trackB, () => "http://test/b");
+    await usePlayerStore.getState().play(trackB);
 
     expect(usePlayerStore.getState().isPlaying).toBe(true);
   });
@@ -476,7 +467,7 @@ describe("player store - transport intent", () => {
   it("seek() bumps seekGen so an in-flight position poll from before the seek is dropped", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
     expect(usePlayerStore.getState().isPlaying).toBe(true);
 
     const { promise: posPromise, resolve: resolvePos } = deferred<number>();
@@ -500,7 +491,7 @@ describe("player store - transport intent", () => {
     const firstTrack = makeTrack("0");
     const tracks = [firstTrack, makeTrack("1")];
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
     expect(usePlayerStore.getState().isPlaying).toBe(true);
 
     // Isolate the isPlaying guard: the ticker keeps polling but playback is not audibly active.
@@ -527,7 +518,7 @@ async function setupPlayingQueue(
 ) {
   const tracks = makeTracks(n);
   onInvoke("audio_play", () => Promise.resolve(undefined));
-  await usePlayerStore.getState().playQueue(tracks, streamUrlFor, opts.queueIndex ?? 0);
+  await usePlayerStore.getState().playQueue(tracks, opts.queueIndex ?? 0);
   usePlayerStore.setState({
     gapless: true,
     isShuffled: opts.isShuffled ?? false,
@@ -589,7 +580,7 @@ describe("player store - gapless hand-off", () => {
       const tracks = makeTracks(2);
       tracks[0]!.duration = null;
       onInvoke("audio_play", () => Promise.resolve(undefined));
-      await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+      await usePlayerStore.getState().playQueue(tracks, 0);
       usePlayerStore.setState({ gapless: true });
       onInvoke("audio_get_pos", () => Promise.resolve(0));
       onInvoke("audio_enqueue_next", () => Promise.resolve(undefined));
@@ -771,7 +762,7 @@ describe("player store - gapless hand-off", () => {
       await setupPlayingQueue(3); // queue 0,1,2 ; queueIndex 0 ; enqueues track "1"
       await driveTickerToEnqueue();
 
-      usePlayerStore.getState().playNext(makeTrack("new"), streamUrlFor); // inserts at position 1
+      usePlayerStore.getState().playNext(makeTrack("new")); // inserts at position 1
 
       emitTauriEvent("track-advanced", undefined);
 
@@ -926,7 +917,7 @@ describe("player store - gapless hand-off", () => {
       await setupPlayingQueue(3); // enqueues track "1"
       await driveTickerToEnqueue();
 
-      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0"), streamUrlFor });
+      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0") });
 
       emitTauriEvent("track-advanced", undefined);
 
@@ -939,7 +930,7 @@ describe("player store - gapless hand-off", () => {
       await driveTickerToEnqueue();
       onInvoke("audio_withdraw_next", () => Promise.resolve(true));
 
-      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0"), streamUrlFor });
+      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0") });
       await vi.advanceTimersByTimeAsync(0);
 
       expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
@@ -988,7 +979,7 @@ describe("player store - gapless hand-off", () => {
       await driveTickerToEnqueue();
       onInvoke("audio_withdraw_next", () => Promise.resolve(true));
 
-      usePlayerStore.getState().playNext(makeTrack("new"), streamUrlFor);
+      usePlayerStore.getState().playNext(makeTrack("new"));
       await vi.advanceTimersByTimeAsync(0);
 
       expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
@@ -1014,7 +1005,7 @@ describe("player store - gapless hand-off", () => {
       expect(runtime.gaplessEnqueued?.wraps).toBe(true);
       onInvoke("audio_withdraw_next", () => Promise.resolve(true));
 
-      usePlayerStore.getState().addToQueue(makeTrack("new"), streamUrlFor);
+      usePlayerStore.getState().addToQueue(makeTrack("new"));
       await vi.advanceTimersByTimeAsync(0);
 
       expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
@@ -1140,7 +1131,7 @@ describe("player store - gapless hand-off", () => {
         resetStore();
         const tracks = makeTracks(4);
         onInvoke("audio_play", () => Promise.resolve(undefined));
-        await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 3);
+        await usePlayerStore.getState().playQueue(tracks, 3);
         usePlayerStore.setState({ isShuffled: true, shuffleOrder: [0, 1, 2, 3], repeat: "repeat-all", gapless: false });
 
         await usePlayerStore.getState().next(true);
@@ -1256,7 +1247,7 @@ describe("player store - buffering vs loading", () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
 
-    const playPromise = usePlayerStore.getState().play(track, () => "http://test/a");
+    const playPromise = usePlayerStore.getState().play(track);
     expect(usePlayerStore.getState().isBuffering).toBe(true);
 
     await playPromise;
@@ -1272,7 +1263,7 @@ describe("player store - buffering vs loading", () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
 
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
 
     const state = usePlayerStore.getState();
     expect(state.isLoading).toBe(false);
@@ -1282,7 +1273,7 @@ describe("player store - buffering vs loading", () => {
   it("buffer deadline force-stops with an error if position never advances past zero", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
     expect(usePlayerStore.getState().isBuffering).toBe(true);
 
     await vi.advanceTimersByTimeAsync(30000);
@@ -1296,7 +1287,7 @@ describe("player store - buffering vs loading", () => {
   it("buffer deadline does not fire if audio-format already cleared it", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
 
     emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
     await vi.advanceTimersByTimeAsync(30000);
@@ -1307,11 +1298,11 @@ describe("player store - buffering vs loading", () => {
   it("switching tracks clears the previous track's deadline instead of leaking a second timer", async () => {
     const trackA = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(trackA, () => "http://test/a");
+    await usePlayerStore.getState().play(trackA);
     const timersAfterA = vi.getTimerCount();
 
     const trackB = makeTrack("b");
-    await usePlayerStore.getState().play(trackB, () => "http://test/b");
+    await usePlayerStore.getState().play(trackB);
 
     // playTrack re-arms armBufferDeadline, which clears the previous timer first: switching
     // tracks must not leave trackA's deadline running alongside trackB's.
@@ -1324,22 +1315,79 @@ describe("player store - buffering vs loading", () => {
     expect(usePlayerStore.getState().currentTrack?.id).toBe("b");
   });
 
-  it("a track appended after a single-track play streams its own URL, not the first track's", async () => {
-    onInvoke("audio_play", () => Promise.resolve(undefined));
-    const streamUrlFor = (track: CurrentTrack) => `http://test/${track.id}`;
-    await usePlayerStore.getState().play(makeTrack("seed"), streamUrlFor);
+  describe("stream URLs come from the builder App registers, never from a caller", () => {
+    // next() debounces its load so rapid skips coalesce.
+    const NAV_DEBOUNCE_SETTLE_MS = 200;
 
-    const store = usePlayerStore.getState();
-    store.addToQueue(makeTrack("next"), store.streamUrlFor ?? streamUrlFor);
-    await usePlayerStore.getState().next();
+    function playedUrls(): unknown[] {
+      return vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === "audio_play")
+        .map(([, args]) => (args as { url: string }).url);
+    }
 
-    expect(usePlayerStore.getState().streamUrl).toBe("http://test/next");
+    beforeEach(() => {
+      onInvoke("audio_play", () => Promise.resolve(undefined));
+    });
+
+    it("a track appended after a single-track play streams its own URL, not the first track's", async () => {
+      await usePlayerStore.getState().play(makeTrack("seed"));
+      usePlayerStore.getState().addToQueue(makeTrack("next"));
+      await usePlayerStore.getState().next();
+      await vi.advanceTimersByTimeAsync(NAV_DEBOUNCE_SETTLE_MS);
+
+      expect(playedUrls()).toEqual(["http://test/seed", "http://test/next"]);
+    });
+
+    it("playQueue streams each track by its own id", async () => {
+      await usePlayerStore.getState().playQueue(makeTracks(3), 1);
+      await usePlayerStore.getState().next();
+      await vi.advanceTimersByTimeAsync(NAV_DEBOUNCE_SETTLE_MS);
+
+      expect(playedUrls()).toEqual(["http://test/1", "http://test/2"]);
+    });
+
+    it("a restored queue streams through the builder registered after it", () => {
+      usePlayerStore.setState({ streamUrlFor: null });
+      usePlayerStore.getState().restoreQueue(makeTracks(2), 1);
+      usePlayerStore.getState().setStreamUrlFor((track) => `http://later/${track.id}`);
+      usePlayerStore.getState().resume();
+
+      expect(playedUrls()).toEqual(["http://later/1"]);
+    });
+
+    it("radio tracks queued after the seed stream by their own id", async () => {
+      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [makeTrack("seed")] });
+      await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [makeTrack("pick")] });
+      await usePlayerStore.getState().next();
+      await vi.advanceTimersByTimeAsync(NAV_DEBOUNCE_SETTLE_MS);
+
+      expect(playedUrls()).toEqual(["http://test/seed", "http://test/pick"]);
+    });
+
+    it("a server switch mid-queue streams the next track from the new server", async () => {
+      await usePlayerStore.getState().playQueue(makeTracks(2));
+      usePlayerStore.getState().setStreamUrlFor((track) => `http://other/${track.id}`);
+      await usePlayerStore.getState().next();
+      await vi.advanceTimersByTimeAsync(NAV_DEBOUNCE_SETTLE_MS);
+
+      expect(playedUrls()).toEqual(["http://test/0", "http://other/1"]);
+    });
+
+    it("playing with no server connected says so instead of doing nothing", async () => {
+      usePlayerStore.setState({ streamUrlFor: null });
+      await usePlayerStore.getState().play(makeTrack("a"));
+
+      expect(playedUrls()).toEqual([]);
+      expect(usePlayerStore.getState().currentTrack?.id).toBe("a");
+      expect(usePlayerStore.getState().error?.message).toMatch(/server/i);
+    });
   });
 
   it("a successful audio-error retry re-arms isBuffering rather than leaving it stuck", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
     emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
     expect(usePlayerStore.getState().isBuffering).toBe(false);
 
@@ -1355,7 +1403,7 @@ describe("player store - buffering vs loading", () => {
   it("an exhausted, unretryable audio-error clears isBuffering and isLoading together", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
 
     emitTauriEvent("audio-error", { url: "http://test/a", message: "404 not found", retryable: false });
 
@@ -1368,7 +1416,7 @@ describe("player store - buffering vs loading", () => {
   it("names a stale track id as the cause when the stream failed with Subsonic error 70", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
 
     emitTauriEvent("audio-error", {
       url: "http://test/a",
@@ -1386,7 +1434,7 @@ describe("player store - buffering vs loading", () => {
   it("leaves the cause unnamed for a stream failure that is not a stale id", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, () => "http://test/a");
+    await usePlayerStore.getState().play(track);
 
     emitTauriEvent("audio-error", {
       url: "http://test/a",
@@ -1400,11 +1448,11 @@ describe("player store - buffering vs loading", () => {
 
   it("drops a named cause when the next track starts", async () => {
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(makeTrack("a"), () => "http://test/a");
+    await usePlayerStore.getState().play(makeTrack("a"));
     emitTauriEvent("audio-error", { url: "http://test/a", message: "gone", retryable: false, subsonicCode: 70 });
     expect(usePlayerStore.getState().error?.cause).toBe("stale-track-id");
 
-    await usePlayerStore.getState().play(makeTrack("b"), () => "http://test/b");
+    await usePlayerStore.getState().play(makeTrack("b"));
 
     expect(usePlayerStore.getState().error).toBeNull();
   });
@@ -1424,7 +1472,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
   it("does not prefetch upcoming tracks' waveforms from play()/playQueue() itself", async () => {
     const tracks = makeWfTracks(3);
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
 
     // fetchWaveform (the *current* track's own waveform) is allowed to have fired here; what must
     // not have happened yet is the next-tracks prefetch pass, which only the ticker triggers.
@@ -1437,7 +1485,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
   it("prefetches offsets 1 and 2 ahead once the ticker observes a non-zero position", async () => {
     const tracks = makeWfTracks(3);
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
 
     onInvoke("audio_get_pos", () => Promise.resolve(1));
     await vi.advanceTimersByTimeAsync(200);
@@ -1451,7 +1499,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
   it("does not re-run the prefetch pass on a second tick for the same track (pause/resume)", async () => {
     const tracks = makeWfTracks(3);
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
 
     onInvoke("audio_get_pos", () => Promise.resolve(1));
     await vi.advanceTimersByTimeAsync(200);
@@ -1472,7 +1520,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
           : Promise.resolve([]),
     });
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
 
     onInvoke("audio_get_pos", () => Promise.resolve(1));
     await vi.advanceTimersByTimeAsync(200);
@@ -1491,7 +1539,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
     });
     const tracks = makeWfTracks(3);
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
 
     onInvoke("audio_get_pos", () => Promise.resolve(1));
     await vi.advanceTimersByTimeAsync(200);
@@ -1611,7 +1659,7 @@ describe("player store - sleep timer", () => {
   });
 
   it("clearSleepTimer does not touch an unrelated in-flight gapless enqueue", async () => {
-    await usePlayerStore.getState().playQueue(makeTracks(2), streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(makeTracks(2), 0);
     usePlayerStore.setState({ gapless: true });
     onInvoke("audio_get_pos", () => Promise.resolve(ENQUEUE_POS));
     onInvoke("audio_enqueue_next", () => Promise.resolve(undefined));
@@ -2102,9 +2150,7 @@ describe("player store - startRadioFrom", () => {
     usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: makeTrack("1"), isPlaying: true });
     const seed = makeTrack("seed");
 
-    await usePlayerStore
-      .getState()
-      .startRadioFrom("replace", { tracks: [seed], streamUrlFor, mode: "same-genre", label: "Rock" });
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [seed], mode: "same-genre", label: "Rock" });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["seed"]);
@@ -2122,7 +2168,7 @@ describe("player store - startRadioFrom", () => {
     usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
     const seed = makeTrack("seed");
 
-    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed], streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed] });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["0", "1", "2", "seed"]);
@@ -2138,7 +2184,7 @@ describe("player store - startRadioFrom", () => {
     onInvoke("audio_play", () => Promise.resolve(undefined));
     const seed = makeTrack("seed");
 
-    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed], streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed] });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["seed"]);
@@ -2152,7 +2198,7 @@ describe("player store - startRadioFrom", () => {
     usePlayerStore.setState({ queue: makeTracks(5), queueIndex: 3, currentTrack: null, maxQueueSize: 5 });
     const tracks = [makeTrack("r1"), makeTrack("r2"), makeTrack("r3")];
 
-    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks });
 
     expect(usePlayerStore.getState().currentTrack?.id).toBe("r1");
   });
@@ -2162,14 +2208,14 @@ describe("player store - startRadioFrom", () => {
     usePlayerStore.setState({ queue: makeTracks(2), queueIndex: 0, currentTrack: makeTrack("0"), isPlaying: true });
     const tracks = [makeTrack("g1"), makeTrack("g2")];
 
-    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, seed: tracks[1], streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, seed: tracks[1] });
 
     expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["0", "1", "g1", "g2"]);
     expect(usePlayerStore.getState().radioSeed?.id).toBe("g2");
   });
 
   it("does nothing without tracks or a seed", async () => {
-    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [] });
 
     expect(usePlayerStore.getState().radioActive).toBe(false);
     expect(audioPlayCount()).toBe(0);
@@ -2179,7 +2225,7 @@ describe("player store - startRadioFrom", () => {
     const current = makeTrack("1");
     usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
 
-    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: current, streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: current });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["1"]);
@@ -2202,7 +2248,7 @@ describe("player store - startRadioFrom", () => {
       isPlaying: true,
     });
 
-    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: tracks[0]!, streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: tracks[0]! });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["0"]);
@@ -2214,7 +2260,7 @@ describe("player store - startRadioFrom", () => {
     const current = makeTrack("1");
     usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
 
-    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [], seed: current, streamUrlFor });
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [], seed: current });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["0", "1", "2"]);
@@ -2227,7 +2273,7 @@ describe("player store - startRadioFrom", () => {
 describe("player store - quit flush", () => {
   it("writes a queue edit still waiting on its debounce before quit finishes", async () => {
     const db = mockDb();
-    usePlayerStore.getState().addToQueue(makeTrack("late"), streamUrlFor);
+    usePlayerStore.getState().addToQueue(makeTrack("late"));
     expect(db.execute).not.toHaveBeenCalled();
 
     await runQuitFlushes(1000);

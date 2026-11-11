@@ -27,7 +27,6 @@ import { extractAccent } from "../lib/artColor";
 import { mostPlayedHere } from "../lib/artistRanking";
 import { plural } from "../lib/plural";
 import { shuffleArray } from "../lib/shuffle";
-import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
@@ -210,8 +209,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server), [server, credential]);
 
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
-
   const handleAlbumClick = useCallback(
     (albumId: string) => {
       const album = albums?.find((a) => a.id === albumId) ?? appearsOnAlbums?.find((a) => a.id === albumId);
@@ -224,27 +221,27 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     (track: TopTrack) => {
       if (!topTracks.length) return;
       const startIndex = topTracks.findIndex((t) => t.id === track.id);
-      playQueue(topTracks.map(toTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+      playQueue(topTracks.map(toTrackObj), startIndex >= 0 ? startIndex : 0);
     },
-    [topTracks, playQueue, streamUrlFor],
+    [topTracks, playQueue],
   );
 
   function handlePlayAll() {
     if (!topTracks.length) return;
-    playQueue(topTracks.map(toTrackObj), streamUrlFor, 0);
+    playQueue(topTracks.map(toTrackObj), 0);
   }
 
   function handleShuffleAll() {
     if (!topTracks.length) return;
     const shuffled = shuffleArray(topTracks);
-    playQueue(shuffled.map(toTrackObj), streamUrlFor, 0);
+    playQueue(shuffled.map(toTrackObj), 0);
   }
 
   function handleStartRadio() {
     const seed = topTracks[0];
     if (!seed) return;
     const track = toTrackObj(seed);
-    void startRadio({ tracks: [track], streamUrlFor });
+    void startRadio({ tracks: [track] });
   }
 
   const handleTrackContextMenu = useCallback((e: React.MouseEvent, track: TopTrack) => {
@@ -628,7 +625,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              playNext(toTrackObj(contextMenu.track), streamUrlFor);
+              playNext(toTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -636,7 +633,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              addToQueue(toTrackObj(contextMenu.track), streamUrlFor);
+              addToQueue(toTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -645,7 +642,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = toTrackObj(contextMenu.track);
-              void startRadio({ tracks: [track], streamUrlFor, mode });
+              void startRadio({ tracks: [track], mode });
               setContextMenu(null);
             }}
           />

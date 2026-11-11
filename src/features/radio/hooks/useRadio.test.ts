@@ -141,7 +141,7 @@ describe("useRadio auto-advance", () => {
       isLoading: false,
       streamUrlFor: () => "http://stream",
       playFromQueueIndex: playFromQueueIndex as unknown as (i: number) => Promise<void>,
-      addToQueue: addToQueue as unknown as (t: CurrentTrack, f: (t: CurrentTrack) => string) => void,
+      addToQueue: addToQueue as unknown as (t: CurrentTrack) => void,
     });
   });
 

@@ -37,7 +37,7 @@ export function createQueueActions(
   return {
     // Seeds the queue from a saved session without starting playback: playQueue calls playTrack,
     // which used to fetch a whole track at startup and race a pause() against it. resume() routes a first play through retryCurrent instead.
-    restoreQueue: (tracks, streamUrlFn, position) => {
+    restoreQueue: (tracks, position) => {
       if (tracks.length === 0) return;
       const clamped = Math.max(0, Math.min(position, tracks.length - 1));
       set({
@@ -47,7 +47,6 @@ export function createQueueActions(
         isShuffled: false,
         currentTrack: tracks[clamped] ?? null,
         streamUrl: null,
-        streamUrlFor: streamUrlFn,
         isPlaying: false,
         elapsed: 0,
       });
@@ -102,19 +101,19 @@ export function createQueueActions(
       void persistQueueState();
     },
 
-    addToQueue: (track, streamUrlFn) => {
-      get().addManyToQueue([track], streamUrlFn);
+    addToQueue: (track) => {
+      get().addManyToQueue([track]);
     },
 
-    playNext: (track, streamUrlFn) => {
-      get().playNextMany([track], streamUrlFn);
+    playNext: (track) => {
+      get().playNextMany([track]);
     },
 
     // Batch appends commit once; looping the single-track action per track fired one re-render
     // and queue copy each, so a 20-track album used to fire 20 passes.
-    addManyToQueue: (tracks, streamUrlFn) => {
+    addManyToQueue: (tracks) => {
       if (tracks.length === 0) return;
-      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor, maxQueueSize } = get();
+      const { queue, queueIndex, isShuffled, shuffleOrder, maxQueueSize } = get();
       const newQueue = [...queue, ...tracks];
       let newOrder: number[] = [];
       if (isShuffled) {
@@ -126,15 +125,14 @@ export function createQueueActions(
         queue: trimmed?.queue ?? newQueue,
         ...(isShuffled ? { shuffleOrder: trimmed?.shuffleOrder ?? newOrder } : {}),
         ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
-        streamUrlFor: streamUrlFn ?? streamUrlFor,
       });
       withdrawGaplessHandOffIfNotNext(get());
       void persistQueueState();
     },
 
-    playNextMany: (tracks, streamUrlFn) => {
+    playNextMany: (tracks) => {
       if (tracks.length === 0) return;
-      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor, maxQueueSize } = get();
+      const { queue, queueIndex, isShuffled, shuffleOrder, maxQueueSize } = get();
       let newQueue: CurrentTrack[];
       let newOrder: number[] = [];
       if (isShuffled) {
@@ -150,14 +148,13 @@ export function createQueueActions(
         queue: trimmed?.queue ?? newQueue,
         ...(isShuffled ? { shuffleOrder: trimmed?.shuffleOrder ?? newOrder } : {}),
         ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
-        streamUrlFor: streamUrlFn ?? streamUrlFor,
       });
       withdrawGaplessHandOffIfNotNext(get());
       void persistQueueState();
     },
 
     removeFromQueue: async (position) => {
-      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+      const { queue, queueIndex, isShuffled, shuffleOrder } = get();
       if (position < 0 || position >= queue.length) return;
 
       let newQueue: CurrentTrack[];
@@ -181,9 +178,9 @@ export function createQueueActions(
       if (position === queueIndex) {
         // Removing currently playing track, play what's now at that position or stop
         set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
-        if (newQueueIndex < newQueue.length && streamUrlFor) {
+        if (newQueueIndex < newQueue.length) {
           const nextTrack = resolveTrack(newQueue, newShuffleOrder, isShuffled, newQueueIndex);
-          if (nextTrack) await playTrack(nextTrack, streamUrlFor(nextTrack));
+          if (nextTrack) await playTrack(nextTrack);
         } else {
           get().stop();
         }
@@ -198,7 +195,7 @@ export function createQueueActions(
 
     removeManyFromQueue: async (positions: number[]) => {
       if (positions.length === 0) return;
-      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+      const { queue, queueIndex, isShuffled, shuffleOrder } = get();
 
       // Sort descending so we remove high indices first, avoids index drift
       const sorted = [...new Set(positions)].sort((a, b) => b - a);
@@ -227,9 +224,9 @@ export function createQueueActions(
       set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
 
       if (removedCurrentTrack) {
-        if (newQueue.length > 0 && streamUrlFor) {
+        if (newQueue.length > 0) {
           const next = resolveTrack(newQueue, newShuffleOrder, isShuffled, newQueueIndex);
-          if (next) await playTrack(next, streamUrlFor(next));
+          if (next) await playTrack(next);
         } else {
           get().stop();
         }
@@ -284,11 +281,11 @@ export function createQueueActions(
     },
 
     playFromQueueIndex: async (position: number) => {
-      const { queue, streamUrlFor, isShuffled, shuffleOrder } = get();
-      if (position < 0 || position >= queue.length || !streamUrlFor) return;
+      const { queue, isShuffled, shuffleOrder } = get();
+      if (position < 0 || position >= queue.length) return;
       set({ queueIndex: position });
       const track = resolveTrack(queue, shuffleOrder, isShuffled, position);
-      if (track) await playTrack(track, streamUrlFor(track));
+      if (track) await playTrack(track);
       void persistQueueState();
     },
 

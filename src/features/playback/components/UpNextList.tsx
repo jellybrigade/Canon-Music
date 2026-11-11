@@ -180,10 +180,9 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
           <StartRadioSubmenu
             onSelect={(mode) => {
               if (menuTrack) {
-                void playFromQueueIndex(upNextMenu.position).then(() => {
-                  const { streamUrlFor } = usePlayerStore.getState();
-                  if (streamUrlFor) return startRadio({ tracks: [], seed: menuTrack, streamUrlFor, mode });
-                });
+                void playFromQueueIndex(upNextMenu.position).then(() =>
+                  startRadio({ tracks: [], seed: menuTrack, mode }),
+                );
               }
               setUpNextMenu(null);
             }}

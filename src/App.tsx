@@ -23,13 +23,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
-import {
-  getCoverArtUrl,
-  getStreamUrl,
-  initCoverServer,
-  setStreamMaxBitrate,
-  updateCoverProxyConfig,
-} from "./clients/navidromeUrls";
+import { getCoverArtUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
 import { getDb } from "./db";
 import { useDiscogsLookups } from "./features/albumFacts/hooks/useDiscogsLookups";
 import { loadCoverOverrides } from "./features/covers/albumCoverOverrides";
@@ -346,11 +340,7 @@ export default function App() {
 
   useEffect(() => {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
-    setStreamUrlFor((track) => {
-      const navTrackId = track.id.slice(srv.id.length + 1);
-      return getStreamUrl(srv.url, srv.username, credential, navTrackId);
-    });
+    setStreamUrlFor(makeStreamUrlBuilder(serverWithCred.server, serverWithCred.credential));
   }, [serverWithCred, setStreamUrlFor]);
 
   useTrackAccent();
@@ -367,7 +357,7 @@ export default function App() {
 
   async function handlePlayTrack(trackId: string) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
+    const { server: srv } = serverWithCred;
     const db = await getDb();
     const rows = await db.select<PlayableTrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id, ${REPLAY_GAIN_COLUMNS},
@@ -379,7 +369,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    await play(currentTrackFromRow(t, srv), makeStreamUrlBuilder(srv, credential));
+    await play(currentTrackFromRow(t, srv));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -409,7 +399,7 @@ export default function App() {
       albumId: album.id,
       replayGain: replayGainFromRow(t),
     };
-    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
+    await startRadio({ tracks: [track], mode });
   }
 
   async function handleAddAlbumToQueue(album: AlbumRow) {
@@ -417,7 +407,6 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     const rows = await loadAlbumTracksForPlay(srv, credential, album);
     const coverArtUrl = album.artwork_url ? getCoverArtUrl(srv.id, album.artwork_url, 64) : null;
-    const streamUrlFor = makeStreamUrlBuilder(srv, credential);
     for (const t of rows) {
       const track = {
         id: t.id,
@@ -430,19 +419,18 @@ export default function App() {
         albumId: album.id,
         replayGain: replayGainFromRow(t),
       };
-      addToQueue(track, streamUrlFor);
+      addToQueue(track);
     }
   }
 
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
+    const { server: srv } = serverWithCred;
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
     const tracks = rows.map((t) => currentTrackFromRow(t, srv));
     await startRadio({
       tracks,
-      streamUrlFor: makeStreamUrlBuilder(srv, credential),
       mode: "same-genre",
       label: genreLabel,
     });
@@ -450,11 +438,11 @@ export default function App() {
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
+    const { server: srv } = serverWithCred;
     const t = await loadArtistSeedTrack(srv.id, artist.name);
     if (!t) return;
     const track = currentTrackFromRow(t, srv);
-    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
+    await startRadio({ tracks: [track], mode });
   }
 
   // Resolve an album id to a full row, then open it. Used where callers only

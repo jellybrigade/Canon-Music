@@ -19,7 +19,6 @@ import { applyGenreMappings, useGenreMappings } from "../../hooks/useGenreDispla
 import { useLoved } from "../../hooks/useLoved";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { fileToScaledDataUri } from "../../lib/imageDataUri";
-import { makeStreamUrlBuilder } from "../../lib/track";
 import type { SortDirection } from "../../lib/trackSort";
 import type { PlaylistTrackRow } from "../../types/library";
 import { ContextMenu } from "../../ui/ContextMenu";
@@ -87,7 +86,7 @@ export function PlaylistDetail({
   onSelectAlbum,
   onSelectArtist,
 }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const { data: playlistTracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
   const [chosenSort, setChosenSort] = useState<PlaylistSort | null>(null);
   const sort = activePlaylistSort(chosenSort, playlist.id);
@@ -256,13 +255,11 @@ export function PlaylistDetail({
     };
   }
 
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
-
   function handlePlayTrack(track: PlaylistTrackRow) {
     if (!tracks) return;
     const startIndex = tracks.findIndex((t) => t.id === track.id && t.position === track.position);
     const idx = startIndex >= 0 ? startIndex : 0;
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, idx);
+    playQueue(tracks.map(buildTrackObj), idx);
     getDb()
       .then(async (db) => {
         await db.execute(
@@ -289,7 +286,7 @@ export function PlaylistDetail({
 
   function handlePlayAll() {
     if (!tracks || tracks.length === 0) return;
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, 0);
+    playQueue(tracks.map(buildTrackObj), 0);
   }
 
   async function handleRemoveTrack(track: PlaylistTrackRow) {
@@ -709,7 +706,7 @@ export function PlaylistDetail({
           </button>
           <button
             onClick={() => {
-              playNext(buildTrackObj(contextMenu.track), streamUrlFor);
+              playNext(buildTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -717,7 +714,7 @@ export function PlaylistDetail({
           </button>
           <button
             onClick={() => {
-              addToQueue(buildTrackObj(contextMenu.track), streamUrlFor);
+              addToQueue(buildTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -726,7 +723,7 @@ export function PlaylistDetail({
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = buildTrackObj(contextMenu.track);
-              void startRadio({ tracks: [track], streamUrlFor, mode });
+              void startRadio({ tracks: [track], mode });
               setContextMenu(null);
             }}
           />

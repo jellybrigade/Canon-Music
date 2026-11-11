@@ -19,7 +19,7 @@ import { RadioStartDialogHost } from "./RadioStartDialog";
 let db: FakeDatabase;
 const startRadioFrom = vi.fn(() => Promise.resolve());
 const seed: CurrentTrack = { id: "s", title: "Seed", artist: null, duration: 100 };
-const request = { tracks: [seed], streamUrlFor: (t: CurrentTrack) => t.id };
+const request = { tracks: [seed] };
 
 const dialog = () => document.querySelector(".radio-start-dialog");
 const button = (name: string) =>

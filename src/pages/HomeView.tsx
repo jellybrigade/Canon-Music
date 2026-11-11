@@ -23,7 +23,6 @@ import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import type { ForYouCategoryConfig } from "../lib/forYouGroups";
-import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { CanonIcon } from "../ui/CanonIcon";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
@@ -314,7 +313,6 @@ export function HomeView({
       };
       await startRadio({
         tracks: [track],
-        streamUrlFor: makeStreamUrlBuilder(server, credential),
         mode: "same-genre",
         label: genreLabel,
       });

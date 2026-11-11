@@ -5,7 +5,6 @@ import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { onQuit } from "../../../lib/quitFlush";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
-import { makeStreamUrlBuilder } from "../../../lib/track";
 import { usePlayerStore } from "../store/player";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
@@ -75,8 +74,6 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // would overwrite it. Whoever got there first wins.
       if (usePlayerStore.getState().currentTrack) return;
 
-      const streamUrlFor = makeStreamUrlBuilder(server, credential);
-
       const trackObjs = orderedTracks.map((r) => ({
         id: r.id,
         title: r.title,
@@ -95,7 +92,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // Seeds the queue only. Loading the track here would download and decode it at startup
       // for playback the user never asked for, and the pause that followed had to win a race
       // against the download thread appending to the sink.
-      restoreQueue(trackObjs, streamUrlFor, startIndex >= 0 ? startIndex : 0);
+      restoreQueue(trackObjs, startIndex >= 0 ? startIndex : 0);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverWithCred?.server.id]);

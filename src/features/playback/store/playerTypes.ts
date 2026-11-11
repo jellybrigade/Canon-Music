@@ -83,7 +83,6 @@ export type RadioStartAction = "replace" | "queue_last";
 
 export interface RadioStartRequest {
   tracks: CurrentTrack[];
-  streamUrlFor: (t: CurrentTrack) => string;
   // Defaults to the first of `tracks`. A genre play queues many tracks but seeds from one;
   // radio started from the playing track queues nothing and passes only the seed.
   seed?: CurrentTrack;
@@ -171,9 +170,9 @@ export interface PlayerState {
   scanRenderers: () => Promise<void>;
   setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
 
-  play: (track: CurrentTrack, streamUrlFor: (t: CurrentTrack) => string) => Promise<void>;
-  playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
-  restoreQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, position: number) => void;
+  play: (track: CurrentTrack) => Promise<void>;
+  playQueue: (tracks: CurrentTrack[], startIndex?: number) => Promise<void>;
+  restoreQueue: (tracks: CurrentTrack[], position: number) => void;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
   prev: () => Promise<void>;
   pause: () => void;
@@ -199,10 +198,10 @@ export interface PlayerState {
   toggleGapless: () => Promise<void>;
   toggleRadioOnQueueEnd: () => Promise<void>;
   loadSettings: () => Promise<void>;
-  addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
-  playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
-  addManyToQueue: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
-  playNextMany: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
+  addToQueue: (track: CurrentTrack) => void;
+  playNext: (track: CurrentTrack) => void;
+  addManyToQueue: (tracks: CurrentTrack[]) => void;
+  playNextMany: (tracks: CurrentTrack[]) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
   removeManyFromQueue: (positions: number[]) => Promise<void>;

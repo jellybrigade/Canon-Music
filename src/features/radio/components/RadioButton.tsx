@@ -11,7 +11,7 @@ export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
   const radioSeedTitle = usePlayerStore((s) => s.radioSeed?.title ?? null);
   const radioMode = usePlayerStore((s) => s.radioMode);
   const radioLabel = usePlayerStore((s) => s.radioLabel);
-  const hasTrack = usePlayerStore((s) => s.currentTrack !== null && s.streamUrlFor !== null);
+  const hasTrack = usePlayerStore((s) => s.currentTrack !== null);
   const setRadioActive = usePlayerStore((s) => s.setRadioActive);
   const setRadioMode = usePlayerStore((s) => s.setRadioMode);
   const startRadio = useStartRadio();
@@ -26,9 +26,9 @@ export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
       setRadioMode(mode);
       return;
     }
-    const { currentTrack, streamUrlFor } = usePlayerStore.getState();
-    if (!currentTrack || !streamUrlFor) return;
-    void startRadio({ tracks: [], seed: currentTrack, streamUrlFor, mode });
+    const { currentTrack } = usePlayerStore.getState();
+    if (!currentTrack) return;
+    void startRadio({ tracks: [], seed: currentTrack, mode });
   }
 
   const modeLabel = RADIO_MODES.find((m) => m.mode === radioMode)?.label ?? "Radio";
