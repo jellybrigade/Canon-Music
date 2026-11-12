@@ -12,10 +12,7 @@ mod streaming;
 mod tray;
 mod upnp;
 use audio::{AudioState, PosTracker};
-use cover::{
-    cover_error_response, handle_cover_request, CoverState, ImageCache, COVER_CACHE_DIR,
-    MAX_COVER_REQUESTS,
-};
+use cover::{serve_cover_request, CoverState, ImageCache, COVER_CACHE_DIR, MAX_COVER_REQUESTS};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -135,14 +132,7 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("cover", |ctx, request, responder| {
             let state = ctx.app_handle().state::<CoverState>().inner().clone();
             tauri::async_runtime::spawn(async move {
-                let permit = state.request_sem.clone().acquire_owned().await;
-                let response = tauri::async_runtime::spawn_blocking(move || {
-                    let _permit = permit;
-                    handle_cover_request(&state, &request)
-                })
-                .await
-                .unwrap_or_else(|_| cover_error_response(500));
-                responder.respond(response);
+                responder.respond(serve_cover_request(state, Arc::new(request)).await);
             });
         })
         .plugin(tauri_plugin_http::init())
