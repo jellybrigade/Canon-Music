@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
-import { type NavidromeCredential, normalizeUrl } from "../../../clients/navidromeUrls";
+import { fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
+import { normalizeUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import { useCredentialRejected } from "../../../hooks/useCredentialRejected";
 import type { ServerWithCredential } from "../../../hooks/useServer";
@@ -11,12 +11,9 @@ import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import { forgetAnsweringRoute } from "../../../lib/transportHealth";
 import type { Server as ServerRow } from "../../../types/server";
-import { loginFailureMessage } from "../../setup/loginFailureMessage";
+import { type AuthMethod, type ConnectionFields, useConnectionTest } from "../../setup/useConnectionTest";
 import type { SyncOptions } from "../../sync/sync";
 import { purgeServerData } from "../../sync/syncPrune";
-
-type TestState = "idle" | "testing" | "ok" | "error";
-type AuthMethod = "password" | "apikey";
 
 interface Props {
   server: ServerRow | undefined;
@@ -40,16 +37,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
   const [editPassword, setEditPassword] = useState("");
   const [editApiKey, setEditApiKey] = useState("");
   const [editAuthMethod, setEditAuthMethod] = useState<AuthMethod>("password");
-  const [serverTestState, setServerTestState] = useState<TestState>("idle");
-  const [serverTestError, setServerTestError] = useState("");
-  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{
-    url: string;
-    username: string;
-    password: string;
-    apiKey: string;
-    authMethod: AuthMethod;
-  } | null>(null);
-  const [serverTestedCredential, setServerTestedCredential] = useState<NavidromeCredential | null>(null);
+  const connectionTest = useConnectionTest();
   const [serverSaving, setServerSaving] = useState(false);
   const [serverSaveError, setServerSaveError] = useState("");
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -72,10 +60,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     // credential's own shape is the only source for it. Without this an API-key
     // user lands on the Password tab every time they open Edit.
     setEditAuthMethod(serverWithCredential?.credential.type === "apikey" ? "apikey" : "password");
-    setServerTestState("idle");
-    setServerTestError("");
-    setServerTestedSnapshot(null);
-    setServerTestedCredential(null);
+    connectionTest.reset();
     setServerSaveError("");
     setServerEditing(true);
   }
@@ -88,56 +73,31 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     } else if (key === "username") setEditUsername(v);
     else if (key === "apiKey") setEditApiKey(v);
     else setEditPassword(v);
-    setServerTestState("idle");
-    setServerTestedSnapshot(null);
-    setServerTestedCredential(null);
+    connectionTest.reset();
   }
 
   function handleEditAuthMethodChange(m: AuthMethod) {
     setEditAuthMethod(m);
-    setServerTestState("idle");
-    setServerTestedSnapshot(null);
-    setServerTestedCredential(null);
+    connectionTest.reset();
   }
 
-  async function handleServerTest() {
-    setServerTestState("testing");
-    setServerTestError("");
-    try {
-      const cred =
-        editAuthMethod === "apikey"
-          ? await authenticateWithApiKey(editUrl, editUsername, editApiKey)
-          : await authenticate(editUrl, editUsername, editPassword);
-      setServerTestState("ok");
-      setServerTestedSnapshot({
-        url: editUrl,
-        username: editUsername,
-        password: editPassword,
-        apiKey: editApiKey,
-        authMethod: editAuthMethod,
-      });
-      setServerTestedCredential(cred);
-    } catch (err) {
-      setServerTestState("error");
-      setServerTestError(loginFailureMessage(err, editAuthMethod));
-    }
-  }
-
-  const serverSnapshotMatch =
-    serverTestedSnapshot !== null &&
-    serverTestedSnapshot.url === editUrl &&
-    serverTestedSnapshot.username === editUsername &&
-    serverTestedSnapshot.authMethod === editAuthMethod &&
-    (editAuthMethod === "apikey"
-      ? serverTestedSnapshot.apiKey === editApiKey
-      : serverTestedSnapshot.password === editPassword);
+  const editFields: ConnectionFields = {
+    url: editUrl,
+    username: editUsername,
+    password: editPassword,
+    apiKey: editApiKey,
+    authMethod: editAuthMethod,
+  };
+  const serverSnapshotMatch = connectionTest.isTested(editFields);
+  const alternateResult = connectionTest.alternateFor(editAltUrl);
+  const serverTestedCredential = connectionTest.testedCredential;
 
   const canTestServer =
     editUrl.trim() !== "" &&
     editUsername.trim() !== "" &&
     (editAuthMethod === "apikey" ? editApiKey.trim() !== "" : editPassword.trim() !== "");
   const canSaveServer =
-    serverTestState === "ok" && serverSnapshotMatch && editDisplayName.trim() !== "" && !serverSaving;
+    connectionTest.state === "ok" && serverSnapshotMatch && editDisplayName.trim() !== "" && !serverSaving;
 
   async function handleSaveServer() {
     if (!serverTestedCredential) return;
@@ -345,9 +305,14 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
               />
             </label>
           )}
-          {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
-          {serverTestState === "ok" && serverSnapshotMatch && (
+          {connectionTest.state === "error" && <p className="settings-error">{connectionTest.error}</p>}
+          {connectionTest.state === "ok" && serverSnapshotMatch && (
             <p className="settings-success">Connection successful.</p>
+          )}
+          {alternateResult?.state === "testing" && <p className="settings-hint">Checking alternate URL…</p>}
+          {alternateResult?.state === "ok" && <p className="settings-success">Alternate URL answered.</p>}
+          {alternateResult?.state === "error" && (
+            <p className="settings-error">Alternate URL didn't answer: {alternateResult.error}</p>
           )}
           {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
           <div className="settings-field--row">
@@ -357,11 +322,11 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
             <button
               className="settings-btn"
               onClick={() => {
-                void handleServerTest();
+                void connectionTest.run(editFields, editAltUrl);
               }}
-              disabled={!canTestServer || serverTestState === "testing"}
+              disabled={!canTestServer || connectionTest.state === "testing"}
             >
-              {serverTestState === "testing" ? "Testing…" : "Test connection"}
+              {connectionTest.state === "testing" ? "Testing…" : "Test connection"}
             </button>
             <button
               className="settings-btn primary"

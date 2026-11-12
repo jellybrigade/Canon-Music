@@ -2,8 +2,6 @@ import { AlertCircle, CheckCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import { getFanartApiKey, setFanartApiKey } from "../../clients/fanart";
 import { getApiKey as loadLastfmApiKey, setApiKey as setLastfmApiKey } from "../../clients/lastfm";
-import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { useApiKeyField } from "../../hooks/useApiKeyField";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
@@ -12,7 +10,7 @@ import type { Server } from "../../types/server";
 import { CanonIcon } from "../../ui/CanonIcon";
 import { SettingRow } from "../settings/components/SettingRow";
 import { importSettingsFile } from "../settings/lib/settingsBackup";
-import { loginFailureMessage } from "./loginFailureMessage";
+import { type AuthMethod, type ConnectionFields, useConnectionTest } from "./useConnectionTest";
 import "../settings/components/SettingsView.css";
 import "./Wizard.css";
 import { errorMessage } from "../../lib/errorMessage";
@@ -22,16 +20,6 @@ interface Props {
 }
 
 type Step = 1 | 2 | 3 | 4;
-type TestState = "idle" | "testing" | "ok" | "error";
-type AuthMethod = "password" | "apikey";
-
-interface ConnectionFields {
-  url: string;
-  username: string;
-  password: string;
-  apiKey: string;
-  authMethod: AuthMethod;
-}
 
 function hostnameFrom(url: string): string {
   try {
@@ -51,10 +39,7 @@ export function Wizard({ onSuccess }: Props) {
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
-  const [testState, setTestState] = useState<TestState>("idle");
-  const [testError, setTestError] = useState("");
-  const [testedSnapshot, setTestedSnapshot] = useState<ConnectionFields | null>(null);
-  const [testedCredential, setTestedCredential] = useState<NavidromeCredential | null>(null);
+  const connectionTest = useConnectionTest();
 
   const [altUrl, setAltUrl] = useState("");
 
@@ -82,11 +67,7 @@ export function Wizard({ onSuccess }: Props) {
 
   function handleUrlChange(v: string) {
     setUrl(v);
-    if (testState !== "idle") {
-      setTestState("idle");
-      setTestedSnapshot(null);
-      setTestedCredential(null);
-    }
+    connectionTest.reset();
     if (!displayName) {
       const h = hostnameFrom(v);
       if (h) setDisplayName(h);
@@ -97,49 +78,24 @@ export function Wizard({ onSuccess }: Props) {
     if (key === "username") setUsername(v);
     else if (key === "apiKey") setApiKey(v);
     else setPassword(v);
-    if (testState !== "idle") {
-      setTestState("idle");
-      setTestedSnapshot(null);
-      setTestedCredential(null);
-    }
+    connectionTest.reset();
   }
 
   function handleAuthMethodChange(m: AuthMethod) {
     setAuthMethod(m);
-    setTestState("idle");
-    setTestedSnapshot(null);
-    setTestedCredential(null);
+    connectionTest.reset();
   }
 
-  async function handleTest() {
-    setTestState("testing");
-    setTestError("");
-    try {
-      const credential =
-        authMethod === "apikey"
-          ? await authenticateWithApiKey(url, username, apiKey)
-          : await authenticate(url, username, password);
-      setTestState("ok");
-      setTestedSnapshot({ url, username, password, apiKey, authMethod });
-      setTestedCredential(credential);
-    } catch (err) {
-      setTestState("error");
-      setTestError(loginFailureMessage(err, authMethod));
-    }
-  }
-
-  const snapshotMatch =
-    testedSnapshot !== null &&
-    testedSnapshot.url === url &&
-    testedSnapshot.username === username &&
-    testedSnapshot.authMethod === authMethod &&
-    (authMethod === "apikey" ? testedSnapshot.apiKey === apiKey : testedSnapshot.password === password);
+  const fields: ConnectionFields = { url, username, password, apiKey, authMethod };
+  const snapshotMatch = connectionTest.isTested(fields);
+  const alternateResult = connectionTest.alternateFor(altUrl);
+  const testedCredential = connectionTest.testedCredential;
 
   const canTest =
     url.trim() !== "" &&
     username.trim() !== "" &&
     (authMethod === "apikey" ? apiKey.trim() !== "" : password.trim() !== "");
-  const step2Complete = testState === "ok" && snapshotMatch && displayName.trim() !== "";
+  const step2Complete = connectionTest.state === "ok" && snapshotMatch && displayName.trim() !== "";
 
   async function handleFinish() {
     if (!testedCredential) return;
@@ -290,16 +246,29 @@ export function Wizard({ onSuccess }: Props) {
                 />
               </label>
 
-              {testState === "error" && (
+              {connectionTest.state === "error" && (
                 <p className="wizard-feedback wizard-feedback--error">
                   <AlertCircle size={14} />
-                  {testError}
+                  {connectionTest.error}
                 </p>
               )}
-              {testState === "ok" && snapshotMatch && (
+              {connectionTest.state === "ok" && snapshotMatch && (
                 <p className="wizard-feedback wizard-feedback--success">
                   <CheckCircle size={14} />
                   Connection successful.
+                </p>
+              )}
+              {alternateResult?.state === "testing" && <p className="wizard-feedback">Checking alternate URL…</p>}
+              {alternateResult?.state === "ok" && (
+                <p className="wizard-feedback wizard-feedback--success">
+                  <CheckCircle size={14} />
+                  Alternate URL answered.
+                </p>
+              )}
+              {alternateResult?.state === "error" && (
+                <p className="wizard-feedback wizard-feedback--error">
+                  <AlertCircle size={14} />
+                  Alternate URL didn't answer: {alternateResult.error}
                 </p>
               )}
 
@@ -307,11 +276,11 @@ export function Wizard({ onSuccess }: Props) {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleTest();
+                    void connectionTest.run(fields, altUrl);
                   }}
-                  disabled={!canTest || testState === "testing"}
+                  disabled={!canTest || connectionTest.state === "testing"}
                 >
-                  {testState === "testing" ? "Testing…" : "Test connection"}
+                  {connectionTest.state === "testing" ? "Testing…" : "Test connection"}
                 </button>
                 <button type="button" className="primary" onClick={() => setStep(3)} disabled={!step2Complete}>
                   Continue
