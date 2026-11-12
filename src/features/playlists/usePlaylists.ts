@@ -12,7 +12,9 @@ import {
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { executeBatched } from "../../lib/dbBatch";
+import { errorMessage } from "../../lib/errorMessage";
 import { stripServerPrefix } from "../../lib/ids";
+import { useDismissibleNoticeStore } from "../../store/dismissibleNotice";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import { buildSmartQuery, parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 
@@ -78,16 +80,19 @@ export function usePlaylists() {
     return s.rows && s.cachedTick === s.playlistsTick ? (s.rows as PlaylistRow[]) : undefined;
   });
   const [isFetching, setIsFetching] = useState(() => data === undefined);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const s = usePlaylistSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as PlaylistRow[]);
       setIsFetching(false);
+      setError(null);
       return;
     }
     let cancelled = false;
     setIsFetching(true);
+    setError(null);
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -98,10 +103,18 @@ export function usePlaylists() {
           usePlaylistSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
           setIsFetching(false);
+          setError(null);
         }
       } catch (err) {
         console.error("usePlaylists: failed to load playlists", err);
-        if (!cancelled) setIsFetching(false);
+        if (!cancelled) {
+          setIsFetching(false);
+          setError(errorMessage(err));
+          // The list keeps its last rows on screen and only shows an error in place of an empty one.
+          if (usePlaylistSessionStore.getState().rows) {
+            useDismissibleNoticeStore.getState().report(`Couldn't refresh your playlists: ${errorMessage(err)}`);
+          }
+        }
       }
     })();
     return () => {
@@ -289,6 +302,8 @@ export function usePlaylists() {
   return {
     data,
     isLoading: isFetching && data === undefined,
+    error,
+    retry: usePlaylistSessionStore.getState().bumpPlaylists,
     createPlaylist,
     deletePlaylist,
     addTrackToPlaylist,

@@ -58,6 +58,7 @@ import {
 } from "../../lib/trackCells";
 import { SortHeaderButton } from "../../ui/SortIndicator";
 import { useClickOutside } from "../../ui/useClickOutside";
+import { reportPlaylistFailure } from "./reportPlaylistFailure";
 
 const PLAYLIST_ROW_HEIGHT = 40;
 
@@ -214,7 +215,7 @@ export function PlaylistDetail({
     try {
       await onRename(playlist, trimmed, playlist.comment, serverWithCredential);
     } catch (e) {
-      console.error("Failed to rename playlist:", e);
+      reportPlaylistFailure(`Couldn't rename ${playlist.name}`, e);
       setNameValue(playlist.name);
     } finally {
       setSaving(false);
@@ -233,7 +234,7 @@ export function PlaylistDetail({
       await onRename(playlist, playlist.name, trimmed, serverWithCredential);
       setDescValue(trimmed ?? "");
     } catch (e) {
-      console.error("Failed to update playlist description:", e);
+      reportPlaylistFailure(`Couldn't change the description of ${playlist.name}`, e);
       setDescValue(playlist.comment ?? "");
     } finally {
       setSaving(false);
@@ -294,7 +295,7 @@ export function PlaylistDetail({
     try {
       await removeTrack(track.position, playlist, serverWithCredential);
     } catch (e) {
-      console.error("Failed to remove track from playlist:", e);
+      reportPlaylistFailure(`Couldn't remove ${track.title || "the track"} from ${playlist.name}`, e);
     }
     setContextMenu(null);
   }
@@ -304,7 +305,7 @@ export function PlaylistDetail({
     try {
       await onDelete();
     } catch (e) {
-      console.error("Failed to delete playlist:", e);
+      reportPlaylistFailure(`Couldn't delete ${playlist.name}`, e);
       setDeleting(false);
     }
   }
@@ -315,7 +316,7 @@ export function PlaylistDetail({
     try {
       await onRefreshSmart(playlist, serverWithCredential);
     } catch (e) {
-      console.error("Failed to refresh smart playlist:", e);
+      reportPlaylistFailure(`Couldn't refresh ${playlist.name}`, e);
     } finally {
       setRefreshingSmart(false);
     }
@@ -329,7 +330,7 @@ export function PlaylistDetail({
     if (!file || !onSetCustomCover) return;
     fileToScaledDataUri(file)
       .then((dataUri) => onSetCustomCover(playlist.id, dataUri))
-      .catch((err) => console.error("Failed to set playlist cover:", err));
+      .catch((err) => reportPlaylistFailure("Couldn't set the playlist cover", err));
   }
 
   const displayCoverUrl =

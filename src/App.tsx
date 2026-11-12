@@ -195,6 +195,8 @@ export default function App() {
   const { lovedAlbumIds } = useLoved();
   const {
     data: playlists,
+    error: playlistsError,
+    retry: retryPlaylists,
     createPlaylist,
     createSmartPlaylist,
     addAlbumToPlaylist,
@@ -529,6 +531,8 @@ export default function App() {
     genresError,
     retryGenres,
     playlists,
+    playlistsError,
+    retryPlaylists,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,

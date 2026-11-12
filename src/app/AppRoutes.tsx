@@ -71,6 +71,8 @@ export interface AppViewProps {
   genresError: string | null;
   retryGenres: () => void;
   playlists: PlaylistRow[] | undefined;
+  playlistsError: string | null;
+  retryPlaylists: () => void;
 
   // Library filters
   canonicalIdFilters: string[];
@@ -176,6 +178,8 @@ export function AppRoutes(props: AppViewProps) {
     allTracksLoading,
     allTracksError,
     playlists,
+    playlistsError,
+    retryPlaylists,
     setCanonicalIdFilters,
     syncStatus,
     syncError,
@@ -429,6 +433,8 @@ export function AppRoutes(props: AppViewProps) {
             {serverWithCred ? (
               <PlaylistList
                 playlists={playlists}
+                loadError={playlistsError}
+                onRetry={retryPlaylists}
                 serverWithCredential={serverWithCred}
                 onSelect={openPlaylist}
                 onCreatePlaylist={createPlaylist}

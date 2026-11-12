@@ -19,6 +19,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { useDismissibleNoticeStore } from "../../store/dismissibleNotice";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { createMigratedTestDb } from "../../test/sqlite";
@@ -42,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetTauriMocks();
   usePlaylistSessionStore.setState({ playlistsTick: 0, rows: undefined, cachedTick: -1 });
+  useDismissibleNoticeStore.setState({ notice: null });
 });
 
 afterEach(() => {
@@ -54,6 +56,47 @@ describe("usePlaylists", () => {
     const { result } = renderHook(() => usePlaylists());
     expect(result.current.isLoading).toBe(true);
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data).toEqual([playlist("p1")]);
+  });
+
+  // A failed read left the list undefined, which the page shows as loading, so it loaded forever.
+  it("reports a failed read and reads again on retry", async () => {
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.error).toBe("database is locked"));
+    expect(result.current.isLoading).toBe(false);
+
+    onInvoke("get_playlists", () => [playlist("p1")]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.data).toEqual([playlist("p1")]));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("shows loading, not the old error, while a retry reads again", async () => {
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.error).toBe("database is locked"));
+
+    onInvoke("get_playlists", () => new Promise(() => {}));
+    act(() => result.current.retry());
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it("says so when a refresh fails with playlists already on screen", async () => {
+    onInvoke("get_playlists", () => [playlist("p1")]);
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.data).toEqual([playlist("p1")]));
+
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    act(() => usePlaylistSessionStore.getState().bumpPlaylists());
+
+    await waitFor(() =>
+      expect(useDismissibleNoticeStore.getState().notice).toEqual({
+        message: "Couldn't refresh your playlists: database is locked",
+      }),
+    );
     expect(result.current.data).toEqual([playlist("p1")]);
   });
 
@@ -137,3 +180,4 @@ describe("adding to a playlist", () => {
     expect(rows.map((r) => r.track_id)).toEqual(["s1:t2", "s1:t1"]);
   });
 });
+
