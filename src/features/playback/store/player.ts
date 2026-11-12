@@ -96,7 +96,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // Restore local playback at the parked position.
         if (currentTrack && streamUrl) {
           try {
-            await runtime.activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
+            await runtime.activeTarget.load(streamUrl, currentTrack);
             if (elapsed > 0) await runtime.activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
             // load() starts audio on every target. Writing isPlaying: false without telling
@@ -139,7 +139,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (currentTrack && streamUrl) {
           try {
             set({ isLoading: true, isBuffering: true });
-            await runtime.activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
+            await runtime.activeTarget.load(streamUrl, currentTrack);
             if (elapsed > 0) await runtime.activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
             // avPlay ran inside load(), so a player that was paused has to be paused again

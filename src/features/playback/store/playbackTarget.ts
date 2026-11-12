@@ -6,6 +6,7 @@ import {
   avSeek,
   avStop,
   buildDidlMetadata,
+  castCoverArtUrl,
   setVolume as dlnaSetVolume,
   getPositionInfo,
   getTransportInfo,
@@ -25,7 +26,7 @@ const DLNA_UNKNOWN_DURATION_POLL_MS = 5000;
 const DLNA_MAX_CONSECUTIVE_FAILURES = 3;
 
 export interface PlaybackTarget {
-  load(url: string, track: CurrentTrack, coverArtUrl: string | null): Promise<void>;
+  load(url: string, track: CurrentTrack): Promise<void>;
   pause(fadeMs?: number): void;
   resume(fadeMs?: number): void;
   stop(): void;
@@ -34,7 +35,7 @@ export interface PlaybackTarget {
   getPosition(): Promise<number>;
   supportsVolume: boolean;
   supportsGapless: boolean;
-  setNext(url: string | null, track?: CurrentTrack, coverArtUrl?: string | null): Promise<void>;
+  setNext(url: string | null): Promise<void>;
   teardown(): void;
 }
 
@@ -145,9 +146,10 @@ export class DlnaTarget implements PlaybackTarget {
     return true;
   }
 
-  async load(url: string, track: CurrentTrack, coverArtUrl: string | null): Promise<void> {
+  async load(url: string, track: CurrentTrack): Promise<void> {
     this.clearTimers();
     const castUrl = this.rewriteUrl(url);
+    const coverArtUrl = castCoverArtUrl(castUrl, track.artworkRef);
     const metadata = buildDidlMetadata(track, castUrl, coverArtUrl, this.castMaxBitrate > 0);
     await setAvTransportUri(this.renderer.avTransportControlUrl, castUrl, metadata);
     await avPlay(this.renderer.avTransportControlUrl);

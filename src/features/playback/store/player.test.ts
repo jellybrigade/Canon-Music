@@ -2103,7 +2103,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     const localTarget = runtime.activeTarget;
     try {
       await usePlayerStore.getState().loadSettings();
-      await runtime.activeTarget.load("http://srv/rest/stream?id=1&maxBitRate=128", makeTrack("1"), null);
+      await runtime.activeTarget.load("http://srv/rest/stream?id=1&maxBitRate=128", makeTrack("1"));
       runtime.activeTarget.pause(0);
     } finally {
       runtime.activeTarget = localTarget;

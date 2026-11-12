@@ -217,7 +217,7 @@ export function createPlayerEngine(
               stallSince = null;
               if (streamUrl && currentTrack) {
                 void runtime.activeTarget
-                  .load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null)
+                  .load(streamUrl, currentTrack)
                   .then(() => {
                     if (get().streamUrl !== streamUrl) return;
                     // The stream is being fetched from scratch again, so the wait is real.
@@ -268,7 +268,7 @@ export function createPlayerEngine(
               // will never be heard, once per repetition. Warm the current URL instead: audio_play
               // consumes the prefetch cache, so the loop restarts instantly for the same bytes.
               if (!castDevice && currentTrack && streamUrl) {
-                void runtime.activeTarget.setNext(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
+                void runtime.activeTarget.setNext(streamUrl);
               }
             } else {
               // A repeat-all loop-back under shuffle installs a fresh order; the opening track is
@@ -299,7 +299,7 @@ export function createPlayerEngine(
                   // Skipped for a shuffled wrap: next() builds its own order when it gets there,
                   // so which track opens the new pass is not knowable yet and this would warm the
                   // wrong one.
-                  void runtime.activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
+                  void runtime.activeTarget.setNext(nextUrl);
                 }
                 // Nothing handed to a cast target ahead of time: it would advance on its own and
                 // Canon can't observe the transition (GetTransportInfo reads PLAYING across it).
@@ -438,7 +438,7 @@ export function createPlayerEngine(
       const { castDevice } = get();
       if (!castDevice) void setupAudioErrorListener(url);
       try {
-        await runtime.activeTarget.load(url, track, track.coverArtUrl ?? null);
+        await runtime.activeTarget.load(url, track);
         if (get().currentTrack?.id !== track.id) return;
         const paused = runtime.pauseRequestedDuringLoad;
         runtime.pauseRequestedDuringLoad = false;
