@@ -7,7 +7,8 @@ Read `instructions/what-to-do.md`. Then act based on what the user asked:
 
 **No args / "show":** Print the table only (not the detail sections).
 
-**"add [feature]":** Add a new row to the table. Ask for Type (Bugfix / QoL / Feature / Perf) and Priority (High / Medium / Low) if not provided. Also append a detail section at the bottom with what the user told you — describe the problem or desired outcome clearly, but do NOT include implementation suggestions, file names, or approach hints. The implementing agent will explore the codebase and figure out the how.
+**"add [feature]":** Add a new row to the table. Ask for Type (Bugfix / QoL / Feature / Perf) and Priority (High / Medium / Low) if not provided. Also append a detail section at the bottom with what the user told you — describe the problem or desired outcome clearly, but do NOT include implementation suggestions, file names, or approach hints. The implementing agent will explore the codebase and figure out the how. End the detail section with an `Outcome:` line: what the user sees or can do once it's done, in their words, from what they told you (don't ask extra questions for it). `/next` turns it into checkable `Done when` points.
+
 **"remove [feature]" / "done [feature]":** Delete the matching row from the table AND its detail section.
 
 **"prioritize [feature] [high/medium/low]":** Update the Priority cell in the table row. No other changes.
