@@ -13,10 +13,9 @@ import { getRadioCandidates } from "../lib/radio";
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
 
-// Artist/album repetition is penalized on a decay curve (recently played = near-zero
-// multiplier, fully recovered after N radio picks) rather than a hard cap, avoids
-// walls that starve thin-library genres and avoids the cap "resetting" as the queue scrolls.
-// The curve is quadratic: a linear one let a thin pool's strongest artist back in every ~4 picks.
+// Artist/album repeats are penalized on a quadratic decay curve (near zero when just played,
+// recovered after N radio picks), not a hard cap: a cap starves thin-library genres and resets
+// as the queue scrolls, and a linear curve let a thin pool's top artist back in every ~4 picks.
 const ARTIST_DECAY_TRACKS = 18;
 const ARTIST_DECAY_TRACKS_NARROW = 8; // similar-artists: pool is naturally few artists
 const ALBUM_DECAY_TRACKS = 8;

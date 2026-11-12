@@ -3,6 +3,7 @@ import { ARTIST_TRACK_MATCH, artistTrackMatchParams } from "../features/playback
 import { ARTIST_MATCH, similarArtistsMatch } from "../features/radio/lib/radio";
 import { ftsDeleteForAlbumsSql, HEAL_FTS_COUNTS_SQL, UNINDEXED_ALBUMS_SQL } from "../features/sync/syncTracks";
 import { TAG_ALBUMS_SQL, UNRESOLVED_TAG_COUNT_SQL } from "../features/tags/hooks/useTagMappings";
+import { sqlNormExpression } from "../features/tags/lib/canonicalize";
 import { APPLY_TAG_MAPPINGS_SQL } from "../features/tags/lib/tagNormalize";
 import { RECENTLY_RELEASED_SQL } from "../hooks/useRecentlyReleasedAlbums";
 import { ownedByServer } from "../lib/sql";
@@ -100,10 +101,9 @@ describe("query plans", () => {
   it("finds similar artists and their featured credits through the artist index", () => {
     const match = similarArtistsMatch("s", ["sting", "the police"]);
     const plan = planOf(`SELECT t.id FROM tracks t WHERE t.server_id = ? AND ${match.sql}`, ["s", ...match.params]);
-    expect(plan).not.toMatch(/^SCAN t$/m);
-    expect(plan).not.toMatch(/SCAN tracks/);
-    expect(plan.match(/idx_tracks_artist_nocase \(artist>\? AND artist<\?\)/g)).toHaveLength(2);
+    expect(plan).not.toMatch(/^SCAN (t|tracks)$/m);
     expect(plan).toContain("idx_tracks_artist_nocase (artist=? AND server_id=?)");
+    expect(plan).toMatch(/^SCAN tracks_fts VIRTUAL TABLE INDEX/m);
   });
 
   it.each([
