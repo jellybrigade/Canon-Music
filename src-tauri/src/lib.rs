@@ -309,6 +309,7 @@ pub fn run() {
             tray::tray_set_visible,
             tray::tray_set_close_to_tray,
             quit::quit_listener_ready,
+            quit::quit_listener_gone,
             quit::quit_ready,
             cover::set_cover_proxy_config,
             cover_override::sync_cover_overrides,

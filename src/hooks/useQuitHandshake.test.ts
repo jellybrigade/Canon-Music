@@ -67,6 +67,24 @@ describe("useQuitHandshake", () => {
     await waitFor(() => expect(listenerCount("quit-requested")).toBe(0));
   });
 
+  it("tells Rust its listener is gone on unmount, so a quit doesn't wait for an answer that never comes", async () => {
+    const { unmount } = renderHook(() => useQuitHandshake());
+    await waitFor(() => expect(invokedCommands()).toEqual(["quit_listener_ready"]));
+
+    unmount();
+
+    await waitFor(() => expect(invokedCommands()).toEqual(["quit_listener_ready", "quit_listener_gone"]));
+  });
+
+  it("reports as many listeners gone as ready under StrictMode", async () => {
+    renderHook(() => useQuitHandshake(), { reactStrictMode: true });
+    await waitFor(() => expect(listenerCount("quit-requested")).toBe(1));
+    await waitFor(() => expect(invokedCommands()).toContain("quit_listener_ready"));
+
+    const count = (cmd: string) => invokedCommands().filter((c) => c === cmd).length;
+    expect(count("quit_listener_ready") - count("quit_listener_gone")).toBe(1);
+  });
+
   it("arms one listener under StrictMode", async () => {
     renderHook(() => useQuitHandshake(), { reactStrictMode: true });
 

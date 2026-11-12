@@ -7,6 +7,7 @@ import { runQuitFlushes } from "../lib/quitFlush";
 export function useQuitHandshake() {
   useEffect(() => {
     let isCancelled = false;
+    let hasReported = false;
     const unlisten = listen("quit-requested", async () => {
       await runQuitFlushes();
       await invoke("quit_ready");
@@ -16,11 +17,18 @@ export function useQuitHandshake() {
         stop();
         return;
       }
+      hasReported = true;
       void invoke("quit_listener_ready").catch((err: unknown) => console.warn("Quit handshake failed", err));
     });
     return () => {
       isCancelled = true;
-      void unlisten.then((stop) => stop());
+      void unlisten.then((stop) => {
+        stop();
+        // Rust counts listeners, so a StrictMode remount's report landing first still leaves one.
+        if (hasReported) {
+          void invoke("quit_listener_gone").catch((err: unknown) => console.warn("Quit handshake failed", err));
+        }
+      });
     };
   }, []);
 }
