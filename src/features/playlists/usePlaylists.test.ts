@@ -12,6 +12,7 @@ vi.mock("../../clients/navidromePlaylists", async () => {
     addTrackToNavidromePlaylist: vi.fn(),
     addTracksToNavidromePlaylist: vi.fn(),
     createNavidromePlaylist: vi.fn(),
+    deleteNavidromePlaylist: vi.fn(),
   };
 });
 
@@ -181,3 +182,28 @@ describe("adding to a playlist", () => {
   });
 });
 
+describe("deleting a playlist", () => {
+  // The resume row outlived its playlist: sync prunes only playlists it still has locally.
+  it("removes its resume point with it", async () => {
+    onInvoke("get_playlists", () => []);
+    const db = await createMigratedTestDb();
+    db.raw.exec(`INSERT INTO playlists (id, server_id, name, track_count) VALUES ('s1:p', 's1', 'p', 0);
+      INSERT INTO playlist_resume (playlist_id, last_track_id, track_position) VALUES ('s1:p', 's1:t1', 0);`);
+    vi.mocked(getDb).mockResolvedValue(db as never);
+    const swc: ServerWithCredential = {
+      server: {
+        id: "s1",
+        type: "navidrome",
+        url: "https://music.example",
+        alt_url: null,
+        display_name: "Home",
+        username: "marcel",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      credential: { type: "md5", token: "tok", salt: "salt" },
+    };
+    const { result } = renderHook(() => usePlaylists());
+    await act(() => result.current.deletePlaylist(playlist("s1:p"), swc));
+    expect(await db.select("SELECT playlist_id FROM playlist_resume")).toEqual([]);
+  });
+});

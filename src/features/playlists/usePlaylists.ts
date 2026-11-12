@@ -128,6 +128,7 @@ export function usePlaylists() {
     await deleteNavidromePlaylist(server.url, server.username, credential, nativeId, server.alt_url ?? undefined);
     const db = await getDb();
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
+    await db.execute("DELETE FROM playlist_resume WHERE playlist_id = ?", [playlist.id]);
     await db.execute("DELETE FROM playlists WHERE id = ?", [playlist.id]);
     usePlaylistSessionStore.getState().bumpPlaylists();
   }
