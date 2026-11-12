@@ -80,33 +80,41 @@ export function parseForYouLocks(raw: string): ForYouLocks {
 export interface ForYouBuildInput {
   orders: ForYouOrders;
   sources: Record<string, AlbumRow[]>;
-  /** Every album, so a locked one still shows after it leaves its tab's source. */
+  /** Every album, so a locked one still shows after it leaves its tab's source; once known, a pick gone from it is dropped. */
   library?: AlbumRow[];
   config: ForYouCategoryConfig[];
   perTab: number;
   locks?: ForYouLocks;
+  /** Shown elsewhere on Home (the spotlight), read live: it can change after the picks are frozen. */
+  excludedIds?: string[];
 }
 
 /** Locked albums are claimed first; then tabs claim in config order, so an album shown under one tab is skipped by every later tab. */
 export function buildForYouGroups({
   orders,
   sources,
-  library = [],
+  library,
   config,
   perTab,
   locks = {},
+  excludedIds = [],
 }: ForYouBuildInput): ForYouGroup[] {
   const latest = new Map<string, AlbumRow>();
-  for (const album of library) latest.set(album.id, album);
+  for (const album of library ?? []) latest.set(album.id, album);
   for (const source of Object.values(sources)) for (const album of source) latest.set(album.id, album);
+  // A frozen pick shows its current row; it is dropped once the library no longer has it, or it lost its artwork.
+  const current = (picked: AlbumRow): AlbumRow | null => {
+    const row = latest.get(picked.id) ?? (library === undefined ? picked : null);
+    return row?.artwork_url ? row : null;
+  };
 
   const enabled = config.filter((cat) => cat.enabled);
-  const used = new Set<string>();
+  const used = new Set<string>(excludedIds);
   const lockedRows = new Map<string, AlbumRow[]>();
   for (const cat of enabled) {
     const ids = locks[cat.key];
     if (!ids) continue;
-    const rows = ids.flatMap((id) => latest.get(id) ?? []).slice(0, perTab);
+    const rows = ids.flatMap((id) => (used.has(id) ? [] : (latest.get(id) ?? []))).slice(0, perTab);
     if (rows.length === 0) continue;
     for (const row of rows) used.add(row.id);
     lockedRows.set(cat.key, rows);
@@ -120,8 +128,10 @@ export function buildForYouGroups({
       for (const picked of orders[cat.key] ?? []) {
         if (albums.length >= perTab) break;
         if (used.has(picked.id)) continue;
+        const row = current(picked);
+        if (row === null) continue;
         used.add(picked.id);
-        albums.push(latest.get(picked.id) ?? picked);
+        albums.push(row);
       }
     }
     if (albums.length > 0) groups.push({ key: cat.key, kicker: cat.kicker, albums, isLocked: locked !== undefined });

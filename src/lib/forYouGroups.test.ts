@@ -145,6 +145,35 @@ describe("locked tabs", () => {
   });
 });
 
+describe("albums shown elsewhere or gone", () => {
+  const sources = { a: albums("a", 8), b: albums("b", 8) };
+  const shown = (groups: { key: string; albums: AlbumRow[] }[]) => groups.flatMap((g) => g.albums.map((a) => a.id));
+
+  it("keeps a spotlight that changed after the pick out of every tab, locked ones included", () => {
+    const orders = pickForYouOrders({}, { sources, config, seed: 1, excludedIds: [] });
+    const groups = buildForYouGroups({
+      orders,
+      sources,
+      config,
+      perTab: 8,
+      locks: { b: ["b1", "b2"] },
+      excludedIds: ["a3", "b1"],
+    });
+    expect(shown(groups)).not.toContain("a3");
+    expect(shown(groups)).not.toContain("b1");
+    expect(groups.find((g) => g.key === "b")?.albums.map((a) => a.id)).toEqual(["b2"]);
+  });
+
+  it("drops a pick gone from the library or left without artwork", () => {
+    const orders = pickForYouOrders({}, { sources, config: [config[0]!], seed: 1, excludedIds: [] });
+    const library = albums("a", 8)
+      .filter((a) => a.id !== "a2")
+      .map((a) => (a.id === "a5" ? { ...a, artwork_url: null } : a));
+    const groups = buildForYouGroups({ orders, sources: { a: [] }, library, config: [config[0]!], perTab: 8 });
+    expect(shown(groups).sort()).toEqual(["a0", "a1", "a3", "a4", "a6", "a7"]);
+  });
+});
+
 describe("parseForYouLocks", () => {
   it("reads stored locks and ignores anything malformed", () => {
     expect(parseForYouLocks('{"a":["x","y"]}')).toEqual({ a: ["x", "y"] });

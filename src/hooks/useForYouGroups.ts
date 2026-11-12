@@ -54,8 +54,8 @@ export function useForYouGroups({
     return next;
   }, [serverId, seed, isReady, sources, config, spotlightIds, pickRevision]);
   const groups = useMemo(
-    () => buildForYouGroups({ orders, sources, library, config, perTab, locks }),
-    [orders, sources, library, config, perTab, locks],
+    () => buildForYouGroups({ orders, sources, library, config, perTab, locks, excludedIds: spotlightIds }),
+    [orders, sources, library, config, perTab, locks, spotlightIds],
   );
 
   const toggleLock = useCallback(

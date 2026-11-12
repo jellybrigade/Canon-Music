@@ -93,10 +93,15 @@ describe("useForYouGroups", () => {
     const picked = ids(first.result.current.groups);
 
     first.rerender({ sources: { a: [...albums(40)].reverse() }, spotlightIds: [picked[0]![0]!], seed: 41 });
+    // The new spotlight leaves its tab; the rest of the pick stays in place.
+    const shownBesideSpotlight = ids(first.result.current.groups)[0]!;
+    expect(shownBesideSpotlight).not.toContain(picked[0]![0]);
+    expect(shownBesideSpotlight.slice(0, -1)).toEqual(picked[0]!.slice(1));
+    first.rerender({ sources: { a: [...albums(40)].reverse() }, spotlightIds, seed: 41 });
     expect(ids(first.result.current.groups)).toEqual(picked);
     first.unmount();
 
-    const again = render({ sources: { a: albums(50).slice(3) }, spotlightIds: ["a9"], seed: 41 });
+    const again = render({ sources: { a: albums(50).slice(3) }, spotlightIds, seed: 41 });
     expect(ids(again.result.current.groups)).toEqual(picked);
 
     again.rerender({ sources, spotlightIds, seed: 42 });
