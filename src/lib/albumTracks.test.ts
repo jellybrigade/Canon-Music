@@ -7,7 +7,7 @@ vi.mock("../db", () => ({ getDb: async () => holder.db }));
 vi.mock("../features/sync/syncTracks", () => ({ syncAlbumTracks: vi.fn() }));
 
 import { syncAlbumTracks } from "../features/sync/syncTracks";
-import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import { useDismissibleNoticeStore } from "../store/dismissibleNotice";
 import {
   fetchAlbumTracks,
   loadAlbumTracks,
@@ -40,7 +40,7 @@ function seedAlbum(serverId: string, albumId: string, trackIds: string[]): void 
 beforeEach(async () => {
   vi.clearAllMocks();
   resetAlbumTrackFetches();
-  useAlbumTracksNoticeStore.setState({ notice: null });
+  useDismissibleNoticeStore.setState({ notice: null });
   holder.db = await createMigratedTestDb();
 });
 
@@ -151,7 +151,7 @@ describe("loadAlbumTracksForPlay", () => {
     seedAlbum(SRV, ALBUM, []);
     mSync.mockRejectedValueOnce(new Error("offline"));
     expect(await loadAlbumTracksForPlay(server(), CRED, album)).toEqual([]);
-    expect(useAlbumTracksNoticeStore.getState().notice).toEqual({
+    expect(useDismissibleNoticeStore.getState().notice).toEqual({
       message: "Couldn't get the tracks for Blue Train: offline",
     });
   });
@@ -160,7 +160,7 @@ describe("loadAlbumTracksForPlay", () => {
     seedAlbum(SRV, ALBUM, []);
     mSync.mockResolvedValue(undefined);
     expect(await loadAlbumTracksForPlay(server(), CRED, album)).toEqual([]);
-    expect(useAlbumTracksNoticeStore.getState().notice).toEqual({
+    expect(useDismissibleNoticeStore.getState().notice).toEqual({
       message: "The server lists no tracks for Blue Train",
     });
   });
@@ -168,7 +168,7 @@ describe("loadAlbumTracksForPlay", () => {
   it("says nothing when the album has tracks", async () => {
     seedAlbum(SRV, ALBUM, [`${SRV}:tr-1`]);
     expect(await loadAlbumTracksForPlay(server(), CRED, album)).toHaveLength(1);
-    expect(useAlbumTracksNoticeStore.getState().notice).toBeNull();
+    expect(useDismissibleNoticeStore.getState().notice).toBeNull();
   });
 });
 

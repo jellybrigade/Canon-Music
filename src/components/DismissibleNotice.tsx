@@ -1,8 +1,8 @@
-import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import { useDismissibleNoticeStore } from "../store/dismissibleNotice";
 
-export function AlbumTracksNotice() {
-  const notice = useAlbumTracksNoticeStore((s) => s.notice);
-  const dismiss = useAlbumTracksNoticeStore((s) => s.dismiss);
+export function DismissibleNotice() {
+  const notice = useDismissibleNoticeStore((s) => s.notice);
+  const dismiss = useDismissibleNoticeStore((s) => s.dismiss);
   if (!notice) return null;
   return (
     <div className="normalizing-bar" role="status">

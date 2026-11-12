@@ -1,9 +1,9 @@
 import { AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AlbumTracksNotice } from "../../../components/AlbumTracksNotice";
+import { DismissibleNotice } from "../../../components/DismissibleNotice";
 import { useSetting } from "../../../hooks/useSetting";
 import { plural } from "../../../lib/plural";
-import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
+import { useDismissibleNoticeStore } from "../../../store/dismissibleNotice";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
 import { useTagsStore } from "../../tags/store/tags";
@@ -97,13 +97,13 @@ function PlaybackErrorNotice({ onOpenResync }: { onOpenResync: () => void }) {
 export function BottomNotices({ onOpenResync }: { onOpenResync: () => void }) {
   const hasTrack = usePlayerStore((s) => s.currentTrack !== null);
   const hasError = usePlayerStore((s) => s.error !== null);
-  const albumTracksNotice = useAlbumTracksNoticeStore((s) => s.notice);
+  const dismissibleNotice = useDismissibleNoticeStore((s) => s.notice);
   const pullProgress = useTagsStore((s) => s.pullProgress);
   const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
   const waveformProgress = useWaveformBackfillStore((s) => s.progress);
 
   const hasInfoRow =
-    albumTracksNotice !== null || pullProgress !== null || waveformProgress !== null || Boolean(enrichmentPending);
+    dismissibleNotice !== null || pullProgress !== null || waveformProgress !== null || Boolean(enrichmentPending);
   const showsError = hasTrack && hasError;
   const rowCount = Number(hasInfoRow) + Number(showsError);
 
@@ -116,8 +116,8 @@ export function BottomNotices({ onOpenResync }: { onOpenResync: () => void }) {
   if (rowCount === 0) return null;
   return (
     <div className={`bottom-notices${hasTrack ? " bottom-notices--above-player" : ""}`}>
-      {albumTracksNotice ? (
-        <AlbumTracksNotice />
+      {dismissibleNotice ? (
+        <DismissibleNotice />
       ) : pullProgress ? (
         <div className="normalizing-bar">
           Fetching metadata… {pullProgress.done} / {pullProgress.total}
