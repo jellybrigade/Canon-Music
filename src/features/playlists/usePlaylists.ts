@@ -211,21 +211,10 @@ export function usePlaylists() {
       server.username,
       credential,
       filters.name,
-      [],
+      trackRows.map((t) => stripServerPrefix(t.id, server.id)),
       server.alt_url ?? undefined,
     );
     const plDbId = `${server.id}:${created.id}`;
-    if (trackRows.length > 0) {
-      const nativeTrackIds = trackRows.map((t) => stripServerPrefix(t.id, server.id));
-      await addTracksToNavidromePlaylist(
-        server.url,
-        server.username,
-        credential,
-        created.id,
-        nativeTrackIds,
-        server.alt_url ?? undefined,
-      );
-    }
     await db.execute(
       "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count, is_smart, rules_json) VALUES (?, ?, ?, ?, ?, 1, ?)",
       [plDbId, server.id, filters.name, null, trackRows.length, JSON.stringify(filters)],

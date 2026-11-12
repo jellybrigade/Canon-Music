@@ -17,13 +17,14 @@ vi.mock("../../clients/navidromePlaylists", async () => {
 });
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { createNavidromePlaylist } from "../../clients/navidromePlaylists";
+import { addTracksToNavidromePlaylist, createNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { useDismissibleNoticeStore } from "../../store/dismissibleNotice";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { createMigratedTestDb } from "../../test/sqlite";
+import { DEFAULT_SMART_FILTERS } from "./smartPlaylist";
 import { createPlaylist, type PlaylistRow, usePlaylists } from "./usePlaylists";
 
 function playlist(id: string): PlaylistRow {
@@ -179,6 +180,18 @@ describe("adding to a playlist", () => {
       "SELECT track_id FROM playlist_tracks WHERE playlist_id = 's1:q' ORDER BY position",
     );
     expect(rows.map((r) => r.track_id)).toEqual(["s1:t2", "s1:t1"]);
+  });
+
+  // Created empty, then filled by a second request: a refused fill left an empty playlist on the
+  // server that the next sync brought in as a plain one, and saving again made a second.
+  it("creates a smart playlist with its tracks in the one creating request", async () => {
+    vi.mocked(createNavidromePlaylist).mockResolvedValue({ id: "sm", name: "All", songCount: 2 } as never);
+    const { result } = renderHook(() => usePlaylists());
+    await act(() => result.current.createSmartPlaylist({ ...DEFAULT_SMART_FILTERS, name: "All", sort: "+title" }, swc));
+
+    expect(createNavidromePlaylist).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(createNavidromePlaylist).mock.calls[0]?.[4]).toEqual(["t1", "t2"]);
+    expect(addTracksToNavidromePlaylist).not.toHaveBeenCalled();
   });
 });
 
