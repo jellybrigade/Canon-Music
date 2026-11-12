@@ -62,11 +62,12 @@ export const SORT_OPTIONS = [
   { value: "-title", label: "Title Z→A" },
 ] as const;
 
+// SQLite sorts NULL first ascending, so "Oldest first" would open with every undated track.
 const SORT_SQL: Record<string, string> = {
   "+title": "t.title ASC",
   "-title": "t.title DESC",
-  "-year": "t.year DESC",
-  "+year": "t.year ASC",
+  "-year": "t.year IS NULL, t.year DESC",
+  "+year": "t.year IS NULL, t.year ASC",
   "-playcount": "t.play_count DESC",
 };
 
