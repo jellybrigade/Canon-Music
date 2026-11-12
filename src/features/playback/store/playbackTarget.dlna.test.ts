@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe("DlnaTarget cover art", () => {
   it("hands the renderer a cover it can fetch, on the stream's server and login", async () => {
-    await castTrack(new DlnaTarget(renderer, () => {}, 320), track());
+    await castTrack(new DlnaTarget({ renderer, onTrackEnd: () => {}, readMaxBitrate: () => 320 }), track());
 
     const art = sentAlbumArtUri();
     expect(art).not.toBeNull();
@@ -79,7 +79,10 @@ describe("DlnaTarget cover art", () => {
   });
 
   it("sends no cover for a track without one", async () => {
-    await castTrack(new DlnaTarget(renderer, () => {}, 320), track({ coverArtUrl: null, artworkRef: null }));
+    await castTrack(
+      new DlnaTarget({ renderer, onTrackEnd: () => {}, readMaxBitrate: () => 320 }),
+      track({ coverArtUrl: null, artworkRef: null }),
+    );
 
     expect(soapBodies.some((body) => body.includes("SetAVTransportURI"))).toBe(true);
     expect(sentAlbumArtUri()).toBeNull();

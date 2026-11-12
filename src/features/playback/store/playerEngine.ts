@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
 import { errorMessage } from "../../../lib/errorMessage";
+import { LoadSupersededError } from "./playbackTarget";
 import type { PlayerPersistence } from "./playerPersistence";
 import { runtime } from "./playerRuntime";
 import { type CurrentTrack, type PlayerGet, type PlayerSet, plainError } from "./playerTypes";
@@ -437,9 +438,12 @@ export function createPlayerEngine(
     const doPlay = async () => {
       const { castDevice } = get();
       if (!castDevice) void setupAudioErrorListener(url);
+      // A device switch mid-load replaces the target and reloads the track itself.
+      const target = runtime.activeTarget;
+      const isOvertaken = () => runtime.activeTarget !== target || get().currentTrack?.id !== track.id;
       try {
-        await runtime.activeTarget.load(url, track);
-        if (get().currentTrack?.id !== track.id) return;
+        await target.load(url, track);
+        if (isOvertaken()) return;
         const paused = runtime.pauseRequestedDuringLoad;
         runtime.pauseRequestedDuringLoad = false;
         // isBuffering deliberately not re-asserted: on a prefetch-cache hit, audio-format may
@@ -465,7 +469,7 @@ export function createPlayerEngine(
         void fetchWaveform(track.id, url);
         // preloadWaveforms is deliberately not called here, see the elapsed ticker.
       } catch (e) {
-        if (get().currentTrack?.id !== track.id) return;
+        if (isOvertaken() || e instanceof LoadSupersededError) return;
         set({
           isPlaying: false,
           isLoading: false,

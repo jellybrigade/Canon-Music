@@ -2,21 +2,19 @@ import { invoke } from "@tauri-apps/api/core";
 import type { DlnaRenderer } from "../../../clients/dlna";
 import { getDb } from "../../../db";
 import { isOwnedByServer, owningServerId } from "../../../lib/ids";
-import { parseIntegerOr } from "../../../lib/numberSetting";
 import { withCoverFromRef } from "../../../lib/track";
-import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget } from "./playbackTarget";
-import type { PlayerEngine } from "./playerEngine";
+import type { PlaybackTarget } from "./playbackTarget";
+import { applyCastMaxBitrate, type PlayerCast } from "./playerCast";
 import { runtime } from "./playerRuntime";
-import {
-  type CurrentTrack,
-  type PlayerGet,
-  type PlayerSet,
-  type PlayerState,
-  plainError,
-  type QueueSnapshot,
-  type RadioMode,
-  type RepeatMode,
-  type ReplayGainMode,
+import type {
+  CurrentTrack,
+  PlayerGet,
+  PlayerSet,
+  PlayerState,
+  QueueSnapshot,
+  RadioMode,
+  RepeatMode,
+  ReplayGainMode,
 } from "./playerTypes";
 import { clampQueueIndex, normalizeShuffleOrder } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
@@ -41,7 +39,7 @@ type SettingsActions = Pick<
 export function createSettingsActions(
   set: PlayerSet,
   get: PlayerGet,
-  { stopElapsedTimer }: PlayerEngine,
+  { createCastTarget, verifyRestoredCastDevice }: PlayerCast,
 ): SettingsActions {
   return {
     toggleConsumeMode: async () => {
@@ -203,11 +201,12 @@ export function createSettingsActions(
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'player.pre_mute_volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'radio.similarity_scale', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'player.pre_mute_volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'radio.similarity_scale', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size', 'cast.max_bitrate')",
           [],
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         let showWaveform = true;
+        let restoredCast: { renderer: DlnaRenderer; target: PlaybackTarget } | null = null;
         // queue_state and radio_seed carry server-scoped track ids in a global settings row;
         // removing a server strands ids the mirror no longer holds, so check only these two keys.
         const carriesTrackIds = rows.some((r) => (r.key === "queue_state" || r.key === "radio_seed") && r.value);
@@ -325,23 +324,16 @@ export function createSettingsActions(
           } else if (row.key === "player.replay_gain_fallback_gain") {
             const v = parseFloat(row.value);
             if (!Number.isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
-          } else if (row.key === "cast.device" && row.value) {
+          } else if (row.key === "cast.max_bitrate") {
+            applyCastMaxBitrate(row.value);
+          } else if (row.key === "cast.device" && row.value && !get().castDevice && !get().streamUrl) {
+            // A settings import must not move a player that has a track loaded, cast or local.
             try {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;
-              const bitrateRow = rows.find((r2) => r2.key === "cast.max_bitrate");
-              const savedBitrate = parseIntegerOr(bitrateRow?.value, CAST_MAX_BITRATE_DEFAULT);
-              runtime.activeTarget = new DlnaTarget(
-                savedRenderer,
-                () => {
-                  void get().next(true);
-                },
-                savedBitrate,
-                (message) => {
-                  set({ error: plainError(message), isPlaying: false, isBuffering: false });
-                  stopElapsedTimer();
-                },
-              );
+              const restoredTarget = createCastTarget(savedRenderer);
+              runtime.activeTarget = restoredTarget;
               set({ castDevice: savedRenderer });
+              restoredCast = { renderer: savedRenderer, target: restoredTarget };
             } catch {
               /* malformed, ignore */
             }
@@ -351,6 +343,8 @@ export function createSettingsActions(
         // arrive in whatever order the read returns them, so a seed rejected mid-loop would
         // otherwise be followed by the row that turns radio back on without one.
         if (radioSeedStranded) set({ radioSeed: null, radioActive: false, radioLabel: null });
+        // Not awaited: a renderer that's switched off takes up to the SOAP timeout to fail.
+        if (restoredCast) void verifyRestoredCastDevice(restoredCast.renderer, restoredCast.target);
         // Load waveform from cache for the restored track, fetchWaveform is only
         // called from playTrack, so a session-restored track would show nothing until
         // the user navigated away and back.

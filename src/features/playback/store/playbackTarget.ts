@@ -25,6 +25,14 @@ const DLNA_UNKNOWN_DURATION_POLL_MS = 5000;
 // treating one as "track ended" or "device gone" would skip a track or drop the session for no reason.
 const DLNA_MAX_CONSECUTIVE_FAILURES = 3;
 
+// A load that a newer load or a teardown overtook; whoever overtook it owns the player state.
+export class LoadSupersededError extends Error {
+  constructor() {
+    super("Load superseded");
+    this.name = "LoadSupersededError";
+  }
+}
+
 export interface PlaybackTarget {
   load(url: string, track: CurrentTrack): Promise<void>;
   pause(fadeMs?: number): void;
@@ -82,7 +90,13 @@ export class LocalTarget implements PlaybackTarget {
   }
 }
 
-export const CAST_MAX_BITRATE_DEFAULT = 320;
+export interface DlnaTargetOptions {
+  renderer: DlnaRenderer;
+  onTrackEnd: () => void;
+  // Read on every load(), so a bitrate changed mid-cast applies from the next track.
+  readMaxBitrate: () => number;
+  onError?: (message: string) => void;
+}
 
 export class DlnaTarget implements PlaybackTarget {
   readonly supportsVolume: boolean;
@@ -91,7 +105,7 @@ export class DlnaTarget implements PlaybackTarget {
   readonly supportsGapless = false;
 
   private renderer: DlnaRenderer;
-  private castMaxBitrate: number;
+  private readMaxBitrate: () => number;
   private positionSeconds = 0;
   private positionUpdatedAt = 0;
   private currentDuration = 0;
@@ -101,31 +115,38 @@ export class DlnaTarget implements PlaybackTarget {
   private onError: ((message: string) => void) | null = null;
   private consecutiveFailures = 0;
   private playing = false;
+  // Bumped by every write that moves the position; a renderer reading started before one is stale.
+  private positionEpoch = 0;
+  // A renderer can still report the pre-seek time a few seconds after accepting a Seek.
+  private discardNextReading = false;
+  // Pause/Play go out one at a time, latest wins: parallel SOAP calls can reach the renderer
+  // out of order and leave it paused after the last click said play.
+  private desiredTransport: "play" | "pause" | null = null;
+  private transportFlush: Promise<void> | null = null;
+  private isTornDown = false;
+  // Loads reach the renderer one at a time, in call order; only the newest one starts playing.
+  private loadGeneration = 0;
+  private loadChain: Promise<void> = Promise.resolve();
 
-  constructor(
-    renderer: DlnaRenderer,
-    onTrackEnd: () => void,
-    castMaxBitrate = CAST_MAX_BITRATE_DEFAULT,
-    onError?: (message: string) => void,
-  ) {
+  constructor({ renderer, onTrackEnd, readMaxBitrate, onError }: DlnaTargetOptions) {
     this.renderer = renderer;
     this.supportsVolume = renderer.supportsVolume;
     this.onTrackEnd = onTrackEnd;
-    this.castMaxBitrate = castMaxBitrate;
+    this.readMaxBitrate = readMaxBitrate;
     this.onError = onError ?? null;
   }
 
-  private rewriteUrl(url: string): string {
+  private rewriteUrl(url: string, maxBitrate: number): string {
     try {
       const u = new URL(url);
-      if (this.castMaxBitrate <= 0) {
+      if (maxBitrate <= 0) {
         // "Raw (original)" has to actually be raw. The URL arrives carrying whatever
         // maxBitRate the local player asked for, and leaving it in place would keep the
         // server transcoding for the renderer too.
         u.searchParams.delete("maxBitRate");
         u.searchParams.delete("format");
       } else {
-        u.searchParams.set("maxBitRate", String(this.castMaxBitrate));
+        u.searchParams.set("maxBitRate", String(maxBitrate));
       }
       return u.toString();
     } catch {
@@ -147,12 +168,36 @@ export class DlnaTarget implements PlaybackTarget {
   }
 
   async load(url: string, track: CurrentTrack): Promise<void> {
+    const generation = ++this.loadGeneration;
     this.clearTimers();
-    const castUrl = this.rewriteUrl(url);
+    this.desiredTransport = null;
+    this.positionEpoch++;
+    this.playing = false;
+    const run = this.loadChain.then(() => this.sendLoad(generation, url, track));
+    this.loadChain = run.catch(() => {});
+    await run;
+  }
+
+  private isCurrentLoad(generation: number): boolean {
+    return !this.isTornDown && generation === this.loadGeneration;
+  }
+
+  private async sendLoad(generation: number, url: string, track: CurrentTrack): Promise<void> {
+    // A Pause still in flight would otherwise land after this track's Play and stop it.
+    await this.transportFlush;
+    if (!this.isCurrentLoad(generation)) throw new LoadSupersededError();
+    const maxBitrate = this.readMaxBitrate();
+    const castUrl = this.rewriteUrl(url, maxBitrate);
     const coverArtUrl = castCoverArtUrl(castUrl, track.artworkRef);
-    const metadata = buildDidlMetadata(track, castUrl, coverArtUrl, this.castMaxBitrate > 0);
+    const metadata = buildDidlMetadata(track, castUrl, coverArtUrl, maxBitrate > 0);
     await setAvTransportUri(this.renderer.avTransportControlUrl, castUrl, metadata);
+    if (!this.isCurrentLoad(generation)) throw new LoadSupersededError();
     await avPlay(this.renderer.avTransportControlUrl);
+    if (!this.isCurrentLoad(generation)) {
+      // A newer load sends its own track; a torn-down renderer has to be stopped again.
+      if (this.isTornDown) void avStop(this.renderer.avTransportControlUrl).catch(() => {});
+      throw new LoadSupersededError();
+    }
     this.noteSuccess();
     this.playing = true;
     this.positionSeconds = 0;
@@ -170,13 +215,13 @@ export class DlnaTarget implements PlaybackTarget {
     }
     this.playing = false;
     this.clearTimers();
-    void avPause(this.renderer.avTransportControlUrl).catch(() => {});
+    this.requestTransport("pause");
   }
 
   resume(): void {
     this.positionUpdatedAt = Date.now();
     this.playing = true;
-    void avPlay(this.renderer.avTransportControlUrl).catch(() => {});
+    this.requestTransport("play");
     this.scheduleReconcile(2000);
     // pause() cleared the track-end timer along with the reconcile timer. Without
     // rearming it here the track never auto-advances after a pause, and there is no
@@ -186,6 +231,7 @@ export class DlnaTarget implements PlaybackTarget {
 
   stop(): void {
     this.playing = false;
+    this.desiredTransport = null;
     this.clearTimers();
     void avStop(this.renderer.avTransportControlUrl).catch(() => {});
   }
@@ -193,6 +239,9 @@ export class DlnaTarget implements PlaybackTarget {
   async seek(seconds: number): Promise<void> {
     await avSeek(this.renderer.avTransportControlUrl, seconds);
     this.noteSuccess();
+    // After the await, so a reading started while the Seek was pending is discarded too.
+    this.positionEpoch++;
+    this.discardNextReading = true;
     this.positionSeconds = seconds;
     this.positionUpdatedAt = Date.now();
     if (this.playing) {
@@ -216,12 +265,13 @@ export class DlnaTarget implements PlaybackTarget {
     return this.positionSeconds + elapsed;
   }
 
-  // Deliberately a no-op: see supportsGapless above. The ticker in player.ts skips this
-  // for cast targets, and the method only stays to satisfy the PlaybackTarget interface.
+  // No-op: supportsGapless is false, see above.
   async setNext(): Promise<void> {}
 
   teardown(): void {
+    this.isTornDown = true;
     this.playing = false;
+    this.desiredTransport = null;
     this.clearTimers();
     this.onTrackEnd = null;
     this.onError = null;
@@ -230,14 +280,36 @@ export class DlnaTarget implements PlaybackTarget {
 
   // ── internals ──
 
+  private requestTransport(state: "play" | "pause") {
+    this.desiredTransport = state;
+    if (!this.transportFlush) this.transportFlush = this.flushTransport();
+  }
+
+  private async flushTransport() {
+    try {
+      while (this.desiredTransport) {
+        const state = this.desiredTransport;
+        this.desiredTransport = null;
+        await (state === "play" ? avPlay : avPause)(this.renderer.avTransportControlUrl).catch(() => {});
+      }
+    } finally {
+      this.transportFlush = null;
+    }
+  }
+
   private scheduleReconcile(delayMs: number) {
     if (this.reconcileTimer) clearTimeout(this.reconcileTimer);
     this.reconcileTimer = setTimeout(async () => {
       this.reconcileTimer = null;
       if (!this.playing) return;
       try {
+        const epoch = this.positionEpoch;
         const t0 = Date.now();
         const reported = await getPositionInfo(this.renderer.avTransportControlUrl);
+        const isStale = epoch !== this.positionEpoch;
+        // A reading that started before a newer seek must not consume that seek's discard.
+        const isFirstAfterSeek = !isStale && this.discardNextReading;
+        if (!isStale) this.discardNextReading = false;
         const rtt = Date.now() - t0;
         const effective = reported + rtt / 2000;
         const localPos = this.positionSeconds + (Date.now() - this.positionUpdatedAt) / 1000;
@@ -245,7 +317,7 @@ export class DlnaTarget implements PlaybackTarget {
         const valid =
           (reported > 0 || localPos <= 3) && (this.currentDuration <= 0 || effective < this.currentDuration + 5);
         // Only re-baseline on significant drift to avoid visible snaps.
-        if (valid && Math.abs(effective - localPos) > 1.5) {
+        if (!isStale && !isFirstAfterSeek && valid && Math.abs(effective - localPos) > 1.5) {
           this.positionSeconds = effective;
           this.positionUpdatedAt = Date.now();
         }
@@ -276,11 +348,15 @@ export class DlnaTarget implements PlaybackTarget {
     const poll = async () => {
       this.trackEndTimer = null;
       if (!this.playing) return;
+      const epoch = this.positionEpoch;
       let state: string;
       try {
         state = await getTransportInfo(this.renderer.avTransportControlUrl);
+        // A load or seek since the request re-armed its own poll; this reply describes the old track.
+        if (epoch !== this.positionEpoch) return;
         this.noteSuccess();
       } catch (e) {
+        if (epoch !== this.positionEpoch) return;
         // Not reaching the renderer once is not evidence the track ended (a transient fault
         // lands here too); only a sustained run means the device is really gone.
         if (this.noteFailure("Lost contact with the renderer", e)) {

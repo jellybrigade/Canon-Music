@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { discoverRenderers } from "../../../clients/dlna";
 import { getDb } from "../../../db";
-import { parseIntegerOr } from "../../../lib/numberSetting";
-import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget, LocalTarget } from "./playbackTarget";
+import { LoadSupersededError, LocalTarget } from "./playbackTarget";
+import { createPlayerCast } from "./playerCast";
 import { createPlayerEngine } from "./playerEngine";
 import { createPlayerPersistence } from "./playerPersistence";
 import { runtime } from "./playerRuntime";
@@ -22,6 +22,7 @@ const SLEEP_TIMER_CHECK_MS = 15000;
 export const usePlayerStore = create<PlayerState>((set, get) => {
   const persistence = createPlayerPersistence(get);
   const engine = createPlayerEngine(set, get, persistence, createPlayerWaveform(set, get));
+  const cast = createPlayerCast(set, get, engine);
   const { persistQueueState, persistRadioState, persistVolume } = persistence;
   const { clearBufferDeadline, startElapsedTimer, stopElapsedTimer, playTrack } = engine;
 
@@ -86,7 +87,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     setCastDevice: async (renderer) => {
-      const { isPlaying, elapsed, streamUrl, currentTrack } = get();
+      const { elapsed, streamUrl, currentTrack } = get();
+      // A track still loading counts as playing: its own load dies with the old target.
+      const isPlaying = get().isPlaying || (get().isLoading && !runtime.pauseRequestedDuringLoad);
 
       runtime.activeTarget.teardown();
 
@@ -106,34 +109,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             // returned but nothing has been fetched yet. audio-format or the ticker clears this.
             set({ isPlaying, isLoading: false, isBuffering: isPlaying });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
+            // Overtaken by a newer load or device switch, which owns the state now.
+            if (!(e instanceof LoadSupersededError)) {
+              set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
+            }
           }
         }
       } else {
-        let castBitrate = CAST_MAX_BITRATE_DEFAULT;
-        try {
-          const db2 = await getDb();
-          const rows2 = await db2.select<{ value: string }[]>(
-            "SELECT value FROM settings WHERE key = 'cast.max_bitrate'",
-            [],
-          );
-          if (rows2[0]) castBitrate = parseIntegerOr(rows2[0].value, CAST_MAX_BITRATE_DEFAULT);
-        } catch {
-          /* use default */
-        }
-        runtime.activeTarget = new DlnaTarget(
-          renderer,
-          () => {
-            void get().next(true);
-          },
-          castBitrate,
-          (message) => {
-            // The renderer stopped answering. Nothing else on the cast path surfaces this:
-            // there is no audio-error event, and the target has stopped its own timers.
-            set({ error: plainError(message), isPlaying: false, isBuffering: false });
-            stopElapsedTimer();
-          },
-        );
+        runtime.activeTarget = cast.createCastTarget(renderer);
         set({ castDevice: renderer });
         // Resume on renderer at parked position.
         if (currentTrack && streamUrl) {
@@ -147,7 +130,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (!isPlaying) runtime.activeTarget.pause(0);
             set({ isPlaying, isLoading: false, isBuffering: false });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
+            // Overtaken by a newer load or device switch, which owns the state now.
+            if (!(e instanceof LoadSupersededError)) {
+              set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
+            }
           }
         }
       }
@@ -512,6 +498,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     ...createQueueActions(set, get, engine, persistence),
-    ...createSettingsActions(set, get, engine),
+    ...createSettingsActions(set, get, cast),
   };
 });

@@ -5,9 +5,12 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
+import type { DlnaRenderer } from "../../../clients/dlna";
 import { getDb } from "../../../db";
 import { runQuitFlushes } from "../../../lib/quitFlush";
+import { useDismissibleNoticeStore } from "../../../store/dismissibleNotice";
 import { emitTauriEvent, invoke, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
+import { LocalTarget, type PlaybackTarget } from "./playbackTarget";
 import { usePlayerStore } from "./player";
 import { runtime } from "./playerRuntime";
 import { type CurrentTrack, canUndoClearQueue, isNextDisabled } from "./playerTypes";
@@ -31,6 +34,14 @@ function mockDb(
 function last<T>(arr: T[]): T {
   return arr[arr.length - 1]!;
 }
+
+const castRenderer: DlnaRenderer = {
+  name: "Speaker",
+  baseUrl: "http://renderer",
+  avTransportControlUrl: "http://renderer/av",
+  renderingControlUrl: "http://renderer/rc",
+  supportsVolume: true,
+};
 
 function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
   let resolve!: (v: T) => void;
@@ -1517,6 +1528,22 @@ describe("player store - waveform prefetch gated on audible playback", () => {
     expect(countAfterSecondTick).toBe(countAfterFirstTick);
   });
 
+  it("does not prefetch upcoming tracks' waveforms while casting", async () => {
+    const tracks = makeWfTracks(3);
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, 0);
+    usePlayerStore.setState({ castDevice: castRenderer });
+
+    onInvoke("audio_get_pos", () => Promise.resolve(1));
+    await vi.advanceTimersByTimeAsync(200);
+
+    const prefetchedIds = invoke.mock.calls
+      .filter((c) => c[0] === "audio_extract_waveform")
+      .map((c) => (c[1] as { trackId: string }).trackId);
+    expect(prefetchedIds).not.toContain(tracks[1]!.id);
+    expect(prefetchedIds).not.toContain(tracks[2]!.id);
+  });
+
   it("skips a track whose waveform is already cached", async () => {
     const tracks = makeWfTracks(3);
     mockDb({
@@ -1809,8 +1836,12 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
   /** Settings reads answer from `rows`; the ownership read answers with `serverIds`. */
   function mockSettingsDb(rows: Record<string, string>, serverIds: string[] = [SRV]) {
     return mockDb({
-      select: (sql: string) =>
-        Promise.resolve(sql.includes("FROM servers") ? serverIds.map((id) => ({ id })) : settingsRows(rows)),
+      select: (sql: string, params: unknown[]) =>
+        Promise.resolve(
+          sql.includes("FROM servers")
+            ? serverIds.map((id) => ({ id }))
+            : settingsRows(rows).filter((r) => sql.includes(`'${r.key}'`) || params.includes(r.key)),
+        ),
     });
   }
 
@@ -2115,6 +2146,142 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     expect(setUri).not.toContain("maxBitRate");
   });
 
+  describe("restored cast device", () => {
+    let localTarget: PlaybackTarget;
+    beforeEach(() => {
+      localTarget = runtime.activeTarget;
+      useDismissibleNoticeStore.setState({ notice: null });
+      usePlayerStore.setState({ availableRenderers: [] });
+    });
+    afterEach(() => {
+      runtime.activeTarget.teardown();
+      runtime.activeTarget = localTarget;
+      usePlayerStore.setState({ castDevice: null, availableRenderers: [] });
+    });
+
+    function soapActions(): string[] {
+      return invoke.mock.calls
+        .filter((c) => c[0] === "upnp_soap")
+        .map((c) => /#(\w+)"$/.exec((c[1] as { soapAction: string }).soapAction)?.[1] ?? "");
+    }
+
+    it("lists a restored device that answers", async () => {
+      mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+      onInvoke("upnp_soap", () => "<CurrentTransportState>STOPPED</CurrentTransportState>");
+
+      await usePlayerStore.getState().loadSettings();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const state = usePlayerStore.getState();
+      expect(state.castDevice?.baseUrl).toBe(castRenderer.baseUrl);
+      expect(state.availableRenderers).toEqual([castRenderer]);
+      expect(soapActions()).toEqual(["GetTransportInfo"]);
+      expect(useDismissibleNoticeStore.getState().notice).toBeNull();
+    });
+
+    it("falls back to this computer and says so when the restored device doesn't answer", async () => {
+      const db = mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+      onInvoke("upnp_soap", () => Promise.reject(new Error("connection refused")));
+
+      await usePlayerStore.getState().loadSettings();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(usePlayerStore.getState().castDevice).toBeNull();
+      expect(runtime.activeTarget).toBeInstanceOf(LocalTarget);
+      expect(useDismissibleNoticeStore.getState().notice).toEqual({
+        message: "Speaker didn't answer, playing on this computer.",
+      });
+      expect(db.execute.mock.calls.some(([sql]) => String(sql).includes("cast.device"))).toBe(false);
+    });
+
+    it("doesn't wait for the device to answer before finishing startup", async () => {
+      mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+      const probe = deferred<string>();
+      onInvoke("upnp_soap", () => probe.promise);
+
+      await usePlayerStore.getState().loadSettings();
+
+      expect(usePlayerStore.getState().castDevice?.baseUrl).toBe(castRenderer.baseUrl);
+      expect(soapActions()).toEqual(["GetTransportInfo"]);
+      probe.resolve("");
+    });
+
+    it("leaves a cast already running alone when settings load again (settings import)", async () => {
+      onInvoke("upnp_soap", () => "");
+      await usePlayerStore.getState().setCastDevice(castRenderer);
+      const liveTarget = runtime.activeTarget;
+      invoke.mockClear();
+      mockSettingsDb({
+        "cast.device": JSON.stringify({ ...castRenderer, name: "Kitchen", baseUrl: "http://kitchen" }),
+      });
+
+      await usePlayerStore.getState().loadSettings();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runtime.activeTarget).toBe(liveTarget);
+      expect(usePlayerStore.getState().castDevice?.baseUrl).toBe(castRenderer.baseUrl);
+      expect(soapActions()).toEqual([]);
+    });
+
+    it("keeps playing on this computer when settings load again during local playback (settings import)", async () => {
+      usePlayerStore.setState({ currentTrack: makeTrack("1"), streamUrl: "http://test/1", isPlaying: true });
+      mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+
+      await usePlayerStore.getState().loadSettings();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runtime.activeTarget).toBe(localTarget);
+      expect(usePlayerStore.getState().castDevice).toBeNull();
+      expect(soapActions()).toEqual([]);
+    });
+
+    it("plays on this computer a track started while the restored device was being checked", async () => {
+      mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+      const gate = deferred<void>();
+      onInvoke("upnp_soap", () =>
+        gate.promise.then(() => {
+          throw new Error("connection refused");
+        }),
+      );
+      await usePlayerStore.getState().loadSettings();
+      const playing = usePlayerStore.getState().play(makeTrack("1"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      gate.resolve();
+      await playing;
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runtime.activeTarget).toBeInstanceOf(LocalTarget);
+      expect(invoke).toHaveBeenCalledWith("audio_play", { url: "http://test/1" });
+      const state = usePlayerStore.getState();
+      expect(state.error).toBeNull();
+      expect(state.isPlaying).toBe(true);
+    });
+
+    it("keeps a device the user picked while the restored one was being checked", async () => {
+      mockSettingsDb({ "cast.device": JSON.stringify(castRenderer) });
+      let failProbe: (e: Error) => void = () => {};
+      onInvoke(
+        "upnp_soap",
+        () =>
+          new Promise<string>((_, reject) => {
+            failProbe = reject;
+          }),
+      );
+      await usePlayerStore.getState().loadSettings();
+
+      onInvoke("upnp_soap", () => "");
+      await usePlayerStore.getState().setCastDevice({ ...castRenderer, name: "Kitchen", baseUrl: "http://kitchen" });
+      const chosenTarget = runtime.activeTarget;
+      failProbe(new Error("gone"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(usePlayerStore.getState().castDevice?.name).toBe("Kitchen");
+      expect(runtime.activeTarget).toBe(chosenTarget);
+      expect(useDismissibleNoticeStore.getState().notice).toBeNull();
+    });
+  });
+
   it("ignores an invalid replay_gain_mode value, leaving the mode unchanged", async () => {
     usePlayerStore.setState({ replayGainMode: "track" });
     mockSettingsDb({ "player.replay_gain_mode": "bogus" });
@@ -2122,6 +2289,49 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     await usePlayerStore.getState().loadSettings();
 
     expect(usePlayerStore.getState().replayGainMode).toBe("track");
+  });
+});
+
+describe("player store - switching cast device during a load", () => {
+  let localTarget: PlaybackTarget;
+  beforeEach(() => {
+    localTarget = runtime.activeTarget;
+  });
+  afterEach(() => {
+    runtime.activeTarget.teardown();
+    runtime.activeTarget = localTarget;
+    usePlayerStore.setState({ castDevice: null });
+  });
+
+  it("starts the loading track on the newly chosen device and ignores the old device's late answer", async () => {
+    onInvoke("upnp_soap", () => "");
+    await usePlayerStore.getState().setCastDevice(castRenderer);
+    const held = deferred<string>();
+    onInvoke("upnp_soap", () => held.promise);
+    const playing = usePlayerStore.getState().play(makeTrack("1"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    const kitchenActions: string[] = [];
+    onInvoke("upnp_soap", (args) => {
+      const { url, soapAction } = args as { url: string; soapAction: string };
+      if (url.startsWith("http://kitchen")) kitchenActions.push(/#(\w+)"$/.exec(soapAction)?.[1] ?? "");
+      return "";
+    });
+    await usePlayerStore.getState().setCastDevice({
+      ...castRenderer,
+      name: "Kitchen",
+      baseUrl: "http://kitchen",
+      avTransportControlUrl: "http://kitchen/av",
+    });
+    held.resolve("");
+    await playing;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(kitchenActions).toEqual(["SetAVTransportURI", "Play"]);
+    const state = usePlayerStore.getState();
+    expect(state.isPlaying).toBe(true);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBeNull();
   });
 });
 

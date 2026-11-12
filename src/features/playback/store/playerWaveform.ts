@@ -26,6 +26,8 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
   });
 
   async function preloadWaveforms() {
+    // The renderer is already streaming from the same server; next tracks' waveforms wait until they play.
+    if (get().castDevice) return;
     try {
       const db = await getDb();
       const settingRows = await db.select<{ value: string }[]>(
