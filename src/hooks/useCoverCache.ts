@@ -25,7 +25,7 @@ async function fetchAndStoreCover(
 ): Promise<string | null> {
   let url = "";
   try {
-    url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
+    url = getCoverArtUrl(swc.server.id, artworkUrl, 300);
     const res = await boundedFetch(url);
     if (!res.ok) {
       console.error(`Cover cache: ${res.status} ${res.statusText} fetching album ${albumId} from ${url}`);
@@ -71,19 +71,24 @@ export async function refreshAlbumCover(
   return dataUrl !== null;
 }
 
-async function getMissingCoverRows(): Promise<{ id: string; artwork_url: string }[]> {
-  const db = await getDb();
-  return db.select<{ id: string; artwork_url: string }[]>(`
-    SELECT a.id, a.artwork_url
-    FROM albums a
+const MISSING_COVERS = `FROM albums a
     LEFT JOIN album_covers ac ON ac.album_id = a.id
-    WHERE a.artwork_url IS NOT NULL AND ac.album_id IS NULL
-  `);
+    WHERE a.server_id = ? AND a.artwork_url IS NOT NULL AND ac.album_id IS NULL`;
+
+// Covers are fetched through one server, so another server's albums would cache its image.
+async function getMissingCoverRows(serverId: string): Promise<{ id: string; artwork_url: string }[]> {
+  const db = await getDb();
+  return db.select<{ id: string; artwork_url: string }[]>(
+    `SELECT a.id, a.artwork_url ${MISSING_COVERS} ORDER BY a.id`,
+    [serverId],
+  );
 }
 
-/** Count of albums with artwork not yet cached. Used to show an estimate before a manual cache-all run. */
-export async function getMissingCoverCount(): Promise<number> {
-  return (await getMissingCoverRows()).length;
+/** Count of one server's albums with artwork not yet cached, the estimate before a manual cache-all run. */
+export async function getMissingCoverCount(serverId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(`SELECT COUNT(*) AS n ${MISSING_COVERS}`, [serverId]);
+  return rows[0]?.n ?? 0;
 }
 
 async function populateMissingCovers(
@@ -92,7 +97,7 @@ async function populateMissingCovers(
   onDone: (failed: number) => void,
   onProgress?: (done: number, total: number) => void,
 ): Promise<void> {
-  const rows = await getMissingCoverRows();
+  const rows = await getMissingCoverRows(swc.server.id);
   onProgress?.(0, rows.length);
   let failed = 0;
 

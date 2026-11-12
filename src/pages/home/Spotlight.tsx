@@ -109,15 +109,13 @@ export function Spotlight({
   onCardContextMenu,
   primary,
 }: SpotlightProps) {
-  const { server, credential } = serverWithCred;
+  const { server } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
 
   const artUrl =
     coverMap.get(pick.album.id) ??
-    (pick.album.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, primary ? 400 : 200)
-      : null);
+    (pick.album.artwork_url ? getCoverArtUrl(server.id, pick.album.artwork_url, primary ? 400 : 200) : null);
 
   const accentColor = useAlbumAccent(pick.album.id, pick.album.accent_color, artUrl, server.id);
 

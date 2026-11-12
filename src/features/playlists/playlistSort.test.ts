@@ -21,6 +21,7 @@ function track(position: number, fields: Partial<PlaylistTrackRow>): PlaylistTra
     replay_gain_track_peak: null,
     replay_gain_album_gain: null,
     replay_gain_album_peak: null,
+    is_unavailable: false,
     ...fields,
   };
 }

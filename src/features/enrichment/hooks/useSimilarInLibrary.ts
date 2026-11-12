@@ -11,21 +11,23 @@ function ownershipKey(name: string): string {
 }
 
 /** Returns the subset of `names`, in their original Last.fm spelling, that the
- * local library owns - either under that name or under an alias pointing at a
+ * server's library owns - either under that name or under an alias pointing at a
  * canonical artist, since a merged artist is still in the library. */
-export function useSimilarInLibrary(names: string[]) {
+export function useSimilarInLibrary(names: string[], serverId: string) {
   const query = useQuery({
-    queryKey: QK.similarInLibrary(names),
+    queryKey: QK.similarInLibrary(names, serverId),
     queryFn: async (): Promise<string[]> => {
       if (names.length === 0) return [];
       const db = await getDb();
       const placeholders = names.map(() => "?").join(",");
       const keys = names.map(ownershipKey);
       const rows = await db.select<{ name: string }[]>(
-        `SELECT name FROM artists WHERE LOWER(TRIM(name)) IN (${placeholders})
+        `SELECT name FROM artists WHERE server_id = ? AND LOWER(TRIM(name)) IN (${placeholders})
          UNION
-         SELECT alias_name AS name FROM artist_aliases WHERE LOWER(TRIM(alias_name)) IN (${placeholders})`,
-        [...keys, ...keys],
+         SELECT aa.alias_name AS name FROM artist_aliases aa
+         JOIN artists a ON a.name = aa.canonical_name AND a.server_id = ?
+         WHERE LOWER(TRIM(aa.alias_name)) IN (${placeholders})`,
+        [serverId, ...keys, serverId, ...keys],
       );
       const owned = new Set(rows.map((r) => ownershipKey(r.name)));
       // Returning the caller's own spelling, so the consumer's `set.has(name)`

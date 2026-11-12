@@ -101,6 +101,14 @@ describe("fetchCaaFrontCovers", () => {
     expect((await fetchCaaFrontCovers("release", "rel-1"))[0]?.isApproved).toBe(false);
   });
 
+  it("counts only a literal true as approved", async () => {
+    vi.mocked(boundedNativeFetch).mockImplementation(async () =>
+      jsonResponse(200, { images: [image({ approved: "true" }), image({ approved: 1 }), image({ approved: true })] }),
+    );
+    const covers = await fetchCaaFrontCovers("release", "rel-1");
+    expect(covers.map((cover) => cover.isApproved)).toEqual([false, false, true]);
+  });
+
   it("answers no covers when the archive has none for the id", async () => {
     vi.mocked(boundedNativeFetch).mockImplementation(async () => jsonResponse(404, {}));
     await expect(fetchCaaFrontCovers("release", "rel-1")).resolves.toEqual([]);

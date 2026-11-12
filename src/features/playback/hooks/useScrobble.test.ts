@@ -23,6 +23,7 @@ import { reportNowPlaying } from "../../../clients/navidrome";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { __resetSettingCache, useSetting } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import type { Server } from "../../../types/server";
 import { usePlayerStore } from "../store/player";
@@ -46,6 +47,9 @@ const SWC: ServerWithCredential = { server: SRV, credential: CRED };
 function makeTrack(id = "srv-a:t1"): CurrentTrack {
   return { id, title: `Track ${id}`, artist: "Artist", duration: 200, albumId: "srv-a:alb", album: "Album" };
 }
+
+// One object for the whole render, as the player store hands over: a fresh one per render re-runs the effect.
+const TRACK = makeTrack();
 
 let db: FakeDatabase;
 let consoleError: ReturnType<typeof vi.spyOn>;
@@ -99,6 +103,7 @@ async function seekTo(elapsed: number) {
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
+  __resetSettingCache();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as never);
   usePlayerStore.setState({ elapsed: 0, playStartedAt: 1000, isPlaying: false });
@@ -121,6 +126,23 @@ describe("useScrobble", () => {
     expect(queueRows()).toHaveLength(0);
 
     await tickTo(120);
+    expect(queueRows().map((r) => r.track_id)).toEqual(["srv-a:t1"]);
+  });
+
+  it("queues a paused play at once when the threshold is lowered below what was heard", async () => {
+    const track = makeTrack();
+    renderHook(() => useScrobble(track, SWC));
+    const setting = renderHook(() => useSetting("scrobble.threshold_percent", "50"));
+    await tickTo(50);
+    expect(queueRows()).toHaveLength(0);
+
+    await act(async () => {
+      await setting.result.current[1]("20");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(queueRows().map((r) => r.track_id)).toEqual(["srv-a:t1"]);
   });
 
@@ -182,7 +204,7 @@ describe("useScrobble", () => {
       return real(sql, binds);
     };
 
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await tickTo(120);
     expect(queueRows()).toHaveLength(0);
@@ -208,7 +230,7 @@ describe("useScrobble", () => {
       return real(sql, binds);
     };
 
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await tickTo(120);
     expect(queueRows()).toHaveLength(1);
@@ -219,7 +241,7 @@ describe("useScrobble", () => {
 
   it("gives up after a bounded number of failed writes instead of retrying every poll", async () => {
     failQueueWrites();
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     for (const elapsed of [120, 125, 130, 135, 140, 145, 150, 155, 160]) await tickTo(elapsed);
 
@@ -260,7 +282,7 @@ describe("useScrobble now-playing reporting", () => {
   }
 
   it("tells the server which track is playing once playback starts", async () => {
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await setPlaying(true);
 
@@ -270,7 +292,7 @@ describe("useScrobble now-playing reporting", () => {
   it("says nothing about a restored track that is not playing", async () => {
     // Queue restore writes currentTrack with the player stopped. Reporting it would tell
     // Navidrome a track is playing the moment Canon launches, before anyone pressed play.
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await tickTo(0);
 
@@ -280,7 +302,7 @@ describe("useScrobble now-playing reporting", () => {
   it("tells the server again when playback resumes after a pause", async () => {
     // Navidrome expires its now-playing entry on a timer, so a pause long enough to
     // outlast it leaves the server saying nothing is playing until the next report.
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await setPlaying(true);
     expect(reportNowPlaying).toHaveBeenCalledTimes(1);
@@ -293,7 +315,7 @@ describe("useScrobble now-playing reporting", () => {
   });
 
   it("reports once per play however many position polls follow", async () => {
-    renderHook(() => useScrobble(makeTrack(), SWC));
+    renderHook(() => useScrobble(TRACK, SWC));
 
     await setPlaying(true);
     for (const elapsed of [20, 40, 60, 80, 100]) await tickTo(elapsed);
@@ -336,7 +358,7 @@ describe("useScrobble now-playing reporting", () => {
   });
 
   it("withdraws a pending report on unmount", async () => {
-    const { unmount } = renderHook(() => useScrobble(makeTrack(), SWC));
+    const { unmount } = renderHook(() => useScrobble(TRACK, SWC));
     await setPlaying(true);
 
     unmount();

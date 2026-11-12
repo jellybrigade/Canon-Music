@@ -386,6 +386,7 @@ export function AppRoutes(props: AppViewProps) {
           <Suspense fallback={null}>
             <main className={`library${queueClass}`}>
               <GenreView
+                serverId={server?.id}
                 onSelectGenre={(canonicalId) => {
                   setCanonicalIdFilters([canonicalId]);
                   navigateTo("library");

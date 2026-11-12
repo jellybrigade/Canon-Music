@@ -1,16 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { MbGenre } from "../../../clients/musicbrainz";
+import { LoadError } from "../../../components/LoadError";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
-import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
+import { useCanonTreeNodes } from "../hooks/useCanonTreeNodes";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useTagMappings } from "../hooks/useTagMappings";
-import type { TreeNode } from "../lib/canonicalize";
-import { getCanonTree } from "../lib/canonicalize";
 import type { NormalizedTag } from "../lib/tagNormalize";
 import { normalizeAlbum } from "../lib/tagNormalize";
 import { ACCEPTED, CanonCombobox, IGNORED } from "./TagsViewHelpers";
@@ -19,8 +16,6 @@ import "./TagsView.css";
 
 interface Props {
   albumId: string;
-  albumArtist: string;
-  albumName: string;
   trackId?: string;
   onClose: () => void;
 }
@@ -61,13 +56,11 @@ function useAlbumRawGenreMap(albumId: string) {
            AND tt.canonical_id NOT IN ('__accepted__', '__ignored__')`,
         [albumId],
       );
-      const map = new Map<string, string[]>();
+      const rawValuesByGenre: Record<string, string[]> = {};
       for (const { canonical_id, raw_value } of rows) {
-        const arr = map.get(canonical_id) ?? [];
-        arr.push(raw_value);
-        map.set(canonical_id, arr);
+        rawValuesByGenre[canonical_id] = [...(rawValuesByGenre[canonical_id] ?? []), raw_value];
       }
-      return map;
+      return rawValuesByGenre;
     },
     staleTime: Infinity,
   });
@@ -118,7 +111,7 @@ function TagSection({
   tags: NormalizedTag[];
   level: "album" | "track";
   emptyMessage?: string;
-  rawMap?: Map<string, string[]>;
+  rawMap?: Record<string, string[]>;
   onIgnore?: (rawName: string) => void;
 }) {
   if (tags.length === 0) {
@@ -140,7 +133,7 @@ function TagSection({
         <span className={`tag-level-badge tag-level-badge--${level}`}>{level}</span>
       </h3>
       {tags.map((tag) => {
-        const originals = tag.id ? rawMap?.get(tag.id) : undefined;
+        const originals = tag.id ? rawMap?.[tag.id] : undefined;
         const remapped = originals?.filter((r) => r.toLowerCase() !== tag.name.toLowerCase());
         const tooltip = remapped?.length ? `Original: ${remapped.join(", ")}` : undefined;
         const isUnmapped = tag.id === null;
@@ -171,22 +164,14 @@ function TagSection({
 
 interface UnmatchedSectionProps {
   albumId: string;
-  albumArtist: string;
-  albumName: string;
 }
 
-export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionProps) {
+export function UnmatchedSection({ albumId }: UnmatchedSectionProps) {
+  // Decorative: an unreadable section stays hidden.
   const { data: unmatched = [] } = useAlbumUnmatchedGenres(albumId);
-  const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
-  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
-
-  useEffect(() => {
-    getCanonTree()
-      .then((t) => setTreeNodes(t.nodes))
-      .catch(console.error);
-  }, []);
+  const { data: treeNodes, error: treeError, refetch: refetchTree } = useCanonTreeNodes();
 
   if (unmatched.length === 0) return null;
 
@@ -197,29 +182,7 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
       return;
     }
 
-    let combinedMbGenres: MbGenre[] | null = null;
-    if (identity?.combined_genres_json) {
-      try {
-        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    let combinedMbTags: MbGenre[] | null = null;
-    if (identity?.combined_tags_json) {
-      try {
-        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-
-    await normalizeAlbum(albumId, albumArtist, albumName, {
-      lastfmArtistName: identity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: identity?.lastfm_album_name ?? null,
-      combinedMbGenres,
-      combinedMbTags,
-    });
+    await normalizeAlbum(albumId);
 
     void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
@@ -230,6 +193,9 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
   return (
     <div className="tag-drawer-section">
       <h3 className="tag-drawer-section-title">Unmatched genres</h3>
+      {treeError && (
+        <LoadError title="Couldn't load the genre tree" error={treeError} onRetry={() => void refetchTree()} />
+      )}
       {unmatched.map(({ raw_value, source }) => (
         <div key={raw_value} className="td-unmatched-row">
           <div className="td-unmatched-top">
@@ -253,7 +219,7 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
             </button>
           </div>
           <CanonCombobox
-            treeNodes={treeNodes}
+            treeNodes={treeNodes ?? []}
             currentId={null}
             onSelect={(id) => void handleDecision(raw_value, id)}
             onClear={() => {}}
@@ -266,11 +232,10 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
 
 // ── TagDrawer ─────────────────────────────────────────────────────────────────
 
-export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
-  const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
+export function TagDrawer({ albumId, trackId, onClose }: Props) {
+  const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId);
   const { data: rawTrackTags } = useTrackRawTags(trackId);
   const { data: rawMap } = useAlbumRawGenreMap(albumId);
-  const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
   const dismiss = useOverlayDismiss(onClose);
@@ -282,28 +247,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
     } catch {
       return;
     }
-    let combinedMbGenres: MbGenre[] | null = null;
-    if (identity?.combined_genres_json) {
-      try {
-        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    let combinedMbTags: MbGenre[] | null = null;
-    if (identity?.combined_tags_json) {
-      try {
-        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
-      } catch {
-        /* malformed */
-      }
-    }
-    await normalizeAlbum(albumId, albumArtist, albumName, {
-      lastfmArtistName: identity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: identity?.lastfm_album_name ?? null,
-      combinedMbGenres,
-      combinedMbTags,
-    });
+    await normalizeAlbum(albumId);
     void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
     void queryClient.invalidateQueries({ queryKey: QK.albumGenreRawSources(albumId) });
@@ -327,7 +271,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
             <div className="tag-drawer-empty">No normalized tags yet.</div>
           ) : (
             <>
-              <UnmatchedSection albumId={albumId} albumArtist={albumArtist} albumName={albumName} />
+              <UnmatchedSection albumId={albumId} />
               <TagSection
                 title="Genres"
                 tags={normalizedTags.genres}

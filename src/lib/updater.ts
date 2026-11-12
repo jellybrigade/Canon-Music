@@ -1,5 +1,6 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { runQuitFlushes } from "./quitFlush";
 
 export type DownloadProgress = { downloaded: number; total: number | null };
 
@@ -22,5 +23,7 @@ export async function installAndRestart(update: Update, onProgress: (p: Download
       onProgress({ downloaded, total });
     }
   });
+  // Relaunch ends the process without a quit request, so pending writes go out here.
+  await runQuitFlushes();
   await relaunch();
 }

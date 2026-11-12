@@ -56,4 +56,29 @@ describe("useBackgroundNormalizer", () => {
     expect(db.queryLog.some((q) => q.sql.includes("FROM albums"))).toBe(false);
     expect(fetchArtistInfo).not.toHaveBeenCalled();
   });
+
+  it("keeps a bio and similar artists another source found when Last.fm has none", async () => {
+    vi.mocked(fetchArtistInfo).mockResolvedValueOnce({
+      bio: null,
+      listeners: null,
+      playcount: null,
+      similar: [],
+      topTags: [],
+      imageUrl: null,
+    });
+    db.raw
+      .prepare(
+        "INSERT INTO artist_identity (artist_name, bio, similar_json, listenbrainz_listens) VALUES (?, 'from wikipedia', '[\"Ride\"]', 50)",
+      )
+      .run("slowdive");
+    renderHook(() => useBackgroundNormalizer());
+
+    await waitFor(() => expect(fetchArtistInfo).toHaveBeenCalledOnce());
+    await waitFor(() => expect(db.queryLog.some((q) => q.sql.includes("INSERT INTO artist_identity"))).toBe(true));
+    expect(
+      db.raw
+        .prepare("SELECT bio, similar_json, listenbrainz_listens FROM artist_identity WHERE artist_name = ?")
+        .get("slowdive"),
+    ).toEqual({ bio: "from wikipedia", similar_json: '["Ride"]', listenbrainz_listens: 50 });
+  });
 });

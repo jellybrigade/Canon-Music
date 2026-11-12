@@ -1,5 +1,7 @@
 import { md5 } from "js-md5";
 import { noteEnvelope } from "../lib/credentialRejections";
+import { latestWrite } from "../lib/latestWrite";
+import type { ReleaseDateParts } from "../lib/releaseDate";
 import { apiPost, callSubsonicVoid, checkEnvelope, SubsonicError } from "./navidromeTransport";
 import { buildAuthParams, type NavidromeCredential, normalizeUrl } from "./navidromeUrls";
 
@@ -17,6 +19,10 @@ export interface NavidromeAlbum {
   played?: string;
   releaseTypes?: string[];
   releaseType?: string;
+  /** OpenSubsonic: the date the files are tagged with, as far as the tags go. */
+  releaseDate?: ReleaseDateParts;
+  /** OpenSubsonic: the first release of the music on this edition (tags like `ORIGINALDATE`). */
+  originalReleaseDate?: ReleaseDateParts;
   /** MusicBrainz release id from the files' tags; empty when untagged. */
   musicBrainzId?: string;
 }
@@ -32,6 +38,7 @@ export async function fetchAllAlbums(
   username: string,
   credential: NavidromeCredential,
   altUrl?: string,
+  signal?: AbortSignal,
 ): Promise<NavidromeAlbum[]> {
   const PAGE_SIZE = 500;
   // A server that ignores `offset` answers every request with the same full page, so the
@@ -47,7 +54,7 @@ export async function fetchAllAlbums(
     params.set("size", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
-    const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl);
+    const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl, signal);
     if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
     const data = (await res.json()) as {
@@ -141,10 +148,11 @@ export async function fetchAlbumTracks(
   credential: NavidromeCredential,
   albumId: string,
   altUrl?: string,
+  signal?: AbortSignal,
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", albumId);
-  const res = await apiPost(baseUrl, "getAlbum", params, altUrl);
+  const res = await apiPost(baseUrl, "getAlbum", params, altUrl, signal);
   if (!res.ok) throw new Error(`getAlbum returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -337,13 +345,16 @@ export function setRating(
   rating: number,
   altUrl?: string,
 ): Promise<void> {
-  return callSubsonicVoid(
-    baseUrl,
-    username,
-    credential,
-    "setRating.view",
-    { id: nativeTrackId, rating: String(rating) },
-    altUrl,
+  return latestWrite(`setRating|${normalizeUrl(baseUrl)}|${username}|${nativeTrackId}`, (signal) =>
+    callSubsonicVoid(
+      baseUrl,
+      username,
+      credential,
+      "setRating.view",
+      { id: nativeTrackId, rating: String(rating) },
+      altUrl,
+      signal,
+    ),
   );
 }
 
@@ -574,8 +585,9 @@ export async function savePlayQueue(
   for (const id of trackIds) params.append("id", id);
   if (currentId) params.set("current", currentId);
   params.set("position", String(Math.round(positionMs)));
-  const res = await apiPost(baseUrl, "savePlayQueue", params, altUrl);
-  if (!res.ok) return;
+  return latestWrite(`savePlayQueue|${normalizeUrl(baseUrl)}|${username}`, async (signal) => {
+    await apiPost(baseUrl, "savePlayQueue", params, altUrl, signal);
+  });
 }
 
 export async function getPlayQueue(

@@ -36,10 +36,11 @@ function formatSizeRange(count: number, minKb: number, maxKb: number): string {
 const MIN_ARTIST_IMAGE_KB = 15;
 const MAX_ARTIST_IMAGE_KB = 150;
 
-function useMissingCoverCount() {
+function useMissingCoverCount(serverId: string | undefined) {
   return useQuery({
-    queryKey: QK.albumCoversMissingCount(),
-    queryFn: getMissingCoverCount,
+    queryKey: QK.albumCoversMissingCount(serverId),
+    queryFn: () => (serverId ? getMissingCoverCount(serverId) : Promise.resolve(0)),
+    enabled: !!serverId,
   });
 }
 
@@ -71,7 +72,7 @@ export function DiagnosticsTab({
   const importInputRef = useRef<HTMLInputElement>(null);
   const [exportResult, setExportResult] = useState<{ savedTo: string } | { error: string } | null>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverId);
-  const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
+  const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount(serverId);
   const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
   const { data: missingArtistImageCount, refetch: refetchMissingArtistImageCount } = useMissingArtistImageCount();
   const {

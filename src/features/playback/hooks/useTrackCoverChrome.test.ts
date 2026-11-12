@@ -13,7 +13,7 @@ import type { CurrentTrack } from "../store/playerTypes";
 import { useTrackAccent } from "./useTrackAccent";
 import { useTrackFavicon } from "./useTrackFavicon";
 
-const storedUrl = "cover://localhost/cover/al-abc_ff?size=64";
+const storedUrl = "cover://localhost/cover/srv-a/al-abc_ff?size=64";
 const track: CurrentTrack = { id: "srv-a:t1", title: "Track", artist: "Artist", duration: 200, coverArtUrl: storedUrl };
 
 beforeEach(() => {
@@ -24,7 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  replaceCoverRevisions(new Map());
+  replaceCoverRevisions(null, new Map());
   usePlayerStore.setState({ currentTrack: null });
   document.head.innerHTML = "";
 });
@@ -36,8 +36,8 @@ describe("useTrackAccent", () => {
     await act(async () => {});
     expect(extractAccent.mock.calls).toEqual([[storedUrl]]);
 
-    await act(async () => setCoverRevision("other", 5));
-    await act(async () => setCoverRevision("abc", 1700));
+    await act(async () => setCoverRevision("srv-a", "other", 5));
+    await act(async () => setCoverRevision("srv-a", "abc", 1700));
 
     expect(extractAccent.mock.calls).toEqual([[storedUrl], [`${storedUrl}&v=1700`]]);
   });
@@ -52,7 +52,7 @@ describe("useTrackFavicon", () => {
     renderHook(() => useTrackFavicon());
     expect(link.getAttribute("href")).toBe(storedUrl);
 
-    act(() => setCoverRevision("abc", 1700));
+    act(() => setCoverRevision("srv-a", "abc", 1700));
 
     expect(link.getAttribute("href")).toBe(`${storedUrl}&v=1700`);
   });

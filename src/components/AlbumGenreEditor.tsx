@@ -2,10 +2,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { getDb } from "../db";
-import { useAlbumIdentity } from "../features/enrichment/hooks/useAlbumIdentity";
 import { UnmatchedSection } from "../features/tags/components/TagDrawer";
 import type { TreeNode } from "../features/tags/lib/canonicalize";
 import { getCanonTree, rawGenreId } from "../features/tags/lib/canonicalize";
+import type { TagSource } from "../features/tags/lib/tagNormalize";
 import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
 import { QK } from "../lib/queryKeys";
 import "./AlbumGenreEditor.css";
@@ -13,7 +13,7 @@ import "./AlbumGenreEditor.css";
 export type DisplayGenre = {
   id: string | null;
   name: string;
-  source?: "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+  source?: TagSource;
 };
 
 export type GenreGroups = {
@@ -21,6 +21,7 @@ export type GenreGroups = {
   file: DisplayGenre[];
   lastfm: DisplayGenre[];
   musicbrainz: DisplayGenre[];
+  discogs: DisplayGenre[];
   folksonomy: DisplayGenre[];
   unsourced: DisplayGenre[];
   multiSource: boolean;
@@ -28,48 +29,23 @@ export type GenreGroups = {
 
 interface Props {
   albumId: string;
-  albumArtist: string;
-  albumName: string;
   genreGroups: GenreGroups;
   rawSourcesByCanonicalId: Map<string, Array<{ raw_value: string; source: string }>>;
   onTagFilter?: (canonicalId: string) => void;
   onClose: () => void;
 }
 
-export function AlbumGenreEditor({
-  albumId,
-  albumArtist,
-  albumName,
-  genreGroups,
-  rawSourcesByCanonicalId,
-  onTagFilter,
-  onClose,
-}: Props) {
+export function AlbumGenreEditor({ albumId, genreGroups, rawSourcesByCanonicalId, onTagFilter, onClose }: Props) {
   const queryClient = useQueryClient();
-  const { data: albumIdentity } = useAlbumIdentity(albumId);
   const [isUpdating, setIsUpdating] = useState(false);
   const [genreInput, setGenreInput] = useState("");
   const [autocomplete, setAutocomplete] = useState<TreeNode[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const buildNormalizeArgs = useCallback(
-    () => ({
-      lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-      combinedMbGenres: albumIdentity?.combined_genres_json
-        ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-        : null,
-      combinedMbTags: albumIdentity?.combined_tags_json
-        ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-        : null,
-    }),
-    [albumIdentity],
-  );
-
   const runNormalize = useCallback(async () => {
-    await normalizeAlbum(albumId, albumArtist, albumName, buildNormalizeArgs());
+    await normalizeAlbum(albumId);
     await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
-  }, [albumId, albumArtist, albumName, buildNormalizeArgs, queryClient]);
+  }, [albumId, queryClient]);
 
   const handleAdd = useCallback(
     async (canonicalId: string, name: string) => {
@@ -117,14 +93,14 @@ export function AlbumGenreEditor({
           albumId,
           canonicalId,
         ]);
-        await normalizeAlbum(albumId, albumArtist, albumName, buildNormalizeArgs());
+        await normalizeAlbum(albumId);
         await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
         await queryClient.invalidateQueries({ queryKey: QK.albumGenreExclusions(albumId) });
       } finally {
         setIsUpdating(false);
       }
     },
-    [albumId, albumArtist, albumName, buildNormalizeArgs, queryClient],
+    [albumId, queryClient],
   );
 
   const handleInputChange = useCallback(async (value: string) => {
@@ -189,6 +165,7 @@ export function AlbumGenreEditor({
         {renderGroup("File", genreGroups.file, false)}
         {renderGroup("Last.fm", genreGroups.lastfm, false)}
         {renderGroup("MusicBrainz", genreGroups.musicbrainz, false)}
+        {renderGroup("Discogs", genreGroups.discogs, false)}
         {renderGroup("Folksonomy", genreGroups.folksonomy, false)}
         {renderGroup(null, genreGroups.unsourced, false)}
 
@@ -224,7 +201,7 @@ export function AlbumGenreEditor({
           </div>
         </div>
 
-        <UnmatchedSection albumId={albumId} albumArtist={albumArtist} albumName={albumName} />
+        <UnmatchedSection albumId={albumId} />
       </div>
     </div>
   );

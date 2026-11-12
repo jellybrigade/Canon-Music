@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchItunesCoverArt } from "../clients/itunes";
+import { fetchFallbackCover } from "../features/covers/fallbackCover";
 import { CoverImg } from "./CoverImg";
 
 interface Props {
@@ -22,7 +22,7 @@ export function AlbumArt({ src, artist, album, alt = "", className, loading, dec
     if (hasTriedFallback) return;
     const failedSrc = src;
     setFallback({ forSrc: failedSrc, url: null });
-    const url = await fetchItunesCoverArt(artist, album).catch(() => null);
+    const url = await fetchFallbackCover(artist, album).catch(() => null);
     setFallback((previous) => (previous?.forSrc === failedSrc ? { forSrc: failedSrc, url } : previous));
   }
 

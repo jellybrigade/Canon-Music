@@ -129,3 +129,38 @@ describe("PlaylistDetail column sort", () => {
     expect(queuedTitles()).toEqual(["Alpha", "Charlie", "Bravo"]);
   });
 });
+
+describe("PlaylistDetail entries not synced yet", () => {
+  // jsdom lays nothing out, so the virtualized list renders no rows without a viewport size.
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(2000);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(900);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function seedUnmirroredEntry(position: number) {
+    db.raw
+      .prepare("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)")
+      .run(PLAYLIST.id, `srv-a:missing${position}`, position);
+  }
+
+  it("leaves them out of Play All", async () => {
+    seedUnmirroredEntry(3);
+    renderDetail();
+    await playAll();
+    expect(queuedTitles()).toEqual(["Bravo", "Alpha", "Charlie"]);
+  });
+
+  it("shows them greyed in their position, and keeps Play All disabled when none is playable", async () => {
+    db.raw.prepare("DELETE FROM playlist_tracks").run();
+    seedUnmirroredEntry(0);
+    renderDetail();
+    const row = await screen.findByText("Not synced yet");
+    expect(row.closest(".playlist-vrow--unavailable")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Play playlist" })).toBeDisabled();
+    fireEvent.click(row);
+    expect(playQueue).not.toHaveBeenCalled();
+  });
+});

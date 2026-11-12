@@ -235,6 +235,16 @@ describe("useSearch FTS pool ranking and caps", () => {
   });
 });
 
+describe("useSearch tie order", () => {
+  // Inserted in descending id order, so FTS rowid order disagrees with id order on every tie.
+  it("orders tracks and albums that rank and score the same by id", async () => {
+    for (const key of ["c", "b", "a"]) seedPair({ key, albumName: "Echoes", trackTitle: "Echoes", artist: "Same" });
+    const res = await search("echoes");
+    expect(res.tracks.map((t) => t.id)).toEqual(["a-trk", "b-trk", "c-trk"]);
+    expect(res.albums.map((a) => a.id)).toEqual(["a-alb", "b-alb", "c-alb"]);
+  });
+});
+
 describe("useSearch server scoping", () => {
   it("excludes albums, tracks and artists owned by another server", async () => {
     seedPair({ key: "mine", albumName: "Blue Album", trackTitle: "Blue Song", artist: "Blue Artist" });

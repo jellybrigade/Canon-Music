@@ -443,13 +443,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
         (() => {
           const popoverUrl =
             serverWithCred && currentTrack.artworkRef
-              ? getCoverArtUrl(
-                  serverWithCred.server.url,
-                  serverWithCred.server.username,
-                  serverWithCred.credential,
-                  currentTrack.artworkRef,
-                  400,
-                )
+              ? getCoverArtUrl(serverWithCred.server.id, currentTrack.artworkRef, 400)
               : currentTrack.coverArtUrl;
           return popoverUrl ? (
             <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>

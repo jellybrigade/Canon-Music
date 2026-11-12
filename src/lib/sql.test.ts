@@ -1,6 +1,6 @@
 import BetterSqlite3 from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { escapeLike } from "./sql";
+import { escapeLike, ownedByServer } from "./sql";
 
 describe("escapeLike", () => {
   it("leaves a value with no LIKE metacharacter untouched", () => {
@@ -64,5 +64,19 @@ describe("escapeLike against real SQLite", () => {
 
   it("proves the probe can fail: the unescaped prefix over-matches", () => {
     expect(matches("music_1:%", "music_1:track", "music-1:track")).toEqual([1, 2]);
+  });
+});
+
+describe("ownedByServer", () => {
+  it("matches ids under the server's prefix only, case and all", () => {
+    const db = new BetterSqlite3(":memory:");
+    db.exec("CREATE TABLE t (id TEXT PRIMARY KEY)");
+    for (const id of ["s_1:a", "s_1:b", "s_1;x", "s_10:a", "S_1:a", "sx1:a", "s_1"]) {
+      db.prepare("INSERT INTO t (id) VALUES (?)").run(id);
+    }
+    const owned = ownedByServer("id", "s_1");
+    const rows = db.prepare(`SELECT id FROM t WHERE ${owned.sql} ORDER BY id`).all(...owned.params);
+    expect(rows).toEqual([{ id: "s_1:a" }, { id: "s_1:b" }]);
+    db.close();
   });
 });

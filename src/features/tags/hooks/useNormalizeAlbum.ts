@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import type { MbGenre } from "../../../clients/musicbrainz";
 import { useSetting } from "../../../hooks/useSetting";
 import { parseStalenessDays } from "../../../lib/numberSetting";
 import { QK } from "../../../lib/queryKeys";
@@ -10,7 +9,7 @@ import { useTagsStore } from "../store/tags";
 
 export type { NormalizedTags };
 
-export function useNormalizeAlbum(albumId: string, artist: string, album: string) {
+export function useNormalizeAlbum(albumId: string) {
   const queryClient = useQueryClient();
   const [stalenessDays, , isStalenessDaysLoaded] = useSetting("tags.staleness_days", "30");
   const { data: identity } = useAlbumIdentity(albumId);
@@ -42,30 +41,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
 
     if (!mbDataJustArrived && !isStale(query.data ?? null, parseStalenessDays(stalenessDays))) return;
 
-    let combinedMbGenres: MbGenre[] | null = null;
-    if (identity?.combined_genres_json) {
-      try {
-        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
-      } catch {
-        // Malformed JSON, ignore, proceed without MB genres
-      }
-    }
-
-    let combinedMbTags: MbGenre[] | null = null;
-    if (identity?.combined_tags_json) {
-      try {
-        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
-      } catch {
-        // Malformed JSON, ignore, proceed without MB tags
-      }
-    }
-
-    void normalizeAlbum(albumId, artist, album, {
-      lastfmArtistName: identity?.lastfm_artist_name ?? null,
-      lastfmAlbumName: identity?.lastfm_album_name ?? null,
-      combinedMbGenres,
-      combinedMbTags,
-    }).then(() => {
+    void normalizeAlbum(albumId).then(() => {
       void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
       if (!decrementedRef.current.has(albumId)) {
@@ -73,17 +49,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
         decrementEnrichmentPending();
       }
     });
-  }, [
-    query.isLoading,
-    query.data,
-    albumId,
-    artist,
-    album,
-    queryClient,
-    stalenessDays,
-    isStalenessDaysLoaded,
-    identity,
-  ]);
+  }, [query.isLoading, query.data, albumId, queryClient, stalenessDays, isStalenessDaysLoaded, identity]);
 
   return { data: query.data ?? null, isLoading: query.isLoading };
 }

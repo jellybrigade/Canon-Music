@@ -16,7 +16,7 @@ import { RADIO_START_ACTION_SETTING, resolveRadioStart, useStartRadio } from "./
 let db: FakeDatabase;
 const startRadioFrom = vi.fn(() => Promise.resolve());
 const seed: CurrentTrack = { id: "s", title: "Seed", artist: null, duration: 100 };
-const request = { tracks: [seed], streamUrlFor: (t: CurrentTrack) => t.id };
+const request = { tracks: [seed] };
 
 function setStored(value: string) {
   db.raw.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(RADIO_START_ACTION_SETTING, value);

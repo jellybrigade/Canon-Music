@@ -396,3 +396,8 @@
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
+
+.foryou-v2-tab__lock {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}

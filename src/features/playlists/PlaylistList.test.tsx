@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { PlaylistList } from "./PlaylistList";
 import type { PlaylistRow } from "./usePlaylists";
@@ -141,5 +141,54 @@ describe("PlaylistList", () => {
       ),
     );
     expect(rowOffsets()[1]).toBe(MEASURED_ROW_HEIGHT + ROW_GAP);
+  });
+
+  describe("renaming", () => {
+    function startRenaming() {
+      const onRename = vi.fn(async () => {});
+      render(
+        <PlaylistList
+          playlists={[playlist(0)]}
+          serverWithCredential={SRV}
+          onSelect={() => {}}
+          onCreatePlaylist={async () => {}}
+          onCreateSmartPlaylist={async () => {}}
+          onRename={onRename}
+        />,
+      );
+      const card = document.querySelector<HTMLElement>("[data-index] button");
+      if (!card) throw new Error("no playlist card");
+      fireEvent.contextMenu(card);
+      fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+      const input = document.querySelector<HTMLInputElement>(".playlist-card-info input");
+      if (!input) throw new Error("no rename field");
+      fireEvent.change(input, { target: { value: "Road trip" } });
+      return { onRename, input };
+    }
+
+    // A browser may blur the field as Enter or Escape removes it; both events land before the re-render.
+    it("renames once when Enter is followed by the field's blur", () => {
+      const { onRename, input } = startRenaming();
+      act(() => {
+        fireEvent.keyDown(input, { key: "Enter" });
+        fireEvent.blur(input);
+      });
+      expect(onRename).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the old name when Escape is followed by the field's blur", () => {
+      const { onRename, input } = startRenaming();
+      act(() => {
+        fireEvent.keyDown(input, { key: "Escape" });
+        fireEvent.blur(input);
+      });
+      expect(onRename).not.toHaveBeenCalled();
+    });
+
+    it("renames when the field loses focus by a click elsewhere", () => {
+      const { onRename, input } = startRenaming();
+      fireEvent.blur(input);
+      expect(onRename).toHaveBeenCalledTimes(1);
+    });
   });
 });

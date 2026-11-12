@@ -3,8 +3,8 @@ import { getPlayQueue, savePlayQueue } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { onQuit } from "../../../lib/quitFlush";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
-import { makeStreamUrlBuilder } from "../../../lib/track";
 import { usePlayerStore } from "../store/player";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
@@ -74,8 +74,6 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // would overwrite it. Whoever got there first wins.
       if (usePlayerStore.getState().currentTrack) return;
 
-      const streamUrlFor = makeStreamUrlBuilder(server, credential);
-
       const trackObjs = orderedTracks.map((r) => ({
         id: r.id,
         title: r.title,
@@ -83,7 +81,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         duration: r.duration,
         album: r.album_name ?? null,
         albumId: r.album_id,
-        coverArtUrl: r.artwork_url ? getCoverArtUrl(server.url, server.username, credential, r.artwork_url, 64) : null,
+        coverArtUrl: r.artwork_url ? getCoverArtUrl(server.id, r.artwork_url, 64) : null,
         artworkRef: r.artwork_url,
         replayGain: replayGainFromRow(r),
       }));
@@ -94,7 +92,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // Seeds the queue only. Loading the track here would download and decode it at startup
       // for playback the user never asked for, and the pause that followed had to win a race
       // against the download thread appending to the sink.
-      restoreQueue(trackObjs, streamUrlFor, startIndex >= 0 ? startIndex : 0);
+      restoreQueue(trackObjs, startIndex >= 0 ? startIndex : 0);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverWithCred?.server.id]);
@@ -118,7 +116,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         : null;
 
       const { elapsed: el } = usePlayerStore.getState();
-      void savePlayQueue(
+      savePlayQueue(
         server.url,
         server.username,
         credential,
@@ -126,7 +124,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         currentNativeId,
         Math.round((el ?? 0) * 1000),
         server.alt_url ?? undefined,
-      );
+      ).catch((err: unknown) => console.warn("Saving the queue to the server failed", err));
     }, 10_000);
 
     return () => {
@@ -137,20 +135,20 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     // meant the server kept the stale order.
   }, [serverWithCred, currentTrack?.id, queue, hasPlayed]);
 
-  // Save immediately on visibility change (tab loses focus) or page unload
+  // Save immediately on visibility change (tab loses focus) or quit
   useEffect(() => {
     if (!serverWithCred) return;
     const { server, credential } = serverWithCred;
 
-    function saveNow() {
+    function saveNow(): Promise<void> {
       const { queue: q, currentTrack: ct, elapsed: el } = usePlayerStore.getState();
-      if (!ct || q.length === 0 || !hasPlayedRef.current) return;
+      if (!ct || q.length === 0 || !hasPlayedRef.current) return Promise.resolve();
       const prefix = `${server.id}:`;
       const nativeIds = q
         .map((t) => (t.id.startsWith(prefix) ? t.id.slice(prefix.length) : null))
         .filter((id): id is string => id != null);
       const currentNativeId = ct.id.startsWith(prefix) ? ct.id.slice(prefix.length) : null;
-      void savePlayQueue(
+      return savePlayQueue(
         server.url,
         server.username,
         credential,
@@ -158,18 +156,18 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         currentNativeId,
         Math.round((el ?? 0) * 1000),
         server.alt_url ?? undefined,
-      );
+      ).catch((err: unknown) => console.warn("Saving the queue to the server failed", err));
     }
 
     function onVisibilityChange() {
-      if (document.visibilityState === "hidden") saveNow();
+      if (document.visibilityState === "hidden") void saveNow();
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("beforeunload", saveNow);
+    const stopQuitFlush = onQuit(saveNow);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("beforeunload", saveNow);
+      stopQuitFlush();
     };
   }, [serverWithCred?.server.id]);
 }

@@ -2,11 +2,14 @@ import { Play, Radio, RefreshCw } from "lucide-react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
+import { useHeldCoverSet } from "../../hooks/useHeldCoverSet";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { AlbumRow } from "../../types/library";
 import "./AlbumCarousel.css";
 import { CoverImg } from "../../components/CoverImg";
 import { CarouselTrack } from "./CarouselTrack";
+
+const NO_ALBUMS: AlbumRow[] = [];
 
 interface CarouselRefresh {
   onClick: () => void;
@@ -45,9 +48,12 @@ export function AlbumCarousel({
   refresh,
   scrollToStartRequest = 0,
 }: AlbumCarouselProps) {
-  const { server, credential } = serverWithCred;
+  const { server } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
+  const coverUrlOf = (album: AlbumRow) =>
+    coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 300) : null);
+  const shownItems = useHeldCoverSet(items ?? NO_ALBUMS, coverUrlOf);
 
   if (!isLoading && (!items || items.length === 0)) return null;
 
@@ -94,12 +100,8 @@ export function AlbumCarousel({
                 <p className="carousel-card__artist">&nbsp;</p>
               </div>
             ))
-          : (items ?? []).map((item) => {
-              const artUrl =
-                coverMap.get(item.id) ??
-                (item.artwork_url
-                  ? getCoverArtUrl(server.url, server.username, credential, item.artwork_url, 300)
-                  : null);
+          : shownItems.map((item) => {
+              const artUrl = coverUrlOf(item);
               return (
                 <div
                   key={item.id}

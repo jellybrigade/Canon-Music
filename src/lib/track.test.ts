@@ -158,7 +158,7 @@ describe("currentTrackFromRow", () => {
   };
 
   it("carries every field a play path needs, ReplayGain included", () => {
-    const track = currentTrackFromRow(row, makeServer(), md5Cred);
+    const track = currentTrackFromRow(row, makeServer());
     expect(track).toMatchObject({
       id: "srv1:t1",
       title: "Title",
@@ -169,11 +169,11 @@ describe("currentTrackFromRow", () => {
       albumId: "srv1:al-1",
       replayGain: { trackGain: -6, trackPeak: 0.9, albumGain: null, albumPeak: null },
     });
-    expect(params(track.coverArtUrl ?? "").get("id")).toBe("co-1");
+    expect(track.coverArtUrl).toBe("cover://localhost/cover/srv1/co-1?size=64");
   });
 
   it("leaves the cover empty for a row with no art", () => {
-    const track = currentTrackFromRow({ ...row, artwork_url: null }, makeServer(), md5Cred);
+    const track = currentTrackFromRow({ ...row, artwork_url: null }, makeServer());
     expect([track.coverArtUrl, track.artworkRef]).toEqual([null, null]);
   });
 });

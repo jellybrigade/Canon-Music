@@ -1,6 +1,6 @@
 use crate::cover::{
-    is_cached_cover_size, sanitize_cache_key, CoverState, ImageCache, MAX_COVER_CACHE_ENTRIES,
-    ORIGINAL_COVER_SIZE,
+    is_cached_cover_size, sanitize_cache_key, CoverRequest, CoverState, ImageCache,
+    MAX_COVER_CACHE_ENTRIES, ORIGINAL_COVER_SIZE,
 };
 use crate::stream_classify::is_image_response;
 use std::collections::HashMap;
@@ -151,21 +151,26 @@ pub(crate) fn active_overrides(
 }
 
 /// The chosen cover for this cover id, scaled to fit `size` (0 = as stored), if the URL names
-/// the revision the active server has stored. Scaled copies are kept in `cache`.
+/// the active server and the revision it has stored. Scaled copies are kept in `cache`.
 pub(crate) fn read_override(
     overrides: &CoverOverrides,
     cache: &ImageCache,
-    cover_id: &str,
-    size: u32,
-    revision: Option<i64>,
+    request: &CoverRequest,
 ) -> Option<(Vec<u8>, String)> {
+    let CoverRequest {
+        server_id,
+        cover_id,
+        size,
+        revision,
+    } = *request;
     let key = album_key_of_cover_id(cover_id)?;
-    let stored = overrides
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .by_album
-        .get(key)
-        .cloned()?;
+    let stored = {
+        let active = overrides.lock().unwrap_or_else(|e| e.into_inner());
+        if active.server_id.as_deref() != Some(server_id) {
+            return None;
+        }
+        active.by_album.get(key).cloned()?
+    };
     if revision != Some(stored.revision) {
         return None;
     }
@@ -473,6 +478,20 @@ mod tests {
         Arc::new(Mutex::new(active_overrides(root, Some(active), rows)))
     }
 
+    fn req<'a>(
+        server_id: &'a str,
+        cover_id: &'a str,
+        size: u32,
+        revision: Option<i64>,
+    ) -> CoverRequest<'a> {
+        CoverRequest {
+            server_id,
+            cover_id,
+            size,
+            revision,
+        }
+    }
+
     fn empty_cache() -> ImageCache {
         Arc::new(Mutex::new(HashMap::new()))
     }
@@ -515,11 +534,15 @@ mod tests {
         let cache = empty_cache();
 
         let (bytes, content_type) =
-            read_override(&overrides, &cache, "al-abc_0fcc", 0, Some(7)).unwrap();
+            read_override(&overrides, &cache, &req("srv", "al-abc_0fcc", 0, Some(7))).unwrap();
         assert_eq!(bytes, b"\x89PNG-bytes");
         assert_eq!(content_type, "image/png");
-        assert!(read_override(&overrides, &cache, "al-abc_ffff", 0, Some(7)).is_some());
-        assert!(read_override(&overrides, &cache, "al-other_0fcc", 0, Some(7)).is_none());
+        assert!(
+            read_override(&overrides, &cache, &req("srv", "al-abc_ffff", 0, Some(7))).is_some()
+        );
+        assert!(
+            read_override(&overrides, &cache, &req("srv", "al-other_0fcc", 0, Some(7))).is_none()
+        );
     }
 
     #[test]
@@ -529,8 +552,8 @@ mod tests {
         let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
         let cache = empty_cache();
 
-        assert!(read_override(&overrides, &cache, "al-abc_00", 0, None).is_none());
-        assert!(read_override(&overrides, &cache, "al-abc_00", 0, Some(6)).is_none());
+        assert!(read_override(&overrides, &cache, &req("srv", "al-abc_00", 0, None)).is_none());
+        assert!(read_override(&overrides, &cache, &req("srv", "al-abc_00", 0, Some(6))).is_none());
     }
 
     #[test]
@@ -541,14 +564,14 @@ mod tests {
         let cache = empty_cache();
 
         let (bytes, content_type) =
-            read_override(&overrides, &cache, "al-abc", 64, Some(7)).unwrap();
+            read_override(&overrides, &cache, &req("srv", "al-abc", 64, Some(7))).unwrap();
         let scaled = image::load_from_memory(&bytes).unwrap();
         assert_eq!((scaled.width(), scaled.height()), (64, 53));
         assert_eq!(content_type, "image/jpeg");
 
         std::fs::remove_file(path).unwrap();
-        assert!(read_override(&overrides, &cache, "al-abc", 64, Some(7)).is_some());
-        assert!(read_override(&overrides, &cache, "al-abc", 0, Some(7)).is_none());
+        assert!(read_override(&overrides, &cache, &req("srv", "al-abc", 64, Some(7))).is_some());
+        assert!(read_override(&overrides, &cache, &req("srv", "al-abc", 0, Some(7))).is_none());
     }
 
     #[test]
@@ -569,14 +592,43 @@ mod tests {
         let scratch = ScratchDir::new("other-server");
         store(&scratch.0, "srv-b", "srv-b:abc", 7, b"\xFF\xD8\xFFb");
         let overrides = overrides_for(&scratch.0, "srv-a", &[row("srv-b", "srv-b:abc", 7)]);
-        assert!(read_override(&overrides, &empty_cache(), "al-abc_00", 0, Some(7)).is_none());
+        assert!(read_override(
+            &overrides,
+            &empty_cache(),
+            &req("srv-a", "al-abc_00", 0, Some(7))
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn a_url_naming_another_server_gets_that_servers_cover_not_the_active_choice() {
+        let scratch = ScratchDir::new("url-server");
+        store(&scratch.0, "srv", "srv:abc", 7, b"\xFF\xD8\xFFa");
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        assert!(read_override(
+            &overrides,
+            &empty_cache(),
+            &req("srv-b", "al-abc_00", 0, Some(7))
+        )
+        .is_none());
+        assert!(read_override(
+            &overrides,
+            &empty_cache(),
+            &req("srv", "al-abc_00", 0, Some(7))
+        )
+        .is_some());
     }
 
     #[test]
     fn a_cover_whose_file_is_gone_falls_through_to_the_server() {
         let scratch = ScratchDir::new("missing-file");
         let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
-        assert!(read_override(&overrides, &empty_cache(), "al-abc_00", 0, Some(7)).is_none());
+        assert!(read_override(
+            &overrides,
+            &empty_cache(),
+            &req("srv", "al-abc_00", 0, Some(7))
+        )
+        .is_none());
     }
 
     #[test]
@@ -586,12 +638,12 @@ mod tests {
         let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
         let saved = store(&scratch.0, "srv", "srv:abc", 9, b"\xFF\xD8\xFFnew");
         let cache = empty_cache();
-        assert!(read_override(&overrides, &cache, "al-abc", 0, Some(9)).is_none());
+        assert!(read_override(&overrides, &cache, &req("srv", "al-abc", 0, Some(9))).is_none());
 
         use_override(&overrides, &scratch.0, "srv", "srv:abc", 9);
 
         assert_eq!(
-            read_override(&overrides, &cache, "al-abc", 0, Some(9))
+            read_override(&overrides, &cache, &req("srv", "al-abc", 0, Some(9)))
                 .unwrap()
                 .0,
             b"\xFF\xD8\xFFnew"
@@ -606,7 +658,12 @@ mod tests {
         let overrides = overrides_for(&scratch.0, "srv-a", &[]);
         store(&scratch.0, "srv-b", "srv-b:abc", 9, b"\xFF\xD8\xFF");
         use_override(&overrides, &scratch.0, "srv-b", "srv-b:abc", 9);
-        assert!(read_override(&overrides, &empty_cache(), "al-abc", 0, Some(9)).is_none());
+        assert!(read_override(
+            &overrides,
+            &empty_cache(),
+            &req("srv-a", "al-abc", 0, Some(9))
+        )
+        .is_none());
     }
 
     #[test]

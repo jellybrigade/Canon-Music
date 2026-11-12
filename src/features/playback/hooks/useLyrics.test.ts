@@ -294,3 +294,51 @@ describe("useLyrics timing offset", () => {
     expect(view.result.current.offsetMs).toBe(700);
   });
 });
+
+describe("useLyrics with a featured credit", () => {
+  const FEATURED: CurrentTrack = { ...TRACK, artist: "Drake feat. Sampha", title: "Too Much" };
+
+  async function mountFeatured() {
+    const view = renderHook(() => useLyrics(FEATURED, null, null), { wrapper });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    return view;
+  }
+
+  it("asks LRClib by the lead artist when the whole credit finds nothing", async () => {
+    vi.mocked(fetchLyrics).mockImplementation(async ({ artist }) =>
+      artist === "Drake" ? { plain: "lead artist lyrics", synced: null } : null,
+    );
+    const view = await mountFeatured();
+    expect(view.result.current.plain).toBe("lead artist lyrics");
+    expect(vi.mocked(fetchLyrics).mock.calls.map(([params]) => params.artist)).toEqual(["Drake feat. Sampha", "Drake"]);
+    expect(vi.mocked(fetchLyricsOvh)).not.toHaveBeenCalled();
+  });
+
+  it("asks lyrics.ovh by the lead artist when the whole credit finds nothing", async () => {
+    vi.mocked(fetchLyricsOvh).mockImplementation(async (artist) => (artist === "Drake" ? "ovh lyrics" : null));
+    const view = await mountFeatured();
+    expect(view.result.current.plain).toBe("ovh lyrics");
+    expect(vi.mocked(fetchLyricsOvh).mock.calls.map(([artist]) => artist)).toEqual(["Drake feat. Sampha", "Drake"]);
+    expect(lyricsRow()?.source).toBe("lyrics.ovh");
+  });
+
+  it("keeps the whole credit's answer without asking again", async () => {
+    vi.mocked(fetchLyrics).mockResolvedValue({ plain: null, synced: "[00:01.00] tagged credit" });
+    const view = await mountFeatured();
+    expect(view.result.current.synced).toBe("[00:01.00] tagged credit");
+    expect(vi.mocked(fetchLyrics)).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks once for a credit naming one artist", async () => {
+    await mountSettled();
+    expect(vi.mocked(fetchLyrics)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchLyricsOvh)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a miss when the whole credit's lookup failed and the lead artist's found nothing", async () => {
+    vi.mocked(fetchLyrics).mockRejectedValueOnce(new TypeError("Load failed"));
+    await mountFeatured();
+    expect(vi.mocked(fetchLyrics)).toHaveBeenCalledTimes(2);
+    expect(lyricsRow()?.source).toBe("cleared");
+  });
+});

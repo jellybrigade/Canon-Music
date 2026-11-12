@@ -48,6 +48,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioSeed: null,
     radioMode: "curated",
     radioLabel: null,
+    clearedQueue: null,
     radioSimilarityScale: 0.5,
     isQueueOpen: false,
     accentColor: null,
@@ -165,16 +166,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({ waveformPeaks: peaks });
     },
 
-    play: async (track, streamUrlFor) => {
+    play: async (track) => {
       // A one-track queue still needs an order covering it while shuffle is on: leaving it empty
       // lets writers that index shuffleOrder without normalising (removeFromQueue, moveQueueItem) read past the end.
       const { isShuffled } = get();
-      set({ queue: [track], queueIndex: 0, streamUrlFor, shuffleOrder: isShuffled ? [0] : [] });
-      await playTrack(track, streamUrlFor(track));
+      set({ queue: [track], queueIndex: 0, shuffleOrder: isShuffled ? [0] : [] });
+      await playTrack(track);
       void persistQueueState();
     },
 
-    playQueue: async (tracks, streamUrlFor, startIndex = 0) => {
+    playQueue: async (tracks, startIndex = 0) => {
       const { isShuffled, maxQueueSize, radioActive: hadRadio, radioSeed: hadSeed } = get();
       let workingTracks = tracks;
       let workingStart = startIndex;
@@ -208,13 +209,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({
         queue: workingTracks,
         queueIndex: position,
-        streamUrlFor,
         shuffleOrder,
         radioActive: false,
         radioSeed: null,
       });
       const track = resolveTrack(workingTracks, shuffleOrder, isShuffled, position);
-      if (track) await playTrack(track, streamUrlFor(track));
+      if (track) await playTrack(track);
       void persistQueueState();
       // Only write radio state if this call actually cleared one. The "start radio" callers run
       // playQueue and startRadio back to back, and startRadio has already written the new state
@@ -255,8 +255,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     next: async (fromNaturalEnd = false) => {
-      const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder, consumeMode, consumeOnSkip } = get();
-      if (queue.length === 0 || !streamUrlFor) return;
+      const { queue, queueIndex, repeat, isShuffled, shuffleOrder, consumeMode, consumeOnSkip } = get();
+      if (queue.length === 0) return;
 
       // Deduplicate: both the Rust event and the TS fallback call next(true); only handle once.
       if (fromNaturalEnd) {
@@ -275,7 +275,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
       const land = async (track: CurrentTrack) => {
         if (!parking) {
-          await playTrack(track, streamUrlFor(track), true);
+          await playTrack(track, true);
           return;
         }
         set({
@@ -355,8 +355,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     prev: async () => {
-      const { queue, queueIndex, streamUrlFor, elapsed, isShuffled, shuffleOrder, error, currentTrack } = get();
-      if (queue.length === 0 || !streamUrlFor) return;
+      const { queue, queueIndex, elapsed, isShuffled, shuffleOrder, error, currentTrack } = get();
+      if (queue.length === 0) return;
       const restart = elapsed > PREV_RESTART_THRESHOLD_S;
       // Restarting the track the engine already holds is a seek, not a load: playTrack would
       // re-fetch and re-decode the whole file for something the sink can do instantly. A failed track has no sink, so that still reloads.
@@ -367,7 +367,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const newPosition = restart ? queueIndex : Math.max(0, queueIndex - 1);
       set({ queueIndex: newPosition });
       const track = resolveTrack(queue, shuffleOrder, isShuffled, newPosition);
-      if (track) void playTrack(track, streamUrlFor(track), true);
+      if (track) void playTrack(track, true);
       void persistQueueState();
     },
 
@@ -405,13 +405,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     retryCurrent: () => {
-      const { currentTrack, streamUrl, streamUrlFor } = get();
+      const { currentTrack } = get();
       if (!currentTrack) return;
-      // Rebuild the URL where possible: a failure caused by an expired or rotated credential
+      // playTrack rebuilds the URL: a failure caused by an expired or rotated credential
       // would otherwise be retried against the same stale URL forever.
-      const url = streamUrlFor ? streamUrlFor(currentTrack) : streamUrl;
-      if (!url) return;
-      void playTrack(currentTrack, url);
+      void playTrack(currentTrack);
     },
 
     stop: () => {
@@ -472,7 +470,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistRadioState();
     },
 
-    startRadioFrom: async (action, { tracks, streamUrlFor, seed, mode, label }) => {
+    startRadioFrom: async (action, { tracks, seed, mode, label }) => {
       const radioSeed = seed ?? tracks[0];
       if (!radioSeed) return;
       if (tracks.length === 0) {
@@ -485,10 +483,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           void persistQueueState();
         }
       } else if (action === "replace") {
-        await get().playQueue(tracks, streamUrlFor, 0);
+        await get().playQueue(tracks, 0);
       } else {
         const hadTrack = get().currentTrack !== null;
-        get().addManyToQueue(tracks, streamUrlFor);
+        get().addManyToQueue(tracks);
         // The queue cap trims only from the head, so the appended tracks are always its tail.
         if (!hadTrack) await get().playFromQueueIndex(Math.max(0, get().queue.length - tracks.length));
       }

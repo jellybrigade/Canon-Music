@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Baseline coverage for `src/hooks/usePlaylistTracks.ts` - the SQLite-mirror read of a
+ * Baseline coverage for `usePlaylistTracks.ts` - the SQLite-mirror read of a
  * playlist's track list, and the removal path that keeps `playlist_tracks.position` gapless.
  *
  * Regressions pinned (known-issues.md):
@@ -232,6 +232,7 @@ describe("usePlaylistTracks load effect", () => {
       bit_rate: 320,
       suffix: "flac",
       position: 0,
+      is_unavailable: false,
       artwork_url: "art-alb1",
       album_name: "album alb1",
       album_id: "srv-a:alb1",
@@ -261,7 +262,7 @@ describe("usePlaylistTracks load effect", () => {
     expect(rows[2]!.album_name).toBe("album alb-c");
   });
 
-  it("drops a playlist row whose track row is gone (the join on tracks is inner)", async () => {
+  it("keeps a playlist entry whose track is not mirrored yet, marked unavailable in its position", async () => {
     const pl = seedPlaylist("pl1");
     seedTrack("a");
     db.raw
@@ -272,9 +273,11 @@ describe("usePlaylistTracks load effect", () => {
       .run(pl, "srv-a:a", 1);
 
     const { result } = renderHook(() => usePlaylistTracks(pl));
-    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
 
-    expect(result.current.data![0]!.id).toBe("srv-a:a");
+    const [missing, present] = result.current.data!;
+    expect(missing).toMatchObject({ id: "srv-a:vanished", position: 0, is_unavailable: true, duration: null });
+    expect(present).toMatchObject({ id: "srv-a:a", position: 1, is_unavailable: false });
   });
 
   it("does not leak rows from another playlist holding the same positions", async () => {

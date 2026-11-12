@@ -1,8 +1,9 @@
-import { Lock, Play, Plus, RefreshCw, Unlock, X } from "lucide-react";
+import { Check, Lock, LockOpen, Pencil, Play, Plus, RefreshCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
+import { useHeldCoverSet } from "../../hooks/useHeldCoverSet";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import {
   FOR_YOU_PER_TAB_MAX,
@@ -64,6 +65,7 @@ interface ForYouRailProps {
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
   onRefresh: () => void;
+  onToggleLock: (key: string) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   config: ForYouCategoryConfig[];
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
@@ -78,13 +80,14 @@ export function ForYouRail({
   onSelectAlbum,
   playAlbum,
   onRefresh,
+  onToggleLock,
   onCardContextMenu,
   config,
   onConfigChange,
   perTab,
   onPerTabChange,
 }: ForYouRailProps) {
-  const { server, credential } = serverWithCred;
+  const { server } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
   const descByKey = useMemo(() => {
@@ -102,7 +105,7 @@ export function ForYouRail({
     return map;
   }, [config]);
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
-  const [locked, setLocked] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [addFormOpen, setAddFormOpen] = useState(false);
@@ -111,6 +114,10 @@ export function ForYouRail({
   const [addArtist, setAddArtist] = useState("");
   // Typing is held locally so a half-typed "1" on the way to "12" doesn't reshuffle every tab.
   const [perTabDraft, setPerTabDraft] = useState<string | null>(null);
+  const coverUrlOf = (album: AlbumRow) =>
+    coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 300) : null);
+  const activeAlbums = (groups.find((g) => g.key === activeTabKey) ?? groups[0])?.albums ?? [];
+  const shownAlbums = useHeldCoverSet(activeAlbums, coverUrlOf);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -203,9 +210,9 @@ export function ForYouRail({
   }
 
   // Locking unmounts the field, and WebKit doesn't focus a clicked button, so no blur arrives to commit it.
-  function handleToggleLocked() {
-    if (!locked) commitPerTabDraft();
-    setLocked((l) => !l);
+  function handleToggleEditing() {
+    if (isEditing) commitPerTabDraft();
+    setIsEditing((editing) => !editing);
   }
 
   function handlePerTabKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -214,20 +221,20 @@ export function ForYouRail({
   }
 
   function handleTabDragStart(e: React.DragEvent, index: number) {
-    if (locked) return;
+    if (!isEditing) return;
     setDragIndex(index);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(index));
   }
   function handleTabDragOver(e: React.DragEvent, index: number) {
-    if (locked || dragIndex === null) return;
+    if (!isEditing || dragIndex === null) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDropIndex(e.clientX < rect.left + rect.width / 2 ? index : index + 1);
   }
   function handleTabDrop(e: React.DragEvent) {
-    if (locked) return;
+    if (!isEditing) return;
     e.preventDefault();
     if (dragIndex !== null && dropIndex !== null) {
       reorderConfig(dragIndex, dropIndex);
@@ -240,7 +247,7 @@ export function ForYouRail({
     setDropIndex(null);
   }
 
-  const tabCount = locked ? groups.length : config.length;
+  const tabCount = isEditing ? config.length : groups.length;
 
   return (
     <section className="home-rail">
@@ -250,7 +257,7 @@ export function ForYouRail({
         </p>
       </div>
 
-      {!locked && (
+      {isEditing && (
         <div className="foryou-v2-edit-row">
           <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
           <label className="foryou-v2-per-tab">
@@ -271,10 +278,10 @@ export function ForYouRail({
       )}
 
       <div className="foryou-v2-tabs" role="tablist" aria-label="For You categories">
-        {/* Keyed on lock state: WebKitGTK keeps painting this scroller at its old width
-            when unlocking adds tabs, clipping the new ones until hovered. */}
-        <div key={locked ? "locked" : "unlocked"} className="foryou-v2-tabs__list">
-          {locked
+        {/* Keyed on edit state: WebKitGTK keeps painting this scroller at its old width
+            when editing adds tabs, clipping the new ones until hovered. */}
+        <div key={isEditing ? "editing" : "viewing"} className="foryou-v2-tabs__list">
+          {!isEditing
             ? groups.map((group, i) => (
                 <div key={group.key} className="foryou-v2-tab-slot">
                   <button
@@ -286,6 +293,7 @@ export function ForYouRail({
                     onKeyDown={(e) => handleTabKeyDown(e, i)}
                   >
                     {group.kicker}
+                    {group.isLocked && <Lock size={11} aria-label="locked" className="foryou-v2-tab__lock" />}
                   </button>
                 </div>
               ))
@@ -329,7 +337,20 @@ export function ForYouRail({
           <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
             <RefreshCw size={14} />
           </button>
-          {!locked && (
+          {!isEditing && (
+            <button
+              className={`foryou-v2-action-btn${activeTabGroup.isLocked ? " foryou-v2-action-btn--active" : ""}`}
+              onClick={() => onToggleLock(activeTabGroup.key)}
+              aria-label={`Lock the ${activeTabGroup.kicker} tab`}
+              aria-pressed={activeTabGroup.isLocked}
+              title={
+                activeTabGroup.isLocked ? "Unlock: let Refresh change this tab" : "Lock: keep these albums on Refresh"
+              }
+            >
+              {activeTabGroup.isLocked ? <Lock size={14} /> : <LockOpen size={14} />}
+            </button>
+          )}
+          {isEditing && (
             <button
               className={`foryou-v2-action-btn${addFormOpen ? " foryou-v2-action-btn--active" : ""}`}
               onClick={() => setAddFormOpen((o) => !o)}
@@ -341,18 +362,18 @@ export function ForYouRail({
             </button>
           )}
           <button
-            className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
-            onClick={handleToggleLocked}
-            aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
-            aria-pressed={!locked}
-            title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}
+            className={`foryou-v2-action-btn${isEditing ? " foryou-v2-action-btn--active" : ""}`}
+            onClick={handleToggleEditing}
+            aria-label={isEditing ? "Done editing tabs" : "Edit tabs"}
+            aria-pressed={isEditing}
+            title={isEditing ? "Done" : "Reorder, show or hide tabs"}
           >
-            {locked ? <Lock size={14} /> : <Unlock size={14} />}
+            {isEditing ? <Check size={14} /> : <Pencil size={14} />}
           </button>
         </div>
       </div>
 
-      {!locked && addFormOpen && (
+      {isEditing && addFormOpen && (
         <form className="foryou-v2-add-form" onSubmit={submitAddCustom}>
           <div className="foryou-v2-add-form__type">
             <button
@@ -397,12 +418,8 @@ export function ForYouRail({
       )}
 
       <div className="foryou-v2-grid" role="tabpanel">
-        {activeTabGroup.albums.map((album) => {
-          const artUrl =
-            coverMap.get(album.id) ??
-            (album.artwork_url
-              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
-              : null);
+        {shownAlbums.map((album) => {
+          const artUrl = coverUrlOf(album);
           return (
             <div
               key={album.id}

@@ -1,5 +1,6 @@
 import { Heart, Play, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { GenreMappings } from "../../hooks/useGenreDisplay";
 import { useTrackListSessionStore } from "../../store/trackListSessionStore";
 import type { TrackRow } from "../../types/library";
 import { useClickOutside } from "../../ui/useClickOutside";
@@ -15,7 +16,7 @@ interface Props {
   tracksError: string | null;
   missingTracks: { isFetching: boolean; error: string | null; retry: () => void };
   trackTagGenresMap: Map<string, TrackGenre[]>;
-  genreMappings: Map<string, string | null>;
+  genreMappings: GenreMappings | null;
   currentTrackId: string | null;
   highlightTrackId: string | null;
   isPlaying: boolean;

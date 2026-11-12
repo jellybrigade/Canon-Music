@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
+import { invoke } from "@tauri-apps/api/core";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { boundedFetch, boundedNativeFetch, REQUEST_TIMEOUT_MS } from "./boundedFetch";
 
@@ -19,6 +21,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.mocked(tauriFetch).mockReset();
+  vi.mocked(invoke).mockReset();
 });
 
 /** A body that sends one byte every `gapMs`, `count` times; it errors on `signal` only if given one. */
@@ -43,7 +46,7 @@ function tricklingBody(gapMs: number, count: number, signal?: AbortSignal | null
 describe("boundedFetch", () => {
   it("rejects when the server never sends headers", async () => {
     vi.stubGlobal("fetch", vi.fn(abortableNever));
-    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("aborted");
+    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
   });
@@ -60,7 +63,7 @@ describe("boundedFetch", () => {
         return Promise.resolve(new Response(body, { status: 200 }));
       }),
     );
-    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("aborted");
+    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
   });
@@ -159,15 +162,32 @@ describe("boundedNativeFetch", () => {
     vi.mocked(tauriFetch).mockImplementation((_url, init) => abortableNever("", init));
     const pending = expect(
       boundedNativeFetch("https://example.test", { headers: { "User-Agent": "Canon" } }),
-    ).rejects.toThrow("aborted");
+    ).rejects.toThrow("timed out after 12s");
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
     await pending;
     expect(tauriFetch).toHaveBeenCalledTimes(1);
     expect(vi.mocked(tauriFetch).mock.calls[0]?.[1]?.headers).toEqual({ "User-Agent": "Canon" });
   });
 
+  it("says a request it gave up on timed out, not that it was canceled", async () => {
+    // The native client rejects an aborted request with a bare "Request canceled".
+    vi.mocked(tauriFetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject("Request canceled"));
+        }),
+    );
+    const failure = boundedNativeFetch("https://coverartarchive.org/release/x").catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    const err = await failure;
+    expect(err).toBeInstanceOf(DOMException);
+    expect((err as DOMException).name).toBe("AbortError");
+    expect((err as DOMException).message).toBe("timed out after 12s");
+  });
+
   it("keeps an API key in the failed request's URL out of the error it rejects with", async () => {
     // The native client rejects with reqwest's text, which quotes the whole URL.
+    vi.mocked(invoke).mockResolvedValue(null);
     vi.mocked(tauriFetch).mockRejectedValue(
       "error sending request for url (https://webservice.fanart.tv/v3/music/albums/rg?api_key=s3cret)",
     );
@@ -177,6 +197,39 @@ describe("boundedNativeFetch", () => {
     expect(String(failure)).toBe(
       "error sending request for url (https://webservice.fanart.tv/v3/music/albums/rg?api_key=[redacted])",
     );
+  });
+
+  it("says why the native client couldn't send, which its own text leaves out", async () => {
+    const cause = "something on your network is blocking it";
+    vi.mocked(tauriFetch).mockRejectedValue("error sending request for url (https://webservice.fanart.tv/v3/x)");
+    vi.mocked(invoke).mockResolvedValue(cause);
+    const failure = await boundedNativeFetch("https://webservice.fanart.tv/v3/x").catch((err: unknown) => err);
+    expect(failure).toBe(cause);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("diagnose_request", { url: "https://webservice.fanart.tv/v3/x" });
+  });
+
+  it("keeps the native client's text when the diagnosis can't run", async () => {
+    vi.mocked(tauriFetch).mockRejectedValue("error sending request for url (https://ws.example/)");
+    vi.mocked(invoke).mockRejectedValue("no such command");
+    const failure = await boundedNativeFetch("https://ws.example/").catch((err: unknown) => err);
+    expect(failure).toBe("error sending request for url (https://ws.example/)");
+  });
+
+  it("asks for no diagnosis when the request was answered or timed out", async () => {
+    vi.mocked(tauriFetch).mockResolvedValue(new Response("nope", { status: 500 }));
+    const answered = await boundedNativeFetch("https://ws.example/");
+    expect(answered.status).toBe(500);
+    vi.mocked(tauriFetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject("Request canceled"));
+        }),
+    );
+    const timedOut = boundedNativeFetch("https://ws.example/").catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(await timedOut).toBeInstanceOf(DOMException);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("keeps the error's type when it hides a key, so callers can still tell a network failure", async () => {

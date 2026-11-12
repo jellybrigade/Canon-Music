@@ -5,16 +5,14 @@ mod keychain;
 mod library_read;
 mod library_write;
 mod net_probe;
+mod quit;
 mod settings_backup;
 mod stream_classify;
 mod streaming;
 mod tray;
 mod upnp;
 use audio::{AudioState, PosTracker};
-use cover::{
-    cover_error_response, handle_cover_request, CoverProxyConfig, CoverState, ImageCache,
-    COVER_CACHE_DIR, MAX_COVER_REQUESTS,
-};
+use cover::{serve_cover_request, CoverState, ImageCache, COVER_CACHE_DIR, MAX_COVER_REQUESTS};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -99,7 +97,6 @@ pub fn run() {
     // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
     let cover_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
-    let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     let cover_client_builder = || {
         reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
@@ -135,14 +132,7 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("cover", |ctx, request, responder| {
             let state = ctx.app_handle().state::<CoverState>().inner().clone();
             tauri::async_runtime::spawn(async move {
-                let permit = state.request_sem.clone().acquire_owned().await;
-                let response = tauri::async_runtime::spawn_blocking(move || {
-                    let _permit = permit;
-                    handle_cover_request(&state, &request)
-                })
-                .await
-                .unwrap_or_else(|_| cover_error_response(500));
-                responder.respond(response);
+                responder.respond(serve_cover_request(state, Arc::new(request)).await);
             });
         })
         .plugin(tauri_plugin_http::init())
@@ -168,12 +158,13 @@ pub fn run() {
             visualizer,
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .manage(quit::QuitState::default())
         .manage(library_read::LibraryReadStore::default())
         .manage(library_write::LibraryWriteStore::default())
         .manage(CoverState {
             cache: cover_cache,
             artist_image_cache,
-            proxy_config: cover_proxy_config,
+            proxy_configs: Arc::default(),
             request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
             http_client: cover_http_client,
             override_http_client: cover_override_http_client,
@@ -206,7 +197,7 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "quit" => app.exit(0),
+                    "quit" => quit::request_quit(app),
                     "show" => {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.show();
@@ -271,6 +262,9 @@ pub fn run() {
                 if let Some(state) = window.app_handle().try_state::<AudioState>() {
                     state.visualizer.set_active(false);
                 }
+                if let Some(state) = window.app_handle().try_state::<quit::QuitState>() {
+                    state.forget_listener();
+                }
             }
             // Fires on every reload, not just the first (window is created hidden); show() on an
             // already-visible window is a no-op, and nothing hides it, so a reload can't unmap it.
@@ -278,11 +272,15 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if let Some(state) = window.app_handle().try_state::<TrayState>() {
-                    if state.close_to_tray.load(Ordering::Relaxed) {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    }
+                api.prevent_close();
+                let is_close_to_tray = window
+                    .app_handle()
+                    .try_state::<TrayState>()
+                    .is_some_and(|state| state.close_to_tray.load(Ordering::Relaxed));
+                if is_close_to_tray {
+                    let _ = window.hide();
+                } else {
+                    quit::request_quit(window.app_handle());
                 }
             }
         })
@@ -310,6 +308,9 @@ pub fn run() {
             tray::tray_update,
             tray::tray_set_visible,
             tray::tray_set_close_to_tray,
+            quit::quit_listener_ready,
+            quit::quit_listener_gone,
+            quit::quit_ready,
             cover::set_cover_proxy_config,
             cover_override::sync_cover_overrides,
             cover_override::save_album_cover_override,
@@ -317,6 +318,7 @@ pub fn run() {
             cover_override::discard_album_cover_file,
             cover_override::clear_album_cover_override,
             net_probe::probe_server,
+            net_probe::diagnose_request,
             take_crash_report,
             settings_backup::save_settings_backup,
             library_read::albums::get_albums,
@@ -331,7 +333,11 @@ pub fn run() {
             library_write::artist_aliases::merge_artist,
             library_write::genre_carry::carry_genre_renames,
             library_write::genre_carry::repair_dangling_genre_id,
+            library_write::playlists::playlist_append_tracks,
             library_write::playlists::playlist_remove_track,
+            library_write::tag_mappings::save_tag_mapping,
+            library_write::tag_mappings::delete_tag_mapping,
+            library_write::tag_mappings::set_rap_to_hip_hop,
             library_write::user_tree::delete_user_tree_node,
             library_write::track_remap::remap_track_ids,
         ])

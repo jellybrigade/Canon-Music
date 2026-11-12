@@ -9,6 +9,7 @@ import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { isMbid } from "../../lib/mbid";
+import { releaseDateText } from "../../lib/releaseDate";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { Server } from "../../types/server";
 import { scanForIssues } from "../tags/lib/tagIssues";
@@ -50,6 +51,12 @@ export interface SyncProgress {
 export interface SyncOptions {
   /** Read every album's tracks whatever the watermark and the probe say. */
   forceTrackPass?: boolean;
+  /** Stops the run between stages and albums, e.g. when the user switches server. */
+  signal?: AbortSignal;
+}
+
+function stopIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException("Sync stopped", "AbortError");
 }
 
 export async function syncLibrary(
@@ -75,6 +82,8 @@ export async function syncLibrary(
   changed: SyncChanges;
 }> {
   const altUrl = server.alt_url ?? undefined;
+  const signal = options?.signal;
+  stopIfAborted(signal);
   const skippedStages: string[] = [];
   // Deliberately not awaited: extension discovery is advisory. It still needs its own
   // catch, or a transient network failure surfaces as an unhandled rejection.
@@ -87,13 +96,14 @@ export async function syncLibrary(
   // Fatal by design: without the album list there is no sync to run. Scan status is
   // survivable (some deployments restrict it to admins); its failure falls through to the id probe, not "nothing changed".
   const [albums, scanStatus] = await Promise.all([
-    fetchAllAlbums(server.url, server.username, credential, altUrl),
+    fetchAllAlbums(server.url, server.username, credential, altUrl, signal),
     fetchScanStatus(server.url, server.username, credential, altUrl).catch((err: unknown) => {
       console.error("sync: failed to read the server scan status, falling back to the id probe:", err);
       return null;
     }),
   ]);
 
+  stopIfAborted(signal);
   const db = await getDb();
   // Inside the run, not before it: a clear made while another sync ran was written back by
   // that sync's own watermark, losing the resync. Cleared up front so an interrupted resync
@@ -137,12 +147,14 @@ export async function syncLibrary(
     played_at: string | null;
     release_type: string | null;
     mb_release_id: string | null;
+    release_date: string | null;
+    original_release_date: string | null;
     tracks_read_scan: string | null;
   };
   type TrackCountRow = { album_id: string; c: number };
   const [existingAlbumRows, trackCountRows] = await Promise.all([
     db.select<ExistingAlbumRow[]>(
-      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, tracks_read_scan
+      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, release_date, original_release_date, tracks_read_scan
        FROM albums WHERE server_id = ?`,
       [server.id],
     ),
@@ -165,7 +177,6 @@ export async function syncLibrary(
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
   const renamedAlbumIds: string[] = [];
-  const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
@@ -182,6 +193,8 @@ export async function syncLibrary(
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     const mbReleaseId = isMbid(album.musicBrainzId) ? album.musicBrainzId : null;
+    const releaseDate = releaseDateText(album.releaseDate);
+    const originalReleaseDate = releaseDateText(album.originalReleaseDate);
     const row = [
       albumDbId,
       server.id,
@@ -195,6 +208,8 @@ export async function syncLibrary(
       album.played ?? null,
       releaseType,
       mbReleaseId,
+      releaseDate,
+      originalReleaseDate,
     ];
 
     if (existing === undefined) {
@@ -212,7 +227,9 @@ export async function syncLibrary(
         sameValue(existing.play_count ?? 0, album.playCount ?? 0) &&
         sameValue(existing.played_at, album.played) &&
         sameValue(existing.release_type, releaseType) &&
-        sameValue(existing.mb_release_id, mbReleaseId);
+        sameValue(existing.mb_release_id, mbReleaseId) &&
+        sameValue(existing.release_date, releaseDate) &&
+        sameValue(existing.original_release_date, originalReleaseDate);
       if (!unchanged) {
         albumUpsertParams.push(row);
         if (!sameValue(existing.artist, album.artist)) artistsDirty = true;
@@ -234,11 +251,11 @@ export async function syncLibrary(
   await executeBatched(
     db,
     albumUpsertParams,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    12,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    14,
     (
       placeholders,
-    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id)
+    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, release_date, original_release_date)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -251,11 +268,13 @@ export async function syncLibrary(
          play_count = excluded.play_count,
          played_at = excluded.played_at,
          release_type = excluded.release_type,
-         mb_release_id = excluded.mb_release_id`,
+         mb_release_id = excluded.mb_release_id,
+         release_date = excluded.release_date,
+         original_release_date = excluded.original_release_date`,
   );
   // Right after the rename lands: a later failure would leave the old name indexed, and the
   // next sync sees no rename to rebuild for.
-  await rebuildTracksFts(db, renamedAlbumIds, []);
+  await rebuildTracksFts(db, renamedAlbumIds);
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
   // album is a real deletion. An empty list against a non-empty stored library still prunes nothing regardless.
@@ -290,13 +309,17 @@ export async function syncLibrary(
   let albumTracksIncomplete = false;
   let attemptedCount = 0;
   const readAlbumIds: string[] = [];
+  // A stop breaks out like a stall rather than throwing: the bookkeeping after the loop
+  // (artists, search index, read stamps) must still cover the albums already written.
   for (const { album, albumDbId, existingTrackCount } of albumsNeedingTracks) {
+    if (signal?.aborted) break;
     let tracks: Awaited<ReturnType<typeof fetchAlbumTracks>>;
     attemptedCount++;
     try {
-      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
+      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl, signal);
       consecutiveFailures = 0;
     } catch (err) {
+      if (signal?.aborted) break;
       if (err instanceof TransportStalledError) {
         console.error(`sync: stopping the album pass early, the connection is paused: ${err.message}`);
         albumTracksIncomplete = true;
@@ -322,10 +345,6 @@ export async function syncLibrary(
       tracks,
       hasStoredTracks: existingTrackCount > 0,
     });
-    // Collected whatever the carry reported: an id the carry declined keeps its own track
-    // row, which the prune then takes along with its FTS row, so clearing it here early is
-    // at worst a no-op and never leaves one behind.
-    for (const remap of written.remaps) renamedTrackIds.push(remap.oldId);
     remappedTracks += written.carried;
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
@@ -382,12 +401,15 @@ export async function syncLibrary(
 
   // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row
   // for a single changed album. Album ids are server-prefixed, so this is already scoped by server.
-  await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
+  await rebuildTracksFts(db, [...ftsDirtyAlbumIds]);
   await healTracksFts(db, server.id);
 
+  stopIfAborted(signal);
   const stage = { db, server, credential, altUrl, skippedStages };
   const lovedChanged = await syncLoved(stage);
+  stopIfAborted(signal);
   const { failedPlaylists, playlistsChanged } = await syncPlaylists(stage);
+  stopIfAborted(signal);
 
   // Only a pass that actually finished may move the watermark: storing it after a run that
   // broke early or lost albums to failures would tell the next sync those albums were read

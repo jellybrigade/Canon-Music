@@ -4,18 +4,64 @@ import type { MbGenre } from "../../../clients/musicbrainz";
 import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { executeBatched } from "../../../lib/dbBatch";
+import { currentLookupSql } from "../../../lib/releaseLookupSql";
+import { isArtistNameTag } from "./artistNameTag";
 import {
   type CanonTree,
-  canonicalKey,
   findCanonicalSync,
   getAncestorIds,
   getCanonTree,
   rawGenreId,
+  sqlNormExpression,
+  tagMatchKey,
 } from "./canonicalize";
 import { getManualGenreMappings } from "./manualMappings";
 import { bucketize } from "./tagBuckets";
 
-export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+export type TagSource =
+  | "file"
+  | "lastfm"
+  | "lastfm-track"
+  | "manual"
+  | "musicbrainz"
+  | "discogs"
+  | "musicbrainz-folksonomy";
+
+const SOURCE_CONFIDENCE: Record<TagSource, number> = {
+  manual: 1.0,
+  file: 1.0,
+  lastfm: 0.8,
+  "lastfm-track": 0.6,
+  musicbrainz: 0.7,
+  discogs: 0.65,
+  "musicbrainz-folksonomy": 0.6,
+};
+
+// Shown genres fill in this order up to the cap; consensus-promoted track genres count as Last.fm.
+const SOURCE_DISPLAY_RANK: Record<TagSource, number> = {
+  manual: 0,
+  file: 1,
+  lastfm: 2,
+  "lastfm-track": 2,
+  musicbrainz: 3,
+  discogs: 4,
+  "musicbrainz-folksonomy": 5,
+};
+
+/** Fills an album's unmapped external tags from tag_mappings: a manual decision beats an automatic one. */
+export const APPLY_TAG_MAPPINGS_SQL = `
+  UPDATE track_tags
+  SET canonical_id = (
+    SELECT tm.canonical_id FROM tag_mappings tm
+    WHERE tm.norm_value = ${sqlNormExpression("track_tags.raw_value")}
+      AND tm.kind = track_tags.kind
+      AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
+    ORDER BY tm.locked DESC, tm.source = 'manual' DESC, tm.raw_value
+    LIMIT 1
+  )
+  WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
+    AND canonical_id IS NULL
+    AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`;
 
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();
@@ -23,14 +69,14 @@ export async function rebuildTagVocabCache(): Promise<void> {
   await db.execute(`
     INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
     SELECT
-      LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
+      ${sqlNormExpression("tt.raw_value")},
       tt.raw_value,
       tt.kind,
       COUNT(DISTINCT tr.album_id),
       GROUP_CONCAT(DISTINCT CASE WHEN tt.source = 'server' THEN 'file' ELSE tt.source END)
     FROM track_tags tt
     JOIN tracks tr ON tr.id = tt.track_id
-    GROUP BY LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')), tt.kind
+    GROUP BY ${sqlNormExpression("tt.raw_value")}, tt.kind
   `);
 }
 
@@ -105,7 +151,7 @@ export interface GenreResolutionInput {
   tree: CanonTree;
   userGenres: { canonical_id: string; name: string }[];
   entries: { name: string; source: TagSource }[];
-  manualMap: Map<string, string>;
+  manualMap: ReadonlyMap<string, string>;
   excludedIds: Set<string>;
 }
 
@@ -130,9 +176,8 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
   }
 
   for (const entry of entries) {
-    const manualId = manualMap.get(canonicalKey(entry.name));
-    const confidence =
-      entry.source === "file" ? 1.0 : entry.source === "lastfm" ? 0.8 : entry.source === "musicbrainz" ? 0.7 : 0.6;
+    const manualId = manualMap.get(tagMatchKey(entry.name));
+    const confidence = SOURCE_CONFIDENCE[entry.source];
 
     if (manualId === "__ignored__") continue;
 
@@ -158,36 +203,47 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
   return { mapped, unmapped };
 }
 
-export async function normalizeAlbum(
-  albumId: string,
-  artist: string,
-  album: string,
-  identity?: {
-    lastfmArtistName?: string | null;
-    lastfmAlbumName?: string | null;
-    combinedMbGenres?: MbGenre[] | null;
-    combinedMbTags?: MbGenre[] | null;
-  },
-): Promise<NormalizedTags> {
+/** Re-derives the album's genres from every stored source; reads its own inputs so no caller can leave one out. */
+export async function normalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const existing = inFlightPromises.get(albumId);
   if (existing) return existing;
-  const promise = _doNormalizeAlbum(albumId, artist, album, identity).finally(() => inFlightPromises.delete(albumId));
+  const promise = _doNormalizeAlbum(albumId).finally(() => inFlightPromises.delete(albumId));
   inFlightPromises.set(albumId, promise);
   return promise;
 }
 
-async function _doNormalizeAlbum(
-  albumId: string,
-  artist: string,
-  album: string,
-  identity?: {
-    lastfmArtistName?: string | null;
-    lastfmAlbumName?: string | null;
-    combinedMbGenres?: MbGenre[] | null;
-    combinedMbTags?: MbGenre[] | null;
-  },
-): Promise<NormalizedTags> {
+type NormalizeInputRow = {
+  name: string;
+  artist: string | null;
+  lastfm_artist_name: string | null;
+  lastfm_album_name: string | null;
+  combined_genres_json: string | null;
+  combined_tags_json: string | null;
+  discogs_styles_json: string | null;
+};
+
+function parseStoredList<T>(json: string | null): T[] {
+  if (json === null) return [];
+  try {
+    return JSON.parse(json) as T[];
+  } catch {
+    return [];
+  }
+}
+
+async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const db = await getDb();
+  const inputRows = await db.select<NormalizeInputRow[]>(
+    `SELECT a.name, a.artist, ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json,
+            d.styles_json AS discogs_styles_json
+     FROM albums a
+     LEFT JOIN album_identity ai ON ai.album_id = a.id
+     LEFT JOIN album_discogs d ON ${currentLookupSql("d", "a")} AND d.status = 'found'
+     WHERE a.id = ?`,
+    [albumId],
+  );
+  const input = inputRows[0];
+  if (input === undefined) throw new Error(`normalizeAlbum: album ${albumId} is not in the library`);
   const tree = await getCanonTree();
   const skipYearGenres = await getSkipYearGenres();
 
@@ -204,8 +260,8 @@ async function _doNormalizeAlbum(
   // whatever mutation writes tag_mappings (see src/features/tags/lib/manualMappings.ts).
   const manualMap = await getManualGenreMappings();
 
-  const lfmArtist = identity?.lastfmArtistName ?? artist;
-  const lfmAlbum = identity?.lastfmAlbumName ?? album;
+  const lfmArtist = input.lastfm_artist_name ?? input.artist ?? "";
+  const lfmAlbum = input.lastfm_album_name ?? input.name;
 
   let lastfmRaw: string[] = [];
   // A Last.fm outage is not "no tags": keep the album's earlier Last.fm tags and leave it due.
@@ -226,20 +282,12 @@ async function _doNormalizeAlbum(
     lastfmRaw = await readStoredLastfmTags(db, albumId);
   }
 
-  const mbRaw: string[] = [];
-  if (identity?.combinedMbGenres?.length) {
-    for (const g of identity.combinedMbGenres) {
-      mbRaw.push(g.name);
-    }
-  }
-
+  const mbRaw = parseStoredList<MbGenre>(input.combined_genres_json).map((genre) => genre.name);
+  const discogsRaw = parseStoredList<string>(input.discogs_styles_json);
   const minFolksonomy = await getMinFolksonomyCount();
-  const mbFolkRaw: string[] = [];
-  if (identity?.combinedMbTags?.length) {
-    for (const t of identity.combinedMbTags) {
-      if (t.count >= minFolksonomy) mbFolkRaw.push(t.name);
-    }
-  }
+  const mbFolkRaw = parseStoredList<MbGenre>(input.combined_tags_json)
+    .filter((tag) => tag.count >= minFolksonomy)
+    .map((tag) => tag.name);
 
   // Artist tags as last resort: only when no file tags AND no album/MB tags exist
   if (
@@ -247,6 +295,7 @@ async function _doNormalizeAlbum(
     fileTagRows.length === 0 &&
     lastfmRaw.length === 0 &&
     mbRaw.length === 0 &&
+    discogsRaw.length === 0 &&
     mbFolkRaw.length === 0
   ) {
     try {
@@ -285,32 +334,41 @@ async function _doNormalizeAlbum(
     }
   }
 
+  const artistNames = [input.artist, input.lastfm_artist_name];
+  const isGenreCandidate = (raw: string) =>
+    !(skipYearGenres && isYearLikeGenre(raw)) && !isArtistNameTag(raw, artistNames);
+
   type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
     if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
-    byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
+    byKey.set(tagMatchKey(row.raw_value), { name: row.raw_value, source: "file" });
   }
   for (const raw of lastfmRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
-    const k = canonicalKey(raw);
+    if (!isGenreCandidate(raw)) continue;
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
   for (const raw of mbRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
-    const k = canonicalKey(raw);
+    if (!isGenreCandidate(raw)) continue;
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
+  for (const raw of discogsRaw) {
+    if (!isGenreCandidate(raw)) continue;
+    const k = tagMatchKey(raw);
+    if (!byKey.has(k)) byKey.set(k, { name: raw, source: "discogs" });
+  }
   for (const raw of mbFolkRaw) {
-    if (skipYearGenres && isYearLikeGenre(raw)) continue;
-    const k = canonicalKey(raw);
+    if (!isGenreCandidate(raw)) continue;
+    const k = tagMatchKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
   // Inject consensus-promoted per-track genres (≥50% of tracks share them) at lastfm confidence.
   for (const canonId of consensusPromoted) {
     const node = tree.byId.get(canonId);
     if (!node) continue;
-    const k = canonicalKey(node.name);
+    const k = tagMatchKey(node.name);
     if (!byKey.has(k)) byKey.set(k, { name: node.name, source: "lastfm" });
   }
 
@@ -332,21 +390,7 @@ async function _doNormalizeAlbum(
       3,
       (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
     );
-    await db.execute(
-      `UPDATE track_tags
-       SET canonical_id = (
-         SELECT tm.canonical_id FROM tag_mappings tm
-         WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
-             = LOWER(REPLACE(REPLACE(TRIM(track_tags.raw_value), '-', ' '), '_', ' '))
-           AND tm.kind = track_tags.kind
-           AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
-         LIMIT 1
-       )
-       WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'musicbrainz-folksonomy')
-         AND canonical_id IS NULL
-         AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
-      [albumId],
-    );
+    await db.execute(APPLY_TAG_MAPPINGS_SQL, [albumId]);
   }
 
   type ExclusionRow = { canonical_id: string };
@@ -377,21 +421,10 @@ async function _doNormalizeAlbum(
   const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
-    const manual: NormalizedTag[] = [];
-    const file: NormalizedTag[] = [];
-    const lastfm: NormalizedTag[] = [];
-    const mb: NormalizedTag[] = [];
-    const folk: NormalizedTag[] = [];
-    for (const id of ids) {
-      const tag = mappedById.get(id);
-      if (!tag) continue;
-      if (tag.source === "manual") manual.push(tag);
-      else if (tag.source === "file") file.push(tag);
-      else if (tag.source === "musicbrainz") mb.push(tag);
-      else if (tag.source === "musicbrainz-folksonomy") folk.push(tag);
-      else lastfm.push(tag);
-    }
-    return [...manual, ...file, ...lastfm, ...mb, ...folk].slice(0, cap);
+    return ids
+      .flatMap((id) => mappedById.get(id) ?? [])
+      .sort((left, right) => SOURCE_DISPLAY_RANK[left.source] - SOURCE_DISPLAY_RANK[right.source])
+      .slice(0, cap);
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);

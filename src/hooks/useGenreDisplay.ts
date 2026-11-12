@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { getDb } from "../db";
-import type { TreeNode } from "../features/tags/lib/canonicalize";
-import { getCanonTree } from "../features/tags/lib/canonicalize";
+import { useCanonTreeNodes } from "../features/tags/hooks/useCanonTreeNodes";
 import { QK } from "../lib/queryKeys";
 
 const IGNORED = "__ignored__";
@@ -13,36 +12,28 @@ interface MappingRow {
   canonical_id: string;
 }
 
+/** Raw genre value to display name (null if ignored), absent if unmapped. */
+export type GenreMappings = Map<string, string | null>;
+
 /**
- * Map of raw genre value to display name (null if ignored), absent if unmapped.
- * Built outside React Query to avoid structuralSharing issues with Map.
+ * The mappings, or null when they couldn't be read, so callers show raw genres rather
+ * than dropping every one as undecided. Built outside the query: a Map breaks structural sharing.
  */
-export function useGenreMappings(): Map<string, string | null> {
-  const { data: rows = [] } = useQuery({
+export function useGenreMappings(): GenreMappings | null {
+  const { data: rows = [], isError } = useQuery({
     queryKey: QK.genreDisplayMappings(),
     queryFn: async (): Promise<MappingRow[]> => {
       const db = await getDb();
       return db.select<MappingRow[]>("SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre'");
     },
   });
-
-  const [nodeById, setNodeById] = useState<Map<string, TreeNode>>(new Map());
-
-  useEffect(() => {
-    let cancelled = false;
-    getCanonTree()
-      .then((tree) => {
-        if (cancelled) return;
-        setNodeById(new Map(tree.nodes.map((n) => [n.id, n])));
-      })
-      .catch(console.error);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // An unreadable tree leaves display names as the raw values below.
+  const { data: treeNodes } = useCanonTreeNodes();
 
   return useMemo(() => {
-    const map = new Map<string, string | null>();
+    if (isError) return null;
+    const nodeById = new Map((treeNodes ?? []).map((n) => [n.id, n]));
+    const map: GenreMappings = new Map();
     for (const row of rows) {
       if (row.canonical_id === IGNORED) {
         map.set(row.raw_value, null);
@@ -54,14 +45,19 @@ export function useGenreMappings(): Map<string, string | null> {
       }
     }
     return map;
-  }, [rows, nodeById]);
+  }, [rows, treeNodes, isError]);
+}
+
+/** A raw genre's display name: undefined with no decision yet, null if ignored, as-is with no mappings readable. */
+export function mappedGenreName(raw: string, mappings: GenreMappings | null): string | null | undefined {
+  return mappings ? mappings.get(raw) : raw;
 }
 
 /**
  * Splits a raw genre string, applies mappings, de-dupes. Raw values with no mapping
- * decision yet are dropped, not shown as-is.
+ * decision yet are dropped, not shown as-is; with no mappings readable, all show as-is.
  */
-export function applyGenreMappings(rawGenreString: string | null, mappings: Map<string, string | null>): string[] {
+export function applyGenreMappings(rawGenreString: string | null, mappings: GenreMappings | null): string[] {
   if (!rawGenreString) return [];
   const seen = new Set<string>();
   const result: string[] = [];
@@ -69,9 +65,8 @@ export function applyGenreMappings(rawGenreString: string | null, mappings: Map<
     .split(/[,;]/)
     .map((g) => g.trim())
     .filter(Boolean)) {
-    if (!mappings.has(raw)) continue;
-    const mapped = mappings.get(raw) ?? null;
-    if (mapped === null) continue;
+    const mapped = mappedGenreName(raw, mappings);
+    if (mapped == null) continue;
     if (!seen.has(mapped)) {
       seen.add(mapped);
       result.push(mapped);

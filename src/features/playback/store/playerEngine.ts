@@ -10,6 +10,7 @@ import { buildShuffleOrder, resolveTrack } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
 
 const BUFFER_DEADLINE_MS = 30000;
+const NO_SERVER_ERROR = plainError("Can't play yet: no server is connected");
 
 export function createPlayerEngine(
   set: PlayerSet,
@@ -394,7 +395,22 @@ export function createPlayerEngine(
   }
 
   // nav=true: debounces 100ms so rapid prev/next coalesces to one HTTP request.
-  async function playTrack(track: CurrentTrack, url: string, nav = false) {
+  // The URL always comes from the builder App registers for the active server: a caller-built one
+  // can ignore its track (every radio pick once replayed the seed).
+  async function playTrack(track: CurrentTrack, nav = false) {
+    const { streamUrlFor } = get();
+    if (!streamUrlFor) {
+      set({
+        currentTrack: track,
+        streamUrl: null,
+        isPlaying: false,
+        isLoading: false,
+        isBuffering: false,
+        error: NO_SERVER_ERROR,
+      });
+      return;
+    }
+    const url = streamUrlFor(track);
     runtime.naturalEndFiredForIndex = null;
     runtime.lastEndedTrackId = null;
     runtime.gaplessActive = false;

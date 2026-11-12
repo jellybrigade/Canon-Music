@@ -12,7 +12,8 @@ export interface GenreTreeData {
   rootsBySection: Record<NodeSection, string[]>;
 }
 
-let cachedData: GenreTreeData | null = null;
+// One server's tree at a time, the one the library views show.
+let cached: { serverId: string; data: GenreTreeData } | null = null;
 
 export function sectionRoots(liveNodes: TreeNode[]): Record<NodeSection, string[]> {
   const sectionsById = new Map(liveNodes.map((n) => [n.id, n.sections]));
@@ -29,19 +30,22 @@ export function sectionRoots(liveNodes: TreeNode[]): Record<NodeSection, string[
 }
 
 export function invalidateGenreTreeCache(): void {
-  cachedData = null;
+  cached = null;
 }
 
-async function buildGenreTree(): Promise<GenreTreeData> {
-  if (cachedData) return cachedData;
+async function buildGenreTree(serverId: string): Promise<GenreTreeData> {
+  if (cached?.serverId === serverId) return cached.data;
 
   const [tree, db] = await Promise.all([getCanonTree(), getDb()]);
 
   type CountRow = { canonical_id: string; album_count: number };
   const countRows = await db.select<CountRow[]>(
-    `SELECT canonical_id, COUNT(DISTINCT album_id) AS album_count
-     FROM album_genres
-     GROUP BY canonical_id`,
+    `SELECT ag.canonical_id, COUNT(DISTINCT ag.album_id) AS album_count
+     FROM album_genres ag
+     JOIN albums a ON a.id = ag.album_id
+     WHERE a.server_id = ?
+     GROUP BY ag.canonical_id`,
+    [serverId],
   );
 
   const countById = new Map<string, number>();
@@ -78,20 +82,26 @@ async function buildGenreTree(): Promise<GenreTreeData> {
 
   const rootsBySection = sectionRoots(liveNodes);
 
-  cachedData = { nodeById, childrenById, countById, rootsBySection };
-  return cachedData;
+  const data = { nodeById, childrenById, countById, rootsBySection };
+  cached = { serverId, data };
+  return data;
 }
 
-export function useGenreTree(): { data: GenreTreeData | null; error: string | null; retry: () => void } {
-  const [data, setData] = useState<GenreTreeData | null>(null);
+export function useGenreTree(serverId: string | undefined): {
+  data: GenreTreeData | null;
+  error: string | null;
+  retry: () => void;
+} {
+  const [result, setResult] = useState<{ serverId: string; data: GenreTreeData } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (!serverId) return;
     let cancelled = false;
-    buildGenreTree()
+    buildGenreTree(serverId)
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) setResult({ serverId, data: d });
       })
       .catch((err: unknown) => {
         console.error("useGenreTree: failed to build genre tree", err);
@@ -100,12 +110,12 @@ export function useGenreTree(): { data: GenreTreeData | null; error: string | nu
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [serverId, attempt]);
 
   const retry = useCallback(() => {
     setError(null);
     setAttempt((n) => n + 1);
   }, []);
 
-  return { data, error, retry };
+  return { data: result && result.serverId === serverId ? result.data : null, error, retry };
 }

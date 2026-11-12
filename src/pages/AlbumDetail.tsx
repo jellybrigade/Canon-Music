@@ -3,11 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
 import { AlbumGrid } from "../components/AlbumGrid";
+import { NO_LOOKED_UP_FACTS, useLookedUpFacts } from "../features/albumFacts/lookedUpFacts";
 import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { useCoverPickerDialogs } from "../features/covers/useCoverPickerDialogs";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import {
+  mbReleaseFacts,
   useAlbumIdentity,
   useConfirmedArtistMbid,
   useRecordFailedLookup,
@@ -41,7 +43,6 @@ import { useTracks } from "../hooks/useTracks";
 import { fetchAlbumTracks } from "../lib/albumTracks";
 import { QK } from "../lib/queryKeys";
 import { shuffleArray } from "../lib/shuffle";
-import { makeStreamUrlBuilder } from "../lib/track";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import type { AlbumRow, TrackRow } from "../types/library";
 import { AlbumBio } from "./album/AlbumBio";
@@ -87,7 +88,7 @@ export function AlbumDetail({
   onSelectArtist,
   onTagFilter,
 }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -101,8 +102,8 @@ export function AlbumDetail({
 
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
-  const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
-  useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
+  const { data: normalizedTags } = useNormalizeAlbum(album.id);
+  useEnrichAlbumTracks(album.id, album.artist ?? "");
   const { data: albumEnrichment } = useEnrichAlbum(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
 
@@ -117,11 +118,12 @@ export function AlbumDetail({
     () => (artistEnrichment?.similar_json ? (JSON.parse(artistEnrichment.similar_json) as string[]) : []),
     [artistEnrichment?.similar_json],
   );
-  const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames);
+  const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames, server.id);
   const similarArtistNamesInLibrary = useMemo(
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
     [similarArtistNames, similarInLibrarySet],
   );
+  // Decorative: an unreadable shelf stays hidden.
   const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary, server.id);
   const fansAlsoLikeAlbums = useMemo(
     () => fansAlsoLikeAlbumsRaw.slice(0, RELATED_SHELF_LIMIT),
@@ -131,6 +133,10 @@ export function AlbumDetail({
   const trackTagGenresMap = useTrackTagGenres(album.id, genreMappings);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
+  const { data: lookedUpFacts = NO_LOOKED_UP_FACTS } = useLookedUpFacts({
+    albumId: album.id,
+    serverId: album.server_id,
+  });
   const [mbAutoIdentify, , isMbAutoIdentifyLoaded] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
@@ -161,16 +167,7 @@ export function AlbumDetail({
     setTagRefreshError(null);
     try {
       await doSyncTracks();
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
+      await normalizeAlbum(album.id);
       await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
       await queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(album.id) });
     } catch (err) {
@@ -179,7 +176,7 @@ export function AlbumDetail({
     } finally {
       setIsTagRefreshing(false);
     }
-  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient, doSyncTracks]);
+  }, [album.id, isTagRefreshing, queryClient, doSyncTracks]);
   const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
@@ -213,11 +210,7 @@ export function AlbumDetail({
         lastfmMatchConfirmed: false,
         combinedGenres,
         combinedTags,
-        label: release?.label ?? null,
-        country: release?.country ?? null,
-        catalogNumber: release?.catalogNumber ?? null,
-        barcode: release?.barcode ?? null,
-        releaseDate: release?.date ?? detail.firstReleaseDate ?? null,
+        ...mbReleaseFacts(release, detail),
         autoMatched: true,
         matchScore: Math.round(score * 100),
       });
@@ -233,9 +226,7 @@ export function AlbumDetail({
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const albumBio = albumEnrichment?.album_bio ?? null;
 
-  const coverArtUrl = useCoverUrl(
-    album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500) : null,
-  );
+  const coverArtUrl = useCoverUrl(album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null);
 
   const accentColor = useAlbumAccent(album.id, album.accent_color, coverArtUrl, server.id);
 
@@ -253,25 +244,23 @@ export function AlbumDetail({
     };
   }
 
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
-
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
     const startIndex = tracks.findIndex((t) => t.id === track.id);
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+    playQueue(tracks.map(buildTrackObj), startIndex >= 0 ? startIndex : 0);
   }
 
   function handlePlayAlbum() {
     if (!tracks || tracks.length === 0) return;
     const trackObjs = tracks.map(buildTrackObj);
     if (playAction === "queue_last") {
-      addManyToQueue(trackObjs, streamUrlFor);
+      addManyToQueue(trackObjs);
     } else if (playAction === "queue_next") {
-      playNextMany(trackObjs, streamUrlFor);
+      playNextMany(trackObjs);
     } else if (playAction === "shuffle") {
-      void playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
+      void playQueue(shuffleArray(trackObjs), 0);
     } else {
-      void playQueue(trackObjs, streamUrlFor, 0);
+      void playQueue(trackObjs, 0);
     }
   }
 
@@ -290,6 +279,7 @@ export function AlbumDetail({
         album={album}
         coverArtUrl={coverArtUrl}
         albumIdentity={albumIdentity}
+        lookedUpFacts={lookedUpFacts}
         showUnidentified={isMbAutoIdentifyLoaded && mbAutoIdentify && identityLoaded && !autoIdentifyFetching}
         tagsComputedAt={normalizedTags?.computed_at ?? null}
         tagRefresh={{
@@ -325,8 +315,6 @@ export function AlbumDetail({
       {showGenreEditor && (
         <AlbumGenreEditor
           albumId={album.id}
-          albumArtist={album.artist ?? ""}
-          albumName={album.name}
           genreGroups={genreGroups}
           rawSourcesByCanonicalId={rawSourcesByCanonicalId}
           onTagFilter={onTagFilter}
@@ -384,11 +372,11 @@ export function AlbumDetail({
           playlists={playlists}
           onClose={() => setContextMenu(null)}
           onPlayNow={() => handlePlayTrack(contextMenu.track)}
-          onPlayNext={() => playNext(buildTrackObj(contextMenu.track), streamUrlFor)}
-          onAddToQueue={() => addToQueue(buildTrackObj(contextMenu.track), streamUrlFor)}
+          onPlayNext={() => playNext(buildTrackObj(contextMenu.track))}
+          onAddToQueue={() => addToQueue(buildTrackObj(contextMenu.track))}
           onStartRadio={(mode) => {
             const track = buildTrackObj(contextMenu.track);
-            void startRadio({ tracks: [track], streamUrlFor, mode });
+            void startRadio({ tracks: [track], mode });
           }}
           onToggleLove={() => void toggleTrackLove(contextMenu.track.id, serverWithCredential)}
           onShowTags={() => setDrawerState({ albumId: album.id, trackId: contextMenu.track.id })}
@@ -398,13 +386,7 @@ export function AlbumDetail({
       )}
 
       {drawerState && (
-        <TagDrawer
-          albumId={drawerState.albumId}
-          albumArtist={album.artist ?? ""}
-          albumName={album.name}
-          trackId={drawerState.trackId}
-          onClose={() => setDrawerState(null)}
-        />
+        <TagDrawer albumId={drawerState.albumId} trackId={drawerState.trackId} onClose={() => setDrawerState(null)} />
       )}
 
       {coverDialogs.identifyTarget === album.id && (

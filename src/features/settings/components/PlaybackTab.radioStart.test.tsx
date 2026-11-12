@@ -18,7 +18,7 @@ import { PlaybackTab } from "./PlaybackTab";
 let db: FakeDatabase;
 const startRadioFrom = vi.fn(() => Promise.resolve());
 const seed: CurrentTrack = { id: "s", title: "Seed", artist: null, duration: 100 };
-const request = { tracks: [seed], streamUrlFor: (t: CurrentTrack) => t.id };
+const request = { tracks: [seed] };
 
 const select = () => document.querySelector<HTMLSelectElement>('select[aria-label="Start radio action"]')!;
 

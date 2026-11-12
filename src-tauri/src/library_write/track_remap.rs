@@ -41,31 +41,39 @@ fn remap_track_ids_in(conn: &mut Connection, remaps: &[TrackIdRemap]) -> Result<
     }
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let mut moved = 0u32;
-    for remap in remaps {
-        let destination_taken: bool = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM tracks WHERE id = ?1)",
-                rusqlite::params![remap.new_id],
-                |row| row.get(0),
-            )
+    {
+        let mut destination_taken = tx
+            .prepare("SELECT EXISTS(SELECT 1 FROM tracks WHERE id = ?1)")
             .map_err(|e| e.to_string())?;
-        if destination_taken {
-            continue;
+        let mut carry_rows = REMAPPED_TRACK_ID_TABLES
+            .iter()
+            .map(|(table, column)| {
+                tx.prepare(&format!(
+                    "UPDATE OR IGNORE {table} SET {column} = ?2 WHERE {column} = ?1"
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        let mut rename_track = tx
+            .prepare("UPDATE OR IGNORE tracks SET id = ?2 WHERE id = ?1")
+            .map_err(|e| e.to_string())?;
+        for remap in remaps {
+            let taken: bool = destination_taken
+                .query_row(rusqlite::params![remap.new_id], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
+            if taken {
+                continue;
+            }
+            for carry in &mut carry_rows {
+                carry
+                    .execute(rusqlite::params![remap.old_id, remap.new_id])
+                    .map_err(|e| e.to_string())?;
+            }
+            let rows = rename_track
+                .execute(rusqlite::params![remap.old_id, remap.new_id])
+                .map_err(|e| e.to_string())?;
+            moved += u32::try_from(rows).unwrap_or(0);
         }
-        for (table, column) in REMAPPED_TRACK_ID_TABLES {
-            tx.execute(
-                &format!("UPDATE OR IGNORE {table} SET {column} = ?2 WHERE {column} = ?1"),
-                rusqlite::params![remap.old_id, remap.new_id],
-            )
-            .map_err(|e| e.to_string())?;
-        }
-        let rows = tx
-            .execute(
-                "UPDATE OR IGNORE tracks SET id = ?2 WHERE id = ?1",
-                rusqlite::params![remap.old_id, remap.new_id],
-            )
-            .map_err(|e| e.to_string())?;
-        moved += u32::try_from(rows).unwrap_or(0);
     }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(moved)
@@ -87,7 +95,7 @@ mod tests {
           position INTEGER NOT NULL, PRIMARY KEY (playlist_id, position));
         CREATE TABLE tag_issues (track_id TEXT NOT NULL, issue_type TEXT,
           UNIQUE(track_id, issue_type));
-        CREATE TABLE lyrics (track_id TEXT PRIMARY KEY, content TEXT);
+        CREATE TABLE lyrics (track_id TEXT PRIMARY KEY, plain TEXT);
         CREATE TABLE waveform_cache (track_id TEXT PRIMARY KEY, peaks_json TEXT);
         CREATE TABLE recent_tracks (track_id TEXT PRIMARY KEY, server_id TEXT NOT NULL,
           opened_at INTEGER NOT NULL);

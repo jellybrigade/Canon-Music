@@ -190,3 +190,47 @@ describe("buildSmartQuery against the real schema", () => {
     expect(await run(filters({ limit: 0, sort: "+title" }))).toHaveLength(1);
   });
 });
+
+describe("buildSmartQuery on tied and album-less tracks", () => {
+  let db: FakeDatabase;
+
+  beforeAll(async () => {
+    db = await createMigratedTestDb();
+    await db.execute(
+      `INSERT INTO albums (id, server_id, server_type, name, artist, year)
+       VALUES ('srv:al1', 'srv', 'navidrome', 'Kid A', 'Radiohead', 2000)`,
+    );
+    await db.execute(
+      `INSERT INTO album_genres (album_id, canonical_id, relation, name)
+       VALUES ('srv:al1', 'art-rock', 'direct', 'Art Rock')`,
+    );
+    // Inserted in descending id order, so scan order disagrees with id order on every tie.
+    for (const id of ["srv:t4", "srv:t3", "srv:t2", "srv:t1"]) {
+      await db.execute(
+        `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count)
+         VALUES (?, 'srv', 'navidrome', 'Same', 'Radiohead', 'srv:al1', 2000, 0)`,
+        [id],
+      );
+    }
+    await db.execute(
+      `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count)
+       VALUES ('srv:loose', 'srv', 'navidrome', 'Loose', 'Radiohead', NULL, 2000, 0)`,
+    );
+  });
+
+  async function run(f: SmartFilters): Promise<string[]> {
+    const { sql, params } = buildSmartQuery(f, "srv");
+    const rows = await db.select<{ id: string }[]>(sql, params);
+    return rows.map((r) => r.id);
+  }
+
+  it("cuts tied tracks the same way on every refresh, whatever the sort", async () => {
+    for (const sort of ["-playcount", "-year", "+year", "+title", "-title"]) {
+      expect(await run(filters({ sort, titleContains: "Same", limit: 2 })), sort).toEqual(["srv:t1", "srv:t2"]);
+    }
+  });
+
+  it("keeps tracks with no album when excluding a genre", async () => {
+    expect(await run(filters({ selectedGenres: ["art-rock"], genreMode: "exclude" }))).toEqual(["srv:loose"]);
+  });
+});

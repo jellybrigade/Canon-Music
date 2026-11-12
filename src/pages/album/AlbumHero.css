@@ -157,11 +157,7 @@
   color: var(--accent);
 }
 
-.album-detail-identity {
-  margin: 0;
-}
-
-.mb-verified-facts {
+.album-detail-facts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -174,7 +170,7 @@
   margin: 0;
 }
 
-.mb-verified-facts span + span::before {
+.album-detail-facts span + span::before {
   content: "·";
   margin-right: 0.4em;
   opacity: var(--opacity-50);

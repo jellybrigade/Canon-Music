@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Disc, ExternalLink, Heart, HelpCircle, ImageIcon, ListEnd, ListPlus, Play, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { ArtBackdrop } from "../../components/ArtBackdrop";
+import type { LookedUpFacts } from "../../features/albumFacts/lookedUpFacts";
 import type { AlbumIdentityRow } from "../../features/enrichment/hooks/useAlbumIdentity";
 import {
   extractSuffix,
@@ -18,6 +19,8 @@ interface Props {
   album: AlbumRow;
   coverArtUrl: string | null;
   albumIdentity: AlbumIdentityRow | null | undefined;
+  /** Facts other sources found, shown only where MusicBrainz has none. */
+  lookedUpFacts: LookedUpFacts;
   showUnidentified: boolean;
   tagsComputedAt: number | null;
   tagRefresh: { isRefreshing: boolean; error: string | null; onRefresh: () => void };
@@ -97,10 +100,31 @@ function AlbumTitle({ album }: { album: AlbumRow }) {
   );
 }
 
+function AlbumFacts({ album, albumIdentity, lookedUpFacts }: Pick<Props, "album" | "albumIdentity" | "lookedUpFacts">) {
+  const identity = albumIdentity?.confirmed_at ? albumIdentity : null;
+  // A catalog number belongs to its label, so a looked-up one shows only beside the looked-up label.
+  const isLookedUpLabel = !identity?.label;
+  const facts = Object.entries({
+    year: identity?.release_date?.slice(0, 4) || (album.year ? String(album.year) : null),
+    label: identity?.label || lookedUpFacts.label,
+    country: identity?.country || lookedUpFacts.country,
+    catalogNumber: identity?.catalog_number || (isLookedUpLabel ? lookedUpFacts.catalogNumber : null),
+  }).filter((entry): entry is [string, string] => !!entry[1]);
+  if (facts.length === 0) return null;
+  return (
+    <p className="album-detail-facts">
+      {facts.map(([name, fact]) => (
+        <span key={name}>{fact}</span>
+      ))}
+    </p>
+  );
+}
+
 export function AlbumHero({
   album,
   coverArtUrl,
   albumIdentity,
+  lookedUpFacts,
   showUnidentified,
   tagsComputedAt,
   tagRefresh,
@@ -161,21 +185,8 @@ export function AlbumHero({
             ) : (
               <p className="album-detail-artist">{album.artist}</p>
             ))}
-          {album.year && !(albumIdentity?.confirmed_at && albumIdentity.release_date) && (
-            <p className="album-detail-year">{album.year}</p>
-          )}
-          {albumIdentity?.confirmed_at ? (
-            (albumIdentity.release_date || albumIdentity.label || albumIdentity.country) && (
-              <div className="album-detail-identity">
-                <p className="mb-verified-facts">
-                  {albumIdentity.release_date && <span>{albumIdentity.release_date.slice(0, 4)}</span>}
-                  {albumIdentity.label && <span>{albumIdentity.label}</span>}
-                  {albumIdentity.country && <span>{albumIdentity.country}</span>}
-                  {albumIdentity.catalog_number && <span>{albumIdentity.catalog_number}</span>}
-                </p>
-              </div>
-            )
-          ) : showUnidentified ? (
+          <AlbumFacts album={album} albumIdentity={albumIdentity} lookedUpFacts={lookedUpFacts} />
+          {!albumIdentity?.confirmed_at && showUnidentified ? (
             <button
               className="album-unidentified-badge"
               onClick={onIdentify}

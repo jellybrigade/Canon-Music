@@ -151,9 +151,28 @@ export function canonicalKey(name: string): string {
     .trim();
 }
 
-/** Normalization that matches the SQL in tag_vocab_cache (used as JOIN key in tag_mappings). */
+/**
+ * The key a tag is deduped and manually mapped by. A tag with no Latin letters or digits has an
+ * empty `canonicalKey`, so it falls back to its spelling instead of meeting every other such tag.
+ */
+export function tagMatchKey(name: string): string {
+  return canonicalKey(name) || sqlNorm(name).trim();
+}
+
+/**
+ * `norm_value`, the key tag_mappings and tag_vocab_cache join on. Mirrors `sqlNormExpression`
+ * exactly: SQLite's TRIM strips only spaces and its LOWER folds only ASCII.
+ */
 export function sqlNorm(name: string): string {
-  return name.replace(/-/g, " ").replace(/_/g, " ").toLowerCase().trim();
+  return name
+    .replace(/^ +| +$/g, "")
+    .replace(/[-_]/g, " ")
+    .replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
+/** SQL computing `sqlNorm` of `column`, so a lookup can meet the stored `norm_value`. */
+export function sqlNormExpression(column: string): string {
+  return `LOWER(REPLACE(REPLACE(TRIM(${column}), '-', ' '), '_', ' '))`;
 }
 
 /** Synthetic canonical_id for unmatched tags stored in album_genres. */

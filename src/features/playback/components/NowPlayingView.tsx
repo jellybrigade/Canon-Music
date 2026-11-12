@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronLeft, ListX, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseLrc } from "../../../clients/lrclib";
@@ -27,6 +27,7 @@ import { NowPlayingControls } from "./NowPlayingControls";
 import { NowPlayingProgress } from "./NowPlayingProgress";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { PlayPauseButton } from "./PlayPauseButton";
+import { UpNextHeader } from "./UpNextHeader";
 import { UpNextList } from "./UpNextList";
 import "./NowPlayingView.css";
 
@@ -60,7 +61,6 @@ export function NowPlayingView({
   const error = usePlayerStore((s) => s.error);
   const retryCurrent = usePlayerStore((s) => s.retryCurrent);
   const seek = usePlayerStore((s) => s.seek);
-  const clearQueue = usePlayerStore((s) => s.clearQueue);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
@@ -75,7 +75,7 @@ export function NowPlayingView({
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
 
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
   const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
@@ -107,13 +107,13 @@ export function NowPlayingView({
   const overlayPeaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
 
   const largeArtUrl = currentTrack?.artworkRef
-    ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
+    ? getCoverArtUrl(server.id, currentTrack.artworkRef, 600)
     : (currentTrack?.coverArtUrl ?? null);
   // Blur destroys detail anyway, so the full-viewport blurred backdrop only needs a
   // tiny source image (avoids WebKit running its expensive blur filter over 600px
   // of pixels it's about to throw away).
   const blurArtUrl = currentTrack?.artworkRef
-    ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
+    ? getCoverArtUrl(server.id, currentTrack.artworkRef, 64)
     : (currentTrack?.coverArtUrl ?? null);
 
   const otherAlbums = useMemo(
@@ -320,16 +320,6 @@ export function NowPlayingView({
                 {TAB_LABELS[t]}
               </button>
             ))}
-            {tab === "up-next" && queue.length > 0 && (
-              <button
-                className="now-playing-tab-refresh-btn"
-                title="Clear queue"
-                aria-label="Clear queue"
-                onClick={() => clearQueue()}
-              >
-                <ListX size={14} />
-              </button>
-            )}
             {tab === "lyrics" && (
               <div className="now-playing-tab-lyric-actions">
                 {lyricsLines && (
@@ -387,6 +377,7 @@ export function NowPlayingView({
           </div>
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>
+            {tab === "up-next" && <UpNextHeader serverWithCredential={serverWithCredential} />}
             {tab === "up-next" && (
               <UpNextList
                 serverWithCredential={serverWithCredential}

@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { readSignalCache, writeSignalCache } from "../db/radioSignalCache";
 import type { TagKind } from "../features/tags/lib/canonicalize";
 import { canonicalKey } from "../features/tags/lib/canonicalize";
 import { errorMessage } from "../lib/errorMessage";
@@ -24,7 +25,7 @@ const LASTFM_ERROR_NOT_FOUND = 6;
 const rateLimit = makeRateLimiter(250);
 
 /** Resolves null when no key is stored; rejects when the secret store is locked or not up yet. */
-async function getApiKey(): Promise<string | null> {
+export async function getApiKey(): Promise<string | null> {
   try {
     const key = await keychain.get(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
     if (key) return key;
@@ -51,6 +52,9 @@ async function getApiKey(): Promise<string | null> {
 export async function setApiKey(key: string): Promise<void> {
   if (key) {
     await keychain.set(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT, key);
+    // Artists enriched from no-key stand-ins would otherwise keep them until they go stale.
+    const db = await getDb();
+    await db.execute("UPDATE artist_identity SET enriched_at = NULL WHERE listeners IS NULL");
   } else {
     try {
       await keychain.delete(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
@@ -242,36 +246,6 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
   };
 }
 
-const SIGNAL_CACHE_TTL_S = 7 * 24 * 3600;
-
-async function getCached<T>(key: string): Promise<T | null> {
-  try {
-    const db = await getDb();
-    const cutoff = Math.floor(Date.now() / 1000) - SIGNAL_CACHE_TTL_S;
-    const rows = await db.select<{ value: string }[]>(
-      "SELECT value FROM radio_signal_cache WHERE cache_key = ? AND fetched_at > ?",
-      [key, cutoff],
-    );
-    if (rows[0]) return JSON.parse(rows[0].value) as T;
-  } catch {
-    /* cache miss */
-  }
-  return null;
-}
-
-async function setCached<T>(key: string, value: T): Promise<void> {
-  try {
-    const db = await getDb();
-    await db.execute("INSERT OR REPLACE INTO radio_signal_cache (cache_key, value, fetched_at) VALUES (?, ?, ?)", [
-      key,
-      JSON.stringify(value),
-      Math.floor(Date.now() / 1000),
-    ]);
-  } catch {
-    /* non-critical */
-  }
-}
-
 export interface SimilarArtistEntry {
   name: string;
   match: number;
@@ -280,7 +254,7 @@ export interface SimilarArtistEntry {
 /** `knownApiKey` lets a caller that already read the keychain skip a second read. */
 export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: string): Promise<SimilarArtistEntry[]> {
   const cacheKey = `artist.getSimilar:${artist.toLowerCase()}`;
-  const cached = await getCached<SimilarArtistEntry[]>(cacheKey);
+  const cached = await readSignalCache<SimilarArtistEntry[]>(cacheKey);
   if (cached) return cached;
 
   const apiKey = knownApiKey ?? (await getApiKey());
@@ -306,16 +280,11 @@ export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: stri
       name: a.name,
       match: parseNumberOr(a.match, 0),
     }));
-    await setCached(cacheKey, result);
+    await writeSignalCache(cacheKey, result);
     return result;
   } catch {
     return [];
   }
-}
-
-export async function fetchSimilarArtists(artist: string): Promise<string[]> {
-  const full = await fetchSimilarArtistsFull(artist);
-  return full.map((a) => a.name).slice(0, 10);
 }
 
 export interface SimilarTrackEntry {
@@ -326,7 +295,7 @@ export interface SimilarTrackEntry {
 
 export async function fetchSimilarTracks(artist: string, title: string): Promise<SimilarTrackEntry[]> {
   const cacheKey = `track.getSimilar:${artist.toLowerCase()}:${title.toLowerCase()}`;
-  const cached = await getCached<SimilarTrackEntry[]>(cacheKey);
+  const cached = await readSignalCache<SimilarTrackEntry[]>(cacheKey);
   if (cached) return cached;
 
   const apiKey = await getApiKey();
@@ -354,7 +323,7 @@ export async function fetchSimilarTracks(artist: string, title: string): Promise
       title: t.name,
       match: t.match || 0,
     }));
-    await setCached(cacheKey, result);
+    await writeSignalCache(cacheKey, result);
     return result;
   } catch {
     return [];

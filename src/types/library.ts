@@ -59,4 +59,6 @@ export interface PlaylistTrackRow extends ReplayGainColumns {
   album_id: string | null;
   bit_rate: number | null;
   suffix: string | null;
+  /** The server lists this entry but the local library has no such track yet. */
+  is_unavailable: boolean;
 }

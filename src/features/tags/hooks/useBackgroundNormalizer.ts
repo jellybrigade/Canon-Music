@@ -17,6 +17,8 @@ let isRunning = false;
 type AlbumRow = { id: string; artist: string | null; name: string };
 type ArtistRow = { name: string; lastfm_artist_name: string | null };
 
+// Last.fm only: a bio or similar artists it lacks may come from another source the artist page
+// asked, so an empty answer here keeps what's stored.
 async function enrichArtistBackground(artistName: string, lastfmName: string): Promise<void> {
   const info = await fetchArtistInfo(lastfmName);
   const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
@@ -27,10 +29,10 @@ async function enrichArtistBackground(artistName: string, lastfmName: string): P
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url, enriched_at)
      VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
-       bio = excluded.bio,
+       bio = COALESCE(excluded.bio, artist_identity.bio),
        listeners = excluded.listeners,
        playcount = excluded.playcount,
-       similar_json = excluded.similar_json,
+       similar_json = COALESCE(excluded.similar_json, artist_identity.similar_json),
        top_tags_json = excluded.top_tags_json,
        lastfm_image_url = excluded.lastfm_image_url,
        enriched_at = CASE WHEN ? THEN excluded.enriched_at ELSE artist_identity.enriched_at END`,
@@ -76,7 +78,7 @@ async function runEnrichPasses(albums: AlbumRow[], artists: ArtistRow[], signal?
     albums,
     async (album) => {
       try {
-        await normalizeAlbum(album.id, album.artist ?? "", album.name);
+        await normalizeAlbum(album.id);
       } catch (e) {
         console.warn("Background normalizer failed for:", album.name, e);
       }

@@ -52,7 +52,7 @@ import { album, CRED, OTHER, SRV, server, track } from "../../test/navidromeFixt
 import type { SyncProgress } from "./sync";
 import { syncLibrary } from "./sync";
 import { purgeServerData, purgeStrandedServers } from "./syncPrune";
-import { repairAlbumTrackIds, syncAlbumTracks } from "./syncTracks";
+import { repairAlbumTrackIds, syncAlbumTracks, UNINDEXED_ALBUMS_SQL } from "./syncTracks";
 import { clearSyncWatermark } from "./syncWatermark";
 import { subscribeTrackIdRemaps } from "./trackIdRemapEvents";
 import type { TrackIdRemap } from "./trackRemap";
@@ -134,6 +134,8 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES ('${tr}', 'T', 'Artist', 1);
     INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${tr}', 1);
     INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${al}', 'data:x', 1);
+    INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${al}', '${serverId}', 'deezer', 'A', 'none', 1);
+    INSERT INTO album_discogs (album_id, server_id, looked_up_name, status, checked_at) VALUES ('${al}', '${serverId}', 'A', 'none', 1);
     INSERT INTO album_identity (album_id) VALUES ('${al}');
     INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('${serverId}', '${al}', 'caa', 'https://x', 1);
     INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('${al}', 'rock', 'Rock');
@@ -141,6 +143,7 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('${al}', 'rock', 'direct', 'Rock');
     INSERT INTO album_unresolved_genres (album_id, raw_value, source) VALUES ('${al}', 'weird', 'server');
     INSERT INTO settings (key, value) VALUES ('server.opensub_extensions.${serverId}', '["x"]');
+    INSERT INTO settings (key, value) VALUES ('server.for_you_locked.${serverId}', '{"loved":["${al}"]}');
     INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${al}', '${serverId}', 1);
     INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${serverId}', 'Artist', 1);
     INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${al}', '${serverId}', 1);
@@ -166,6 +169,8 @@ const OWNED_TABLES = [
   "scrobble_queue",
   "scrobble_history",
   "album_covers",
+  "album_release_lookups",
+  "album_discogs",
   "album_identity",
   "album_cover_overrides",
   "album_user_genres",
@@ -223,13 +228,13 @@ describe("purgeServerData", () => {
     expect(after).toEqual(before);
   });
 
-  it("deletes only its own opensub_extensions settings key", async () => {
+  it("deletes only its own per-server settings keys", async () => {
     seedServerRows(db(), SRV);
     seedServerRows(db(), OTHER);
     db().raw.exec("INSERT INTO settings (key, value) VALUES ('theme', 'dark')");
     await purgeServerData(asDb(db()), SRV);
     const keys = await db().select<{ key: string }[]>("SELECT key FROM settings ORDER BY key");
-    expect(keys.map((r) => r.key)).toEqual(["server.opensub_extensions.srv-b", "theme"]);
+    expect(keys.map((r) => r.key)).toEqual(["server.for_you_locked.srv-b", "server.opensub_extensions.srv-b", "theme"]);
   });
 
   it("leaves no track-keyed orphans behind", async () => {
@@ -424,6 +429,47 @@ describe("syncLibrary initial sync", () => {
     expect(rows.map((r) => r.mb_release_id)).toEqual([tagged, null]);
   });
 
+  it("keeps the release date the files are tagged with, to the day or month they name", async () => {
+    serveLibrary(
+      [
+        album("al-1", { releaseDate: { year: 2026, month: 10, day: 30 } }),
+        album("al-2", { releaseDate: { year: 2026, month: 3 } }),
+        album("al-3", { releaseDate: { year: 2026 } }),
+        album("al-4", { releaseDate: {} }),
+        album("al-5"),
+      ],
+      {},
+    );
+    await syncLibrary(server(), CRED);
+    const rows = await db().select<{ release_date: string | null }[]>("SELECT release_date FROM albums ORDER BY id");
+    expect(rows.map((r) => r.release_date)).toEqual(["2026-10-30", "2026-03", "2026", null, null]);
+  });
+
+  it("keeps the original release date the files are tagged with, apart from the edition's", async () => {
+    serveLibrary(
+      [
+        album("al-1", {
+          releaseDate: { year: 2026, month: 5, day: 1 },
+          originalReleaseDate: { year: 1959, month: 8, day: 17 },
+        }),
+        album("al-2", { originalReleaseDate: { year: 1959 } }),
+        album("al-3", { originalReleaseDate: {} }),
+        album("al-4"),
+      ],
+      {},
+    );
+    await syncLibrary(server(), CRED);
+    const rows = await db().select<{ release_date: string | null; original_release_date: string | null }[]>(
+      "SELECT release_date, original_release_date FROM albums ORDER BY id",
+    );
+    expect(rows).toEqual([
+      { release_date: "2026-05-01", original_release_date: "1959-08-17" },
+      { release_date: null, original_release_date: "1959" },
+      { release_date: null, original_release_date: null },
+      { release_date: null, original_release_date: null },
+    ]);
+  });
+
   it("passes a null alt_url to the fetches as undefined, not null", async () => {
     serveLibrary([album("al-1")], { "al-1": [] });
     await syncLibrary(server(), CRED);
@@ -462,6 +508,21 @@ describe("syncLibrary idempotence", () => {
     // whole-table sweeps gated on albumsChanged || tracksChanged.
     expect(db().executeCount).toBe(0);
     expect(second.changed).toEqual({ albums: false, tracks: false, artists: false, loved: false, playlists: false });
+  });
+
+  it("writes nothing on a second sync over unchanged release dates, and rewrites a changed original date", async () => {
+    const dated = (original: number) =>
+      album("al-1", { releaseDate: { year: 2026, month: 5 }, originalReleaseDate: { year: original } });
+    serveLibrary([dated(1959)], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().executeCount = 0;
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(false);
+    expect(db().executeCount).toBe(0);
+
+    serveLibrary([dated(1958)], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(true);
+    const rows = await db().select<{ original_release_date: string }[]>("SELECT original_release_date FROM albums");
+    expect(rows).toEqual([{ original_release_date: "1958" }]);
   });
 
   it("treats a SQLite integer year and an API string year as the same value", async () => {
@@ -514,8 +575,12 @@ describe("syncLibrary idempotence", () => {
     // What quitting mid-pass leaves: tracks stored, the FTS rebuild at the end never reached.
     await db().execute("DELETE FROM tracks_fts WHERE id IN (?, ?)", [`${SRV}:t1`, `${SRV}:t2`]);
     mAlbumTracks.mockClear();
+    const select = vi.spyOn(db(), "select");
 
     await syncLibrary(server(), CRED);
+
+    // Positive control for the probes below that assert this lookup is skipped.
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(1);
 
     expect(mAlbumTracks).not.toHaveBeenCalled();
     expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`]);
@@ -543,7 +608,7 @@ describe("syncLibrary idempotence", () => {
 
     await syncLibrary(server(), CRED);
 
-    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(0);
   });
 
   it("does not rescan the index every sync for a track with no album row to index it under", async () => {
@@ -557,7 +622,7 @@ describe("syncLibrary idempotence", () => {
 
     await syncLibrary(server(), CRED);
 
-    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+    expect(select.mock.calls.filter(([sql]) => sql === UNINDEXED_ALBUMS_SQL)).toHaveLength(0);
   });
 
   it("does not rebuild the artists table when only a non-artist column changed", async () => {
@@ -588,6 +653,8 @@ describe("syncLibrary album prune", () => {
       INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01');
       INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t3', '[]', 1);
       INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${SRV}:al-2', 'data:x', 1);
+      INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${SRV}:al-2', '${SRV}', 'deezer', 'A', 'none', 1);
+      INSERT INTO album_discogs (album_id, server_id, looked_up_name, status, checked_at) VALUES ('${SRV}:al-2', '${SRV}', 'A', 'none', 1);
       INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_tracks (track_id, server_id, opened_at) VALUES ('${SRV}:t3', '${SRV}', 1);
@@ -605,6 +672,8 @@ describe("syncLibrary album prune", () => {
       ["album_genres", "album_id"],
       ["album_unresolved_genres", "album_id"],
       ["album_covers", "album_id"],
+      ["album_release_lookups", "album_id"],
+      ["album_discogs", "album_id"],
       ["pinned_albums", "album_id"],
       ["recent_albums", "album_id"],
     ];
@@ -2017,5 +2086,65 @@ describe("syncAlbumTracks", () => {
       { id: `${SRV}:t1`, replay_gain_track_gain: -3, replay_gain_album_gain: null, play_count: 0 },
       { id: `${SRV}:t2`, replay_gain_track_gain: null, replay_gain_album_gain: null, play_count: 0 },
     ]);
+  });
+});
+
+describe("syncLibrary cancellation", () => {
+  it("writes nothing when stopped before the album list arrives", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(await count("albums")).toBe(0);
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+  });
+
+  it("stops between albums once stopped and leaves the later stages alone", async () => {
+    const controller = new AbortController();
+    mAllAlbums.mockResolvedValue([album("al-1"), album("al-2")]);
+    mAlbumTracks.mockImplementation(async (_url, _user, _cred, albumId) => {
+      controller.abort();
+      return [track(`t-${albumId}`, albumId)];
+    });
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+    expect(await count("tracks")).toBe(1);
+    expect(await count("tracks_fts")).toBe(1);
+    expect(await count("artists")).toBe(1);
+    expect(mStarred).not.toHaveBeenCalled();
+    expect(mPlaylists).not.toHaveBeenCalled();
+  });
+
+  it("hands the stop to the album list and album track requests", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    const controller = new AbortController();
+
+    await syncLibrary(server(), CRED, undefined, { signal: controller.signal });
+
+    expect(mAllAlbums.mock.calls[0]?.[4]).toBe(controller.signal);
+    expect(mAlbumTracks.mock.calls[0]?.[5]).toBe(controller.signal);
+  });
+
+  it("does not count a stopped album request as a failed album", async () => {
+    const controller = new AbortController();
+    mAllAlbums.mockResolvedValue([album("al-1"), album("al-2")]);
+    mAlbumTracks.mockImplementation(async () => {
+      controller.abort();
+      throw new DOMException("The operation was aborted.", "AbortError");
+    });
+
+    await expect(syncLibrary(server(), CRED, undefined, { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
   });
 });

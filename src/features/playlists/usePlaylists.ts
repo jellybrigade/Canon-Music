@@ -19,7 +19,7 @@ import { buildSmartQuery, parseSmartFilters, type SmartFilters } from "./smartPl
 async function insertPlaylistTracksBatch(
   db: Database,
   playlistId: string,
-  trackIds: string[],
+  trackIds: readonly string[],
   startPos: number,
 ): Promise<void> {
   if (trackIds.length === 0) return;
@@ -43,6 +43,30 @@ export interface PlaylistRow {
   custom_cover_data: string | null;
   is_smart: number;
   rules_json: string | null;
+}
+
+export async function createPlaylist(
+  name: string,
+  swc: ServerWithCredential,
+  trackIds: readonly string[] = [],
+): Promise<void> {
+  const { server, credential } = swc;
+  const created = await createNavidromePlaylist(
+    server.url,
+    server.username,
+    credential,
+    name,
+    trackIds.map((id) => stripServerPrefix(id, server.id)),
+    server.alt_url ?? undefined,
+  );
+  const db = await getDb();
+  const plDbId = `${server.id}:${created.id}`;
+  await db.execute(
+    "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
+    [plDbId, server.id, created.name, created.comment ?? null, created.songCount],
+  );
+  await insertPlaylistTracksBatch(db, plDbId, trackIds, 0);
+  usePlaylistSessionStore.getState().bumpPlaylists();
 }
 
 // Reads go through rusqlite (src-tauri/src/library_read/playlists.rs); mutations below
@@ -85,24 +109,6 @@ export function usePlaylists() {
     };
   }, [refreshTick]);
 
-  async function createPlaylist(name: string, swc: ServerWithCredential): Promise<void> {
-    const { server, credential } = swc;
-    const created = await createNavidromePlaylist(
-      server.url,
-      server.username,
-      credential,
-      name,
-      server.alt_url ?? undefined,
-    );
-    const db = await getDb();
-    const plDbId = `${server.id}:${created.id}`;
-    await db.execute(
-      "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
-      [plDbId, server.id, created.name, created.comment ?? null, created.songCount],
-    );
-    usePlaylistSessionStore.getState().bumpPlaylists();
-  }
-
   async function deletePlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
     const { server, credential } = swc;
     const nativeId = stripServerPrefix(playlist.id, server.id);
@@ -125,18 +131,7 @@ export function usePlaylists() {
       nativeTrackId,
       server.alt_url ?? undefined,
     );
-    const db = await getDb();
-    const rows = await db.select<{ max_pos: number | null }[]>(
-      "SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?",
-      [playlist.id],
-    );
-    const nextPos = (rows[0]?.max_pos ?? -1) + 1;
-    await db.execute("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", [
-      playlist.id,
-      trackId,
-      nextPos,
-    ]);
-    await db.execute("UPDATE playlists SET track_count = track_count + 1 WHERE id = ?", [playlist.id]);
+    await invoke("playlist_append_tracks", { playlistId: playlist.id, trackIds: [trackId] });
     usePlaylistSessionStore.getState().bumpPlaylists();
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
@@ -181,18 +176,7 @@ export function usePlaylists() {
       nativeTrackIds,
       server.alt_url ?? undefined,
     );
-    const rows = await db.select<{ max_pos: number | null }[]>(
-      "SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?",
-      [playlist.id],
-    );
-    const nextPos = (rows[0]?.max_pos ?? -1) + 1;
-    await insertPlaylistTracksBatch(
-      db,
-      playlist.id,
-      tracks.map((t) => t.id),
-      nextPos,
-    );
-    await db.execute("UPDATE playlists SET track_count = track_count + ? WHERE id = ?", [tracks.length, playlist.id]);
+    await invoke("playlist_append_tracks", { playlistId: playlist.id, trackIds: tracks.map((t) => t.id) });
     usePlaylistSessionStore.getState().bumpPlaylists();
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
@@ -213,6 +197,7 @@ export function usePlaylists() {
       server.username,
       credential,
       filters.name,
+      [],
       server.alt_url ?? undefined,
     );
     const plDbId = `${server.id}:${created.id}`;
@@ -258,7 +243,6 @@ export function usePlaylists() {
       credential,
       nativePlaylistId,
       nativeTrackIds,
-      playlist.track_count,
       server.alt_url ?? undefined,
     );
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);

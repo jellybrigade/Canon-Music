@@ -901,6 +901,173 @@ export const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 61,
+    sql: `
+      ALTER TABLE albums ADD COLUMN release_date TEXT;
+    `,
+  },
+  {
+    version: 62,
+    sql: `
+      ALTER TABLE albums ADD COLUMN original_release_date TEXT;
+      ALTER TABLE album_identity ADD COLUMN first_release_date TEXT;
+    `,
+  },
+  {
+    version: 63,
+    sql: `
+      CREATE TABLE album_release_lookups (
+        album_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        source TEXT NOT NULL CHECK (source IN ('deezer', 'itunes')),
+        release_date TEXT,
+        label TEXT,
+        record_type TEXT,
+        is_reissue INTEGER NOT NULL DEFAULT 0,
+        looked_up_name TEXT NOT NULL,
+        looked_up_artist TEXT,
+        looked_up_year INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('found', 'none', 'failed')),
+        checked_at INTEGER NOT NULL,
+        PRIMARY KEY (album_id, server_id, source)
+      );
+    `,
+  },
+  {
+    version: 64,
+    sql: `
+      ALTER TABLE artist_identity ADD COLUMN listenbrainz_listens INTEGER;
+    `,
+  },
+  {
+    version: 65,
+    sql: `
+      ALTER TABLE album_identity ADD COLUMN album_bio_release_group_id TEXT;
+    `,
+  },
+  {
+    version: 66,
+    sql: `
+      CREATE TABLE album_discogs (
+        album_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        discogs_release_id INTEGER,
+        label TEXT,
+        catalog_number TEXT,
+        country TEXT,
+        styles_json TEXT,
+        genres_json TEXT,
+        looked_up_name TEXT NOT NULL,
+        looked_up_artist TEXT,
+        looked_up_year INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('found', 'none', 'failed')),
+        checked_at INTEGER NOT NULL,
+        PRIMARY KEY (album_id, server_id)
+      );
+    `,
+  },
+  {
+    version: 67,
+    sql: `
+      CREATE TABLE track_tags_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        track_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('genre','mood')),
+        raw_value TEXT NOT NULL,
+        canonical_id TEXT,
+        source TEXT NOT NULL CHECK (source IN ('server','lastfm','lastfm-track','manual','musicbrainz','musicbrainz-folksonomy','discogs')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(track_id, kind, raw_value, source)
+      );
+      INSERT INTO track_tags_new SELECT * FROM track_tags;
+      DROP TABLE track_tags;
+      ALTER TABLE track_tags_new RENAME TO track_tags;
+      CREATE INDEX IF NOT EXISTS idx_track_tags_canonical ON track_tags(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
+    `,
+  },
+  {
+    version: 68,
+    sql: `
+      ALTER TABLE artist_identity ADD COLUMN artist_type TEXT;
+      ALTER TABLE artist_identity ADD COLUMN country_code TEXT;
+      ALTER TABLE artist_identity ADD COLUMN begin_year INTEGER;
+      ALTER TABLE artist_identity ADD COLUMN facts_source TEXT;
+      ALTER TABLE artist_identity ADD COLUMN facts_mb_artist_id TEXT;
+    `,
+  },
+  {
+    version: 69,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_artists_server_name ON artists(server_id, name COLLATE NOCASE);
+      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id);
+      CREATE INDEX IF NOT EXISTS idx_scrobble_queue_track ON scrobble_queue(track_id);
+      CREATE INDEX IF NOT EXISTS idx_playlist_resume_track ON playlist_resume(last_track_id);
+      CREATE INDEX IF NOT EXISTS idx_tracks_server_album ON tracks(server_id, album_id);
+      DROP INDEX IF EXISTS idx_track_tags_track;
+      DROP INDEX IF EXISTS idx_tracks_genre;
+    `,
+  },
+  {
+    version: 70,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_tracks_artist_nocase ON tracks(artist COLLATE NOCASE, server_id);
+    `,
+  },
+  {
+    version: 71,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_albums_year ON albums(year);
+    `,
+  },
+  {
+    version: 72,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_tag_mappings_canonical ON tag_mappings(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_album_user_genres_canonical ON album_user_genres(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_album_genre_exclusions_canonical ON album_genre_exclusions(canonical_id);
+    `,
+  },
+  {
+    version: 73,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_track_tags_raw_kind ON track_tags(raw_value, kind);
+      UPDATE tag_mappings SET norm_value = LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '))
+        WHERE norm_value IS NOT LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '));
+    `,
+  },
+  {
+    version: 74,
+    sql: `
+      DELETE FROM tracks_fts;
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre)
+        SELECT t.rowid, t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
+        FROM tracks t JOIN albums a ON t.album_id = a.id;
+    `,
+  },
+  {
+    version: 75,
+    sql: `
+      CREATE TEMP TABLE artist_name_tags AS
+        SELECT tt.id, t.album_id FROM track_tags tt
+        JOIN tracks t ON t.id = tt.track_id
+        LEFT JOIN albums a ON a.id = t.album_id
+        WHERE tt.source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
+          AND LOWER(TRIM(tt.raw_value)) IN (LOWER(TRIM(t.artist)), LOWER(TRIM(t.album_artist)), LOWER(TRIM(a.artist)));
+      UPDATE albums SET computed_at = NULL WHERE id IN (SELECT album_id FROM artist_name_tags);
+      DELETE FROM track_tags WHERE id IN (SELECT id FROM artist_name_tags);
+      DROP TABLE artist_name_tags;
+    `,
+  },
+  {
+    // Every spelling of a tag by its group key (`sqlNormExpression`, frozen here): mapping writes and the album strip.
+    version: 76,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_track_tags_norm_kind
+        ON track_tags(LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')), kind);
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

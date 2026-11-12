@@ -1,6 +1,6 @@
 // Read-only connection to the same canon.db file tauri-plugin-sql writes/migrates,
 // avoiding per-query IPC-to-sqlx round trips for hot-path list queries.
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -34,6 +34,29 @@ impl LibraryReadStore {
         }
         f(guard.as_ref().expect("just set"))
     }
+
+    /// Library views show the active server only; with no server there is nothing to show.
+    fn with_active_server<T: Default>(
+        &self,
+        app: &tauri::AppHandle,
+        f: impl FnOnce(&Connection, &str) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.with_conn(app, |conn| match active_server_id(conn)? {
+            Some(server_id) => f(conn, &server_id),
+            None => Ok(T::default()),
+        })
+    }
+}
+
+// Same choice as the app's `servers?.[0]` from `useServers` (oldest first), plus an id tiebreak.
+fn active_server_id(conn: &Connection) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT id FROM servers ORDER BY created_at, id LIMIT 1",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
 }
 
 pub(crate) fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -95,6 +118,35 @@ mod tests {
         }
     }
 
+    fn server_conn(rows: &str) -> Connection {
+        let conn = Connection::open_in_memory().expect("db");
+        conn.execute_batch(&format!(
+            "CREATE TABLE servers (id TEXT PRIMARY KEY, created_at TEXT NOT NULL); {rows}"
+        ))
+        .expect("seed");
+        conn
+    }
+
+    #[test]
+    fn the_active_server_is_the_oldest_one_like_the_apps_first_server() {
+        let conn =
+            server_conn("INSERT INTO servers VALUES ('new', '2026-02-01'), ('old', '2026-01-01')");
+        assert_eq!(active_server_id(&conn).unwrap().as_deref(), Some("old"));
+    }
+
+    #[test]
+    fn servers_added_in_the_same_second_resolve_to_one_active_server_by_id() {
+        let conn =
+            server_conn("INSERT INTO servers VALUES ('b', '2026-01-01'), ('a', '2026-01-01')");
+        assert_eq!(active_server_id(&conn).unwrap().as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn with_no_server_there_is_no_active_server() {
+        let conn = server_conn("");
+        assert_eq!(active_server_id(&conn).unwrap(), None);
+    }
+
     #[test]
     fn a_missing_database_file_errors_instead_of_being_created() {
         let scratch = ScratchDir::new("no-create");
@@ -111,6 +163,24 @@ mod tests {
     }
 
     #[test]
+    fn every_wal_connection_syncs_at_normal_not_full() {
+        // synchronous is per connection and sqlx's pool has no per-connection hook, so the
+        // bundled SQLite is built with SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 (.cargo/config.toml).
+        let scratch = ScratchDir::new("synchronous");
+        let path = scratch.0.join("canon.db");
+        let writer = Connection::open(&path).expect("writer");
+        writer
+            .pragma_update(None, "journal_mode", "WAL")
+            .expect("wal");
+
+        let conn = open_read_conn_at(&path).expect("existing db must open");
+        let synchronous: i64 = conn
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .expect("read synchronous");
+        assert_eq!(synchronous, 1, "1 = NORMAL; 2 = FULL fsyncs every commit");
+    }
+
+    #[test]
     fn an_existing_database_opens_read_write_so_it_can_participate_in_wal() {
         let scratch = ScratchDir::new("wal");
         let path = scratch.0.join("canon.db");
@@ -120,19 +190,22 @@ mod tests {
                 .pragma_update(None, "journal_mode", "WAL")
                 .expect("wal");
             writer
-                .execute_batch("CREATE TABLE t (v TEXT); INSERT INTO t VALUES ('x')")
+                .execute_batch(
+                    "CREATE TABLE settings (value TEXT); INSERT INTO settings VALUES ('x')",
+                )
                 .expect("seed");
         }
 
         let conn = open_read_conn_at(&path).expect("existing db must open");
         let v: String = conn
-            .query_row("SELECT v FROM t", [], |r| r.get(0))
+            .query_row("SELECT value FROM settings", [], |r| r.get(0))
             .expect("read back");
         assert_eq!(v, "x");
         // READ_ONLY is the flag that broke this once: it cannot recover a -wal/-shm
         // pair the writer pool has not established yet.
         assert!(
-            conn.execute("INSERT INTO t VALUES ('y')", []).is_ok(),
+            conn.execute("INSERT INTO settings VALUES ('y')", [])
+                .is_ok(),
             "connection is opened READ_WRITE by design, even though it issues no writes"
         );
     }
@@ -145,6 +218,9 @@ mod test_fixtures {
     // Mirrors src/db/migrations.ts's post-ALTER shape by hand, since this connection never
     // runs those migrations; a rename there breaks these queries with "no such column".
     pub(super) const FIXTURE_DDL: &str = "
+        CREATE TABLE servers (
+          id TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
         CREATE TABLE albums (
           id TEXT PRIMARY KEY, server_id TEXT NOT NULL, name TEXT NOT NULL,
           artist TEXT, album_artist TEXT, year INTEGER, artwork_url TEXT,
@@ -219,16 +295,32 @@ mod test_fixtures {
         .expect("insert album");
     }
 
+    /// Tags `album_id`, creating it on server `s1` if no album row exists yet.
     pub(super) fn insert_genre(
         conn: &Connection,
         album_id: &str,
         canonical_id: &str,
         relation: &str,
     ) {
+        insert_named_genre(conn, album_id, canonical_id, relation, canonical_id);
+    }
+
+    pub(super) fn insert_named_genre(
+        conn: &Connection,
+        album_id: &str,
+        canonical_id: &str,
+        relation: &str,
+        name: &str,
+    ) {
+        conn.execute(
+            "INSERT OR IGNORE INTO albums (id, server_id, name) VALUES (?, 's1', ?)",
+            [album_id, album_id],
+        )
+        .expect("insert album");
         conn.execute(
             "INSERT INTO album_genres (album_id, canonical_id, relation, name)
              VALUES (?, ?, ?, ?)",
-            [album_id, canonical_id, relation, canonical_id],
+            [album_id, canonical_id, relation, name],
         )
         .expect("insert album_genre");
     }

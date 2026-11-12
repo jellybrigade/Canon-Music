@@ -5,7 +5,6 @@ import type { CurrentTrack } from "../features/playback/store/playerTypes";
 import { loadAlbumTracksForPlay } from "../lib/albumTracks";
 import { replayGainFromRow } from "../lib/replayGainRow";
 import { shuffleArray } from "../lib/shuffle";
-import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
@@ -19,25 +18,19 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
     async (album: AlbumRow) => {
       const tracks = await loadAlbumTracksForPlay(server, credential, album);
       if (tracks.length === 0) return;
-      const coverArtUrl = album.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-        : null;
-      const streamUrlFor = makeStreamUrlBuilder(server, credential);
+      const coverArtUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null;
       for (const t of tracks) {
-        addToQueue(
-          {
-            id: t.id,
-            title: t.title,
-            artist: t.artist,
-            duration: t.duration,
-            coverArtUrl,
-            artworkRef: album.artwork_url ?? null,
-            album: album.name,
-            albumId: album.id,
-            replayGain: replayGainFromRow(t),
-          },
-          streamUrlFor,
-        );
+        addToQueue({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          duration: t.duration,
+          coverArtUrl,
+          artworkRef: album.artwork_url ?? null,
+          album: album.name,
+          albumId: album.id,
+          replayGain: replayGainFromRow(t),
+        });
       }
     },
     [server, credential, addToQueue],
@@ -59,9 +52,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential | undefined) {
       const tracks = await loadAlbumTracksForPlay(server, credential, album);
       if (tracks.length === 0) return;
 
-      const coverArtUrl = album.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-        : null;
+      const coverArtUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 500) : null;
 
       const trackObjs: CurrentTrack[] = tracks.map((t) => ({
         id: t.id,
@@ -75,16 +66,14 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential | undefined) {
         replayGain: replayGainFromRow(t),
       }));
 
-      const streamUrlFor = makeStreamUrlBuilder(server, credential);
-
       if (playAction === "queue_last") {
-        for (const t of trackObjs) addToQueue(t, streamUrlFor);
+        for (const t of trackObjs) addToQueue(t);
       } else if (playAction === "queue_next") {
-        for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
+        for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!);
       } else if (playAction === "shuffle") {
-        await playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
+        await playQueue(shuffleArray(trackObjs), 0);
       } else {
-        await playQueue(trackObjs, streamUrlFor, 0);
+        await playQueue(trackObjs, 0);
       }
     },
     [server, credential, playQueue, addToQueue, playNext, playAction],

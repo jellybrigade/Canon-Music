@@ -8,7 +8,9 @@ import {
   getParentChain,
   rawGenreId,
   sqlNorm,
+  sqlNormExpression,
   type TreeNode,
+  tagMatchKey,
 } from "./canonicalize";
 
 function node(over: Partial<TreeNode> & { id: string; name: string }): TreeNode {
@@ -67,6 +69,21 @@ describe("canonicalKey", () => {
   });
 });
 
+describe("tagMatchKey", () => {
+  it("is the canonical key when the tag has Latin letters or digits", () => {
+    expect(tagMatchKey("Hip-Hop")).toBe(canonicalKey("Hip-Hop"));
+  });
+
+  it("keeps tags with no Latin letters apart instead of collapsing them all to one key", () => {
+    expect(tagMatchKey("ロック")).not.toBe(tagMatchKey("!!!"));
+    expect(tagMatchKey("ロック")).not.toBe("");
+  });
+
+  it("is empty for a blank tag", () => {
+    expect(tagMatchKey("   ")).toBe("");
+  });
+});
+
 describe("sqlNorm", () => {
   it("replaces hyphens and underscores with spaces and lowercases", () => {
     expect(sqlNorm("Post-Rock_Fusion")).toBe("post rock fusion");
@@ -75,6 +92,16 @@ describe("sqlNorm", () => {
   it("trims surrounding whitespace", () => {
     expect(sqlNorm("  Ambient  ")).toBe("ambient");
   });
+
+  it.each(["Électronique", "Post-Rock-", "_Drill", " Ambient\t", "Hip-Hop"])(
+    "agrees with the SQL normalization for %j",
+    async (raw) => {
+      const { createTestDb } = await import("../../../test/sqlite");
+      const db = createTestDb();
+      const row = db.raw.prepare(`SELECT ${sqlNormExpression("?")} AS norm`).get(raw) as { norm: string };
+      expect(sqlNorm(raw)).toBe(row.norm);
+    },
+  );
 });
 
 describe("rawGenreId", () => {

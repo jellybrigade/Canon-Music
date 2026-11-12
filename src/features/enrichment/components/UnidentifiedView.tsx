@@ -10,6 +10,7 @@ import type { AlbumRow } from "../../../types/library";
 import { RowListSkeleton } from "../../../ui/Skeleton";
 import {
   type FailedAlbumRow,
+  mbReleaseFacts,
   persistAlbumIdentity,
   recordFailedLookup,
   useFailedLookupAlbums,
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   const queryClient = useQueryClient();
   const { data: albums = [], isPending, error, refetch } = useFailedLookupAlbums(server.id);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
@@ -57,11 +58,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
             lastfmMatchConfirmed: false,
             combinedGenres: result.combinedGenres,
             combinedTags: result.combinedTags,
-            label: result.release?.label ?? null,
-            country: result.release?.country ?? null,
-            catalogNumber: result.release?.catalogNumber ?? null,
-            barcode: result.release?.barcode ?? null,
-            releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+            ...mbReleaseFacts(result.release, result.detail),
             autoMatched: true,
             matchScore: Math.round(result.score * 100),
           });
@@ -129,9 +126,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
       ) : (
         <div className="unidentified-list">
           {albums.map((album) => {
-            const artUrl = album.artwork_url
-              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url)
-              : null;
+            const artUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url) : null;
             return (
               <div key={album.id} className="unidentified-row">
                 <div

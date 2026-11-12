@@ -3,8 +3,8 @@ import { useMemo } from "react";
 import type { DisplayGenre, GenreGroups } from "../../components/AlbumGenreEditor";
 import { getDb } from "../../db";
 import { rawGenreId } from "../../features/tags/lib/canonicalize";
-import { isYearLikeGenre, type NormalizedTags } from "../../features/tags/lib/tagNormalize";
-import { applyGenreMappings } from "../../hooks/useGenreDisplay";
+import { isYearLikeGenre, type NormalizedTags, type TagSource } from "../../features/tags/lib/tagNormalize";
+import { applyGenreMappings, type GenreMappings, mappedGenreName } from "../../hooks/useGenreDisplay";
 import { useBoolSetting } from "../../hooks/useSetting";
 import { QK } from "../../lib/queryKeys";
 import type { TrackRow } from "../../types/library";
@@ -17,7 +17,7 @@ export interface TrackGenre {
 export function trackGenres(
   track: TrackRow,
   trackTagGenresMap: Map<string, TrackGenre[]>,
-  genreMappings: Map<string, string | null>,
+  genreMappings: GenreMappings | null,
 ): TrackGenre[] {
   return (
     trackTagGenresMap.get(track.id) ??
@@ -30,8 +30,9 @@ export function trackGenres(
 
 export type RawSourcesByCanonicalId = Map<string, Array<{ raw_value: string; source: string }>>;
 
-export function useTrackTagGenres(albumId: string, genreMappings: Map<string, string | null>) {
+export function useTrackTagGenres(albumId: string, genreMappings: GenreMappings | null) {
   const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
+  // Decorative: unreadable, each track falls back to its own genre field in `trackGenres`.
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(albumId),
     queryFn: async () => {
@@ -53,9 +54,8 @@ export function useTrackTagGenres(albumId: string, genreMappings: Map<string, st
     const map = new Map<string, TrackGenre[]>();
     for (const row of trackTagRows) {
       if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
-      if (!genreMappings.has(row.raw_value)) continue;
-      const display = genreMappings.get(row.raw_value) ?? null;
-      if (display === null) continue;
+      const display = mappedGenreName(row.raw_value, genreMappings);
+      if (display == null) continue;
       if (!map.has(row.track_id)) map.set(row.track_id, []);
       const genres = map.get(row.track_id)!;
       if (!genres.some((g) => g.display === display)) {
@@ -67,6 +67,7 @@ export function useTrackTagGenres(albumId: string, genreMappings: Map<string, st
 }
 
 export function useRawSourcesByCanonicalId(albumId: string): RawSourcesByCanonicalId {
+  // Decorative: an unreadable read only hides which sources named each genre.
   const { data: rawSourceRows = [] } = useQuery({
     queryKey: QK.albumGenreRawSources(albumId),
     queryFn: async () => {
@@ -93,6 +94,7 @@ export function useRawSourcesByCanonicalId(albumId: string): RawSourcesByCanonic
 
 // Same query key + shape as TagDrawer's useAlbumUnmatchedGenres so the cache is shared.
 export function useUnmatchedGenreCount(albumId: string): number {
+  // Decorative: an unreadable read only hides the unmatched count badge.
   const { data: unmatchedGenres = [] } = useQuery({
     queryKey: QK.albumUnmatchedGenres(albumId),
     queryFn: async () => {
@@ -117,7 +119,7 @@ export function useUnmatchedGenreCount(albumId: string): number {
 export function buildDisplayGenres(
   normalizedTags: NormalizedTags | null | undefined,
   tracks: TrackRow[] | undefined,
-  genreMappings: Map<string, string | null>,
+  genreMappings: GenreMappings | null,
 ): DisplayGenre[] {
   let raw: DisplayGenre[];
   if (normalizedTags?.genres.length) {
@@ -139,7 +141,7 @@ export function buildDisplayGenres(
   const shownNames = new Set(raw.filter((g) => g.id !== null).map((g) => g.name));
   return raw.filter((g) => {
     if (g.id !== null) return true;
-    const mapped = genreMappings.get(g.name);
+    const mapped = mappedGenreName(g.name, genreMappings);
     if (mapped === undefined) return false; // no decision yet, hide from band
     if (mapped === null) return false; // ignored
     if (shownNames.has(mapped)) return false; // already shown as canonical
@@ -147,21 +149,31 @@ export function buildDisplayGenres(
   });
 }
 
+type GenreGroupKey = Exclude<keyof GenreGroups, "multiSource">;
+
+const GROUP_OF_SOURCE: Record<TagSource, GenreGroupKey> = {
+  manual: "manual",
+  file: "file",
+  lastfm: "lastfm",
+  "lastfm-track": "unsourced",
+  musicbrainz: "musicbrainz",
+  discogs: "discogs",
+  "musicbrainz-folksonomy": "folksonomy",
+};
+
 export function groupGenresBySource(displayGenres: DisplayGenre[]): GenreGroups {
-  const manual: DisplayGenre[] = [];
-  const file: DisplayGenre[] = [];
-  const lastfm: DisplayGenre[] = [];
-  const musicbrainz: DisplayGenre[] = [];
-  const folksonomy: DisplayGenre[] = [];
-  const unsourced: DisplayGenre[] = [];
-  for (const g of displayGenres) {
-    if (g.source === "manual") manual.push(g);
-    else if (g.source === "file") file.push(g);
-    else if (g.source === "lastfm") lastfm.push(g);
-    else if (g.source === "musicbrainz") musicbrainz.push(g);
-    else if (g.source === "musicbrainz-folksonomy") folksonomy.push(g);
-    else unsourced.push(g);
+  const groups: Record<GenreGroupKey, DisplayGenre[]> = {
+    manual: [],
+    file: [],
+    lastfm: [],
+    musicbrainz: [],
+    discogs: [],
+    folksonomy: [],
+    unsourced: [],
+  };
+  for (const genre of displayGenres) {
+    groups[genre.source === undefined ? "unsourced" : GROUP_OF_SOURCE[genre.source]].push(genre);
   }
-  const nonEmpty = [manual, file, lastfm, musicbrainz, folksonomy, unsourced].filter((g) => g.length > 0);
-  return { manual, file, lastfm, musicbrainz, folksonomy, unsourced, multiSource: nonEmpty.length > 1 };
+  const nonEmptyCount = Object.values(groups).filter((group) => group.length > 0).length;
+  return { ...groups, multiSource: nonEmptyCount > 1 };
 }

@@ -1,6 +1,5 @@
 import { Play } from "lucide-react";
 import { memo } from "react";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { CoverImg } from "../../components/CoverImg";
 import type { CurrentTrack } from "../../features/playback/store/playerTypes";
@@ -29,7 +28,6 @@ interface TrackRowProps {
   currentTrack: CurrentTrack | null;
   isPlaying: boolean;
   server: Server;
-  credential: NavidromeCredential;
   onPlay: (track: TopTrack) => void;
   lastfmPlaycount?: number;
   lastfmCombined?: boolean;
@@ -43,7 +41,6 @@ export const TrackRow = memo(function TrackRow({
   currentTrack,
   isPlaying,
   server,
-  credential,
   onPlay,
   lastfmPlaycount,
   lastfmCombined,
@@ -52,9 +49,7 @@ export const TrackRow = memo(function TrackRow({
 }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
-  const artUrl = track.artwork_url
-    ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
-    : null;
+  const artUrl = track.artwork_url ? getCoverArtUrl(server.id, track.artwork_url, 64) : null;
 
   const lastfmPlays = lastfmPlaycount !== undefined && lastfmPlaycount > 0 ? lastfmPlaycount : null;
   const showLibraryCount = lastfmPlays === null && track.play_count != null && track.play_count > 0;

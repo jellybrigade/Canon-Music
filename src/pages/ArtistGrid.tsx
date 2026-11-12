@@ -279,8 +279,7 @@ const ArtistGridCard = memo(function ArtistGridCard({
   // fresh strings per call, which would otherwise defeat this component's React.memo.
   const portraitUrl = useMemo(() => resolvePortraitUrl(artist), [artist]);
   const fallbackUrl = useMemo(
-    () =>
-      artist.artwork_url ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300) : null,
+    () => (artist.artwork_url ? getCoverArtUrl(server.id, artist.artwork_url, 300) : null),
     [artist.artwork_url, server.url, server.username, credential],
   );
   const imgUrl = useMemo(

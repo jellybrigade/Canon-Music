@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe("useNormalizeAlbum", () => {
   it("counts one album off the pending total once it is normalized", async () => {
-    renderHook(() => useNormalizeAlbum("srv-a:alb-1", "slowdive", "Souvlaki"), { wrapper });
+    renderHook(() => useNormalizeAlbum("srv-a:alb-1"), { wrapper });
 
     await waitFor(() => expect(useTagsStore.getState().enrichmentPending).toBe(9));
     expect(vi.mocked(normalizeAlbum)).toHaveBeenCalledTimes(1);
@@ -56,7 +56,7 @@ describe("useNormalizeAlbum", () => {
 
   it("waits for the staleness setting to be read back before normalizing", async () => {
     stalenessSetting.isLoaded = false;
-    const { rerender } = renderHook(() => useNormalizeAlbum("srv-a:alb-1", "slowdive", "Souvlaki"), { wrapper });
+    const { rerender } = renderHook(() => useNormalizeAlbum("srv-a:alb-1"), { wrapper });
     await waitFor(() => expect(queryClient.getQueryState(QK.normalizedTags("srv-a:alb-1"))?.status).toBe("success"));
     rerender();
     expect(vi.mocked(normalizeAlbum)).not.toHaveBeenCalled();
@@ -67,7 +67,7 @@ describe("useNormalizeAlbum", () => {
   });
 
   it("counts each album once when the view returns to an album it already normalized", async () => {
-    const { rerender } = renderHook(({ id }: { id: string }) => useNormalizeAlbum(id, "slowdive", "Souvlaki"), {
+    const { rerender } = renderHook(({ id }: { id: string }) => useNormalizeAlbum(id), {
       wrapper,
       initialProps: { id: "srv-a:alb-1" },
     });

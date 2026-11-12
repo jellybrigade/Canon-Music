@@ -1,6 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
-import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
+import { deleteTrackRowsSql, prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
+import { forYouLocksKey } from "../../lib/forYouGroups";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { escapeLike } from "../../lib/sql";
 
@@ -9,11 +10,7 @@ import { escapeLike } from "../../lib/sql";
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
-    ...prunedTrackIdTables().map(
-      ({ table, column }) =>
-        (ph: string) =>
-          `DELETE FROM ${table} WHERE ${column} IN (${ph})`,
-    ),
+    ...prunedTrackIdTables().map((entry) => (ph: string) => deleteTrackRowsSql(entry, ph)),
     (ph: string) => `DELETE FROM tracks WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -57,16 +54,14 @@ export async function carryPinnedArtistCase(db: Database, serverId: string): Pro
 }
 
 // Drop albums the server no longer lists, plus their tracks and derived rows, dependants
-// first. album_covers goes (pure cache); user-authored album rows stay.
+// first. album_covers, album_release_lookups and album_discogs go (pure caches); user-authored album rows stay.
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
   await carryPinnedAlbums(db, albumIds);
-  const viaTracks =
-    ({ table, column }: { table: string; column: string }) =>
-    (ph: string) =>
-      `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
   const statements = [
-    ...prunedTrackIdTables().map(viaTracks),
+    ...prunedTrackIdTables().map(
+      (entry) => (ph: string) => deleteTrackRowsSql(entry, `SELECT id FROM tracks WHERE album_id IN (${ph})`),
+    ),
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM pinned_albums WHERE album_id IN (${ph})`,
@@ -74,6 +69,8 @@ export async function pruneAlbums(db: Database, albumIds: readonly string[]): Pr
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_unresolved_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_covers WHERE album_id IN (${ph})`,
+    (ph: string) => `DELETE FROM album_release_lookups WHERE album_id IN (${ph})`,
+    (ph: string) => `DELETE FROM album_discogs WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM albums WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -99,6 +96,8 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
     viaAlbums("album_user_genres", "album_id"),
     viaAlbums("album_identity", "album_id"),
     viaAlbums("album_covers", "album_id"),
+    "DELETE FROM album_release_lookups WHERE server_id = ?",
+    "DELETE FROM album_discogs WHERE server_id = ?",
     "DELETE FROM album_cover_overrides WHERE server_id = ?",
     "DELETE FROM albums WHERE server_id = ?",
     "DELETE FROM playlist_resume WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",
@@ -113,7 +112,10 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   for (const sql of statements) {
     await db.execute(sql, [serverId]);
   }
-  await db.execute("DELETE FROM settings WHERE key = ?", [`server.opensub_extensions.${serverId}`]);
+  await db.execute("DELETE FROM settings WHERE key IN (?, ?)", [
+    `server.opensub_extensions.${serverId}`,
+    forYouLocksKey(serverId),
+  ]);
 }
 
 // Every read is scoped by server_id, so rows left by an unfinished purge or a `servers` row

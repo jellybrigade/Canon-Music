@@ -34,6 +34,24 @@ export type ReplayGainMode = "off" | "track" | "album";
 
 export type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
+/** What Clear threw away, so Undo can put it back. */
+export interface ClearedQueue {
+  // The empty list Clear left behind. Every queue writer sets a new array, so the snapshot is
+  // only current while this exact one is still the queue; anything queued since retires it.
+  emptied: CurrentTrack[];
+  queue: CurrentTrack[];
+  queueIndex: number;
+  isShuffled: boolean;
+  shuffleOrder: number[];
+  radioActive: boolean;
+  radioSeed: CurrentTrack | null;
+  radioLabel: string | null;
+}
+
+export function canUndoClearQueue(state: Pick<PlayerState, "clearedQueue" | "queue">): boolean {
+  return state.clearedQueue !== null && state.clearedQueue.emptied === state.queue;
+}
+
 // Both player surfaces and the keyboard shortcut have to agree on when "next" does nothing,
 // otherwise the button greys out on a track the shortcut will happily skip. Repeat-all wraps,
 // and radio-on-queue-end starts a new session off the last track, so neither is a dead end.
@@ -65,7 +83,6 @@ export type RadioStartAction = "replace" | "queue_last";
 
 export interface RadioStartRequest {
   tracks: CurrentTrack[];
-  streamUrlFor: (t: CurrentTrack) => string;
   // Defaults to the first of `tracks`. A genre play queues many tracks but seeds from one;
   // radio started from the playing track queues nothing and passes only the seed.
   seed?: CurrentTrack;
@@ -119,6 +136,7 @@ export interface PlayerState {
   radioMode: RadioMode;
   radioLabel: string | null;
   radioSimilarityScale: number;
+  clearedQueue: ClearedQueue | null;
 
   isQueueOpen: boolean;
   accentColor: string | null;
@@ -152,9 +170,9 @@ export interface PlayerState {
   scanRenderers: () => Promise<void>;
   setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
 
-  play: (track: CurrentTrack, streamUrlFor: (t: CurrentTrack) => string) => Promise<void>;
-  playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
-  restoreQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, position: number) => void;
+  play: (track: CurrentTrack) => Promise<void>;
+  playQueue: (tracks: CurrentTrack[], startIndex?: number) => Promise<void>;
+  restoreQueue: (tracks: CurrentTrack[], position: number) => void;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
   prev: () => Promise<void>;
   pause: () => void;
@@ -180,14 +198,15 @@ export interface PlayerState {
   toggleGapless: () => Promise<void>;
   toggleRadioOnQueueEnd: () => Promise<void>;
   loadSettings: () => Promise<void>;
-  addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
-  playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
-  addManyToQueue: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
-  playNextMany: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
+  addToQueue: (track: CurrentTrack) => void;
+  playNext: (track: CurrentTrack) => void;
+  addManyToQueue: (tracks: CurrentTrack[]) => void;
+  playNextMany: (tracks: CurrentTrack[]) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
   removeManyFromQueue: (positions: number[]) => Promise<void>;
   clearQueue: () => void;
+  undoClearQueue: () => void;
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;

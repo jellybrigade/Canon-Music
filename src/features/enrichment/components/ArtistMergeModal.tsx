@@ -1,8 +1,10 @@
 import { GitMerge, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { LoadError } from "../../../components/LoadError";
 import { useArtists } from "../../../hooks/useArtists";
 import { errorMessage } from "../../../lib/errorMessage";
+import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useSetArtistAlias } from "../hooks/useArtistAliases";
@@ -15,7 +17,7 @@ interface Props {
 }
 
 export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
-  const { data: allArtists = [] } = useArtists();
+  const { data: allArtists, error: artistsError } = useArtists();
   const setAlias = useSetArtistAlias();
   const dismiss = useOverlayDismiss(onClose, { closable: !setAlias.isPending });
   const chrome = useModalChrome(onClose, { closable: !setAlias.isPending });
@@ -24,7 +26,7 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
 
   const candidates = useMemo(() => {
     const q = query.toLowerCase().trim();
-    return allArtists
+    return (allArtists ?? [])
       .filter((a) => a.name !== aliasArtistName)
       .filter((a) => !q || a.name.toLowerCase().includes(q))
       .slice(0, 50);
@@ -87,7 +89,15 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
                 </span>
               </button>
             ))}
-            {candidates.length === 0 && <p className="merge-empty">No artists match.</p>}
+            {artistsError ? (
+              <LoadError
+                title="Couldn't load your artists"
+                error={artistsError}
+                onRetry={() => useArtistBrowseSessionStore.getState().bumpRefresh()}
+              />
+            ) : (
+              allArtists && candidates.length === 0 && <p className="merge-empty">No artists match.</p>
+            )}
           </div>
         </div>
 

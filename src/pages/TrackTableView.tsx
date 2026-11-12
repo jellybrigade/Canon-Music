@@ -11,7 +11,6 @@ import { applyGenreMappings, useGenreMappings } from "../hooks/useGenreDisplay";
 import { useLoved } from "../hooks/useLoved";
 import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
-import { makeStreamUrlBuilder } from "../lib/track";
 import { ContextMenu } from "../ui/ContextMenu";
 import "./AlbumDetail.css";
 import "./TrackTableView.css";
@@ -195,8 +194,6 @@ export function TrackTableView({
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
-
   const [sortField, setSortField] = useState<SortField>("artist");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
@@ -248,9 +245,7 @@ export function TrackTableView({
 
   const buildTrackObj = useCallback(
     (track: AllTrackRow): CurrentTrack => {
-      const coverArtUrl = track.album_artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, track.album_artwork_url, 64)
-        : null;
+      const coverArtUrl = track.album_artwork_url ? getCoverArtUrl(server.id, track.album_artwork_url, 64) : null;
       return {
         id: track.id,
         title: track.title,
@@ -311,9 +306,9 @@ export function TrackTableView({
 
       setSelectedIds(new Set());
       lastClickedIdRef.current = id;
-      playQueue(trackObjs, streamUrlFor, index);
+      playQueue(trackObjs, index);
     },
-    [sorted, trackObjs, streamUrlFor, playQueue],
+    [sorted, trackObjs, playQueue],
   );
 
   const handleRowContextMenu = useCallback((e: React.MouseEvent, track: AllTrackRow) => {
@@ -323,9 +318,9 @@ export function TrackTableView({
 
   const handleRowEnter = useCallback(
     (index: number) => {
-      playQueue(trackObjs, streamUrlFor, index);
+      playQueue(trackObjs, index);
     },
-    [trackObjs, streamUrlFor, playQueue],
+    [trackObjs, playQueue],
   );
 
   const handleToggleLove = useCallback(
@@ -559,7 +554,7 @@ export function TrackTableView({
           <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
             <button
               onClick={() => {
-                void playQueue(bulkTarget, streamUrlFor, 0);
+                void playQueue(bulkTarget, 0);
                 setContextMenu(null);
               }}
             >
@@ -567,7 +562,7 @@ export function TrackTableView({
             </button>
             <button
               onClick={() => {
-                playNextMany(bulkTarget, streamUrlFor);
+                playNextMany(bulkTarget);
                 setContextMenu(null);
               }}
             >
@@ -575,7 +570,7 @@ export function TrackTableView({
             </button>
             <button
               onClick={() => {
-                addManyToQueue(bulkTarget, streamUrlFor);
+                addManyToQueue(bulkTarget);
                 setContextMenu(null);
               }}
             >
@@ -605,7 +600,7 @@ export function TrackTableView({
             <button
               onClick={() => {
                 const idx = sorted.findIndex((t) => t.id === contextMenu.track.id);
-                playQueue(trackObjs, streamUrlFor, idx >= 0 ? idx : 0);
+                playQueue(trackObjs, idx >= 0 ? idx : 0);
                 setContextMenu(null);
               }}
             >
@@ -613,7 +608,7 @@ export function TrackTableView({
             </button>
             <button
               onClick={() => {
-                playNext(buildTrackObj(contextMenu.track), streamUrlFor);
+                playNext(buildTrackObj(contextMenu.track));
                 setContextMenu(null);
               }}
             >
@@ -621,7 +616,7 @@ export function TrackTableView({
             </button>
             <button
               onClick={() => {
-                addToQueue(buildTrackObj(contextMenu.track), streamUrlFor);
+                addToQueue(buildTrackObj(contextMenu.track));
                 setContextMenu(null);
               }}
             >
@@ -630,7 +625,7 @@ export function TrackTableView({
             <StartRadioSubmenu
               onSelect={(mode) => {
                 const track = buildTrackObj(contextMenu.track);
-                void startRadio({ tracks: [track], streamUrlFor, mode });
+                void startRadio({ tracks: [track], mode });
                 setContextMenu(null);
               }}
             />

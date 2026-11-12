@@ -27,6 +27,7 @@ import type { NavidromeCredential } from "./navidromeUrls";
 type Nav = typeof import("./navidromeUrls");
 
 const BASE = "http://music.example";
+const SERVER = "srv-1";
 const cred: NavidromeCredential = { type: "md5", token: "tok", salt: "slt" };
 const apiKeyCred: NavidromeCredential = { type: "apikey", apiKey: "key-123" };
 
@@ -181,58 +182,71 @@ describe("getStreamUrl", () => {
   });
 });
 
-describe("getCoverArtUrl before the cover server is ready", () => {
-  it("builds a direct /rest/getCoverArt URL with credentials and the default size 300", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1")).toBe(
-      "http://music.example/rest/getCoverArt?u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json&id=al-1&size=300",
+describe("getCoverArtUrl", () => {
+  it("builds a cover:// URL naming the server, even before the cover proxy has its config", () => {
+    expect(nav.isCoverServerReady()).toBe(false);
+    expect(nav.getCoverArtUrl(SERVER, "al-1", 300)).toBe("cover://localhost/cover/srv-1/al-1?size=300");
+  });
+
+  it("never carries a credential, so a stored URL can't leak one", () => {
+    const url = nav.getCoverArtUrl(SERVER, "al-1");
+    expect(url).not.toMatch(/[?&](t|s|u|apiKey)=/);
+  });
+
+  it("gives the same cover id on two servers two URLs, so neither cache serves the other's image", () => {
+    expect(nav.getCoverArtUrl("srv-1", "al-1", 300)).not.toBe(nav.getCoverArtUrl("srv-2", "al-1", 300));
+  });
+
+  it("encodes the server id as one path segment", () => {
+    expect(nav.getCoverArtUrl("a/b c", "al-1", 300)).toBe("cover://localhost/cover/a%2Fb%20c/al-1?size=300");
+  });
+
+  it("still defaults size to 300, matching the Rust handler's own fallback", () => {
+    expect(nav.getCoverArtUrl(SERVER, "al-1")).toBe("cover://localhost/cover/srv-1/al-1?size=300");
+  });
+
+  it("keeps size 0 for the stored original and never goes below 1 otherwise", () => {
+    expect(nav.getCoverArtUrl(SERVER, "al-1", nav.ORIGINAL_COVER_SIZE)).toBe(
+      "cover://localhost/cover/srv-1/al-1?size=0",
     );
+    expect(nav.getCoverArtUrl(SERVER, "al-1", 0.4)).toBe("cover://localhost/cover/srv-1/al-1?size=1");
   });
 
-  it("uses apiKey when the credential is an api key", () => {
-    const p = params(nav.getCoverArtUrl(BASE, "alice", apiKeyCred, "al-1"));
-    expect(p.get("apiKey")).toBe("key-123");
-    expect(p.has("t")).toBe(false);
+  it("percent-encodes a slash in the id so the Rust handler sees one segment", () => {
+    expect(nav.getCoverArtUrl(SERVER, "al/1", 300)).toBe("cover://localhost/cover/srv-1/al%2F1?size=300");
   });
 
-  it("emits size unconditionally, unlike maxBitRate, but never below 1 short of the original", () => {
-    // size is set unconditionally; maxBitRate is guarded by > 0. The asymmetry is the point.
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 0.4)).get("size")).toBe("1");
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", nav.ORIGINAL_COVER_SIZE)).get("size")).toBe("0");
+  it("percent-encodes a question mark and ampersand so the id cannot corrupt size", () => {
+    const url = nav.getCoverArtUrl(SERVER, "al?x=2&size=9", 300);
+    expect(url).toBe("cover://localhost/cover/srv-1/al%3Fx%3D2%26size%3D9?size=300");
+    expect(params(url).get("size")).toBe("300");
   });
 
-  it("clamps the direct URL branch by the same rule as the cover:// one", () => {
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -4)).get("size")).toBe("1");
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).get("size")).toBe("150");
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).get("size")).toBe("300");
+  it("encodes a unicode id", () => {
+    expect(nav.getCoverArtUrl(SERVER, "アル", 64)).toBe("cover://localhost/cover/srv-1/%E3%82%A2%E3%83%AB?size=64");
   });
 
-  it("passes a large size through unclamped", () => {
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 100000)).get("size")).toBe("100000");
+  it("leaves encodeURIComponent's unreserved set alone", () => {
+    // Guards against a swap to encodeURI, which would also leave & ? / unescaped.
+    expect(nav.getCoverArtUrl(SERVER, "a'b(c)*-._~!", 300)).toBe("cover://localhost/cover/srv-1/a'b(c)*-._~!?size=300");
   });
 
-  it("emits an empty id when the cover art id is empty", () => {
-    const url = nav.getCoverArtUrl(BASE, "alice", cred, "");
-    expect(url).toContain("&id=&size=300");
+  it("rounds and floors the size, so no bogus value reaches the URL", () => {
+    // Rust caches under the size it was handed, so an unclamped value fragments the disk
+    // cache and every React memo key derived from the URL.
+    expect(nav.getCoverArtUrl(SERVER, "al-1", -1)).toBe("cover://localhost/cover/srv-1/al-1?size=1");
+    expect(nav.getCoverArtUrl(SERVER, "al-1", 149.6)).toBe("cover://localhost/cover/srv-1/al-1?size=150");
   });
 
-  it("encodes reserved characters in the cover art id", () => {
-    const url = nav.getCoverArtUrl(BASE, "alice", cred, "al 1&x#y+z");
-    expect(url).toContain("id=al+1%26x%23y%2Bz");
-    expect(url).not.toContain("#");
-    expect(params(url).get("id")).toBe("al 1&x#y+z");
-  });
-
-  it("round-trips a unicode cover art id", () => {
-    const url = nav.getCoverArtUrl(BASE, "alice", cred, "アルバム");
-    expect(params(url).get("id")).toBe("アルバム");
+  it("falls back to 300, the Rust handler's own default, for a size that is not a number", () => {
+    expect(nav.getCoverArtUrl(SERVER, "al-1", Number.NaN)).toBe("cover://localhost/cover/srv-1/al-1?size=300");
+    expect(nav.getCoverArtUrl(SERVER, "al-1", Number.POSITIVE_INFINITY)).toBe(
+      "cover://localhost/cover/srv-1/al-1?size=300",
+    );
   });
 });
 
 describe("getCoverArtUrl for an album with a chosen cover", () => {
-  beforeEach(() => {
-    nav.initCoverServer();
-  });
-
   it("names the album a cover id belongs to, with or without its change stamp", () => {
     expect(nav.albumKeyOfCoverId("al-4S5lrPg_1214c1cb")).toBe("4S5lrPg");
     expect(nav.albumKeyOfCoverId("al-4S5lrPg")).toBe("4S5lrPg");
@@ -241,36 +255,40 @@ describe("getCoverArtUrl for an album with a chosen cover", () => {
   });
 
   it("adds the choice's revision so the webview cannot reuse the server's image", () => {
-    nav.setCoverRevision("abc", 1700);
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff", 64)).toBe(
-      "cover://localhost/cover/al-abc_ff?size=64&v=1700",
-    );
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-other_ff", 64)).toBe(
-      "cover://localhost/cover/al-other_ff?size=64",
+    nav.setCoverRevision(SERVER, "abc", 1700);
+    expect(nav.getCoverArtUrl(SERVER, "al-abc_ff", 64)).toBe("cover://localhost/cover/srv-1/al-abc_ff?size=64&v=1700");
+    expect(nav.getCoverArtUrl(SERVER, "al-other_ff", 64)).toBe("cover://localhost/cover/srv-1/al-other_ff?size=64");
+  });
+
+  it("stamps a choice only on its own server's URLs", () => {
+    nav.replaceCoverRevisions(SERVER, new Map([["abc", 1700]]));
+    expect(nav.getCoverArtUrl("srv-2", "al-abc_ff", 64)).toBe("cover://localhost/cover/srv-2/al-abc_ff?size=64");
+    expect(nav.withCoverRevision("cover://localhost/cover/srv-2/al-abc_ff?size=64&v=1700")).toBe(
+      "cover://localhost/cover/srv-2/al-abc_ff?size=64",
     );
   });
 
   it("drops the revision when the choice is cleared, and replaces all of them on a reload", () => {
-    nav.setCoverRevision("abc", 1700);
-    nav.setCoverRevision("abc", null);
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff")).toBe("cover://localhost/cover/al-abc_ff?size=300");
-    nav.setCoverRevision("abc", 1700);
-    nav.replaceCoverRevisions(new Map([["xyz", 5]]));
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff")).toBe("cover://localhost/cover/al-abc_ff?size=300");
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-xyz")).toBe("cover://localhost/cover/al-xyz?size=300&v=5");
+    nav.setCoverRevision(SERVER, "abc", 1700);
+    nav.setCoverRevision(SERVER, "abc", null);
+    expect(nav.getCoverArtUrl(SERVER, "al-abc_ff")).toBe("cover://localhost/cover/srv-1/al-abc_ff?size=300");
+    nav.setCoverRevision(SERVER, "abc", 1700);
+    nav.replaceCoverRevisions(SERVER, new Map([["xyz", 5]]));
+    expect(nav.getCoverArtUrl(SERVER, "al-abc_ff")).toBe("cover://localhost/cover/srv-1/al-abc_ff?size=300");
+    expect(nav.getCoverArtUrl(SERVER, "al-xyz")).toBe("cover://localhost/cover/srv-1/al-xyz?size=300&v=5");
   });
 
   it("brings a URL built before the choice up to date, and leaves other URLs alone", () => {
-    const stored = nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff", 64);
-    nav.setCoverRevision("abc", 1700);
-    expect(nav.withCoverRevision(stored)).toBe("cover://localhost/cover/al-abc_ff?size=64&v=1700");
-    nav.setCoverRevision("abc", 1800);
-    expect(nav.withCoverRevision("cover://localhost/cover/al-abc_ff?size=64&v=1700")).toBe(
-      "cover://localhost/cover/al-abc_ff?size=64&v=1800",
+    const stored = nav.getCoverArtUrl(SERVER, "al-abc_ff", 64);
+    nav.setCoverRevision(SERVER, "abc", 1700);
+    expect(nav.withCoverRevision(stored)).toBe("cover://localhost/cover/srv-1/al-abc_ff?size=64&v=1700");
+    nav.setCoverRevision(SERVER, "abc", 1800);
+    expect(nav.withCoverRevision("cover://localhost/cover/srv-1/al-abc_ff?size=64&v=1700")).toBe(
+      "cover://localhost/cover/srv-1/al-abc_ff?size=64&v=1800",
     );
-    nav.setCoverRevision("abc", null);
-    expect(nav.withCoverRevision("cover://localhost/cover/al-abc_ff?size=64&v=1800")).toBe(
-      "cover://localhost/cover/al-abc_ff?size=64",
+    nav.setCoverRevision(SERVER, "abc", null);
+    expect(nav.withCoverRevision("cover://localhost/cover/srv-1/al-abc_ff?size=64&v=1800")).toBe(
+      "cover://localhost/cover/srv-1/al-abc_ff?size=64",
     );
     expect(nav.withCoverRevision("cover://localhost/artist-image/x")).toBe("cover://localhost/artist-image/x");
     expect(nav.withCoverRevision("data:image/png;base64,AAAA")).toBe("data:image/png;base64,AAAA");
@@ -279,75 +297,11 @@ describe("getCoverArtUrl for an album with a chosen cover", () => {
   it("tells subscribers once per change", () => {
     const listener = vi.fn();
     const unsubscribe = nav.subscribeCoverRevisions(listener);
-    nav.setCoverRevision("abc", 1);
-    nav.replaceCoverRevisions(new Map());
+    nav.setCoverRevision(SERVER, "abc", 1);
+    nav.replaceCoverRevisions(SERVER, new Map());
     unsubscribe();
-    nav.setCoverRevision("abc", 2);
+    nav.setCoverRevision(SERVER, "abc", 2);
     expect(listener).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("getCoverArtUrl once the cover server is ready", () => {
-  beforeEach(() => {
-    nav.initCoverServer();
-  });
-
-  it("switches from a direct URL to the cover:// scheme", () => {
-    expect(nav.isCoverServerReady()).toBe(true);
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 300)).toBe("cover://localhost/cover/al-1?size=300");
-  });
-
-  it("still defaults size to 300, matching the Rust handler's own fallback", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1")).toBe("cover://localhost/cover/al-1?size=300");
-  });
-
-  it("emits an identical URL for a different server, so the ready branch is not owner-scoped", () => {
-    // Documents current behavior, not desired behavior. baseUrl/username/credential are
-    // all discarded here; the host is reconstructed in Rust from CoverState's single
-    // global proxy_config slot, and the disk cache key is `{id}:{size}` with no server
-    // namespace. Same shape as known-issues' server_id scoping entry. Flip this
-    // assertion when the URL gains a server id.
-    const a = nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 300);
-    const b = nav.getCoverArtUrl("http://other.example", "bob", apiKeyCred, "al-1", 300);
-    expect(b).toBe(a);
-  });
-
-  it("percent-encodes a slash in the id so the Rust /cover/ prefix strip sees one segment", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al/1", 300)).toBe("cover://localhost/cover/al%2F1?size=300");
-  });
-
-  it("percent-encodes a question mark and ampersand so the id cannot corrupt size", () => {
-    const url = nav.getCoverArtUrl(BASE, "alice", cred, "al?x=2&size=9", 300);
-    expect(url).toBe("cover://localhost/cover/al%3Fx%3D2%26size%3D9?size=300");
-    expect(params(url).get("size")).toBe("300");
-  });
-
-  it("encodes a unicode id", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "アル", 64)).toBe(
-      "cover://localhost/cover/%E3%82%A2%E3%83%AB?size=64",
-    );
-  });
-
-  it("leaves encodeURIComponent's unreserved set alone", () => {
-    // Guards against a swap to encodeURI, which would also leave & ? / unescaped.
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "a'b(c)*-._~!", 300)).toBe(
-      "cover://localhost/cover/a'b(c)*-._~!?size=300",
-    );
-  });
-
-  it("rounds and floors the size, so no bogus value reaches the URL", () => {
-    // Rust parses size as u32 and silently falls back to 300, but it caches under
-    // `{id}:{size}` with whatever string arrived, so an unclamped value fragments the
-    // disk cache and every React memo key derived from the URL.
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -1)).toBe("cover://localhost/cover/al-1?size=1");
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).toBe("cover://localhost/cover/al-1?size=150");
-  });
-
-  it("falls back to 300, the Rust handler's own default, for a size that is not a number", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).toBe("cover://localhost/cover/al-1?size=300");
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.POSITIVE_INFINITY)).toBe(
-      "cover://localhost/cover/al-1?size=300",
-    );
   });
 });
 
@@ -356,8 +310,6 @@ describe("isCoverServerReady", () => {
     expect(nav.isCoverServerReady()).toBe(false);
     nav.initCoverServer();
     expect(nav.isCoverServerReady()).toBe(true);
-    // No reset exists. If one is added, the server-switch follow-up above is addressable.
-    expect("resetCoverServer" in nav).toBe(false);
   });
 });
 
@@ -409,14 +361,20 @@ describe("getArtistImageUrl", () => {
 
 describe("updateCoverProxyConfig", () => {
   /** The single argument object handed to the nth `set_cover_proxy_config` invoke. */
-  function proxyArgs(n = 0): { baseUrl: string; altUrl: string | null; authParams: string } {
+  type ProxyArgs = { serverId: string; baseUrl: string; altUrl: string | null; authParams: string };
+  function proxyArgs(n = 0): ProxyArgs {
     const calls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "set_cover_proxy_config");
-    return calls[n]![1] as { baseUrl: string; altUrl: string | null; authParams: string };
+    return calls[n]![1] as ProxyArgs;
   }
 
-  it("normalizes the base URL and flattens the auth params to a query string", async () => {
-    await nav.updateCoverProxyConfig(`${BASE}/rest/`, null, "alice", cred);
+  function update(baseUrl: string, altUrl: string | null, username: string, credential: NavidromeCredential) {
+    return nav.updateCoverProxyConfig({ serverId: SERVER, baseUrl, altUrl, username, credential });
+  }
+
+  it("names the server, normalizes the base URL and flattens the auth params to a query string", async () => {
+    await update(`${BASE}/rest/`, null, "alice", cred);
     expect(proxyArgs()).toEqual({
+      serverId: "srv-1",
       baseUrl: "http://music.example",
       altUrl: null,
       authParams: "u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json",
@@ -424,18 +382,18 @@ describe("updateCoverProxyConfig", () => {
   });
 
   it("hands Rust the normalized alternate URL so covers can fall back to it", async () => {
-    await nav.updateCoverProxyConfig(BASE, "http://192.168.1.5:4533/", "alice", cred);
+    await update(BASE, "http://192.168.1.5:4533/", "alice", cred);
     expect(proxyArgs().altUrl).toBe("http://192.168.1.5:4533");
   });
 
   it("encodes a space in the username as + inside the flat param string", async () => {
     // Rust concatenates authParams into an upstream query verbatim, where + means space.
-    await nav.updateCoverProxyConfig(BASE, null, "al ice", cred);
+    await update(BASE, null, "al ice", cred);
     expect(proxyArgs().authParams).toContain("u=al+ice");
   });
 
   it("carries apiKey and no t/s for an api key credential", async () => {
-    await nav.updateCoverProxyConfig(BASE, null, "alice", apiKeyCred);
+    await update(BASE, null, "alice", apiKeyCred);
     const p = new URLSearchParams(proxyArgs().authParams);
     expect(p.get("apiKey")).toBe("key-123");
     expect(p.has("t")).toBe(false);
@@ -443,7 +401,7 @@ describe("updateCoverProxyConfig", () => {
 
   it("propagates an invoke failure instead of swallowing it", async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("no such command"));
-    await expect(nav.updateCoverProxyConfig(BASE, null, "alice", cred)).rejects.toThrow("no such command");
+    await expect(update(BASE, null, "alice", cred)).rejects.toThrow("no such command");
   });
 });
 

@@ -44,17 +44,16 @@ export function AlbumArtStrip({
   size?: number;
   max?: number;
 }) {
-  const { data: albums = [] } = useTagAlbums(rawValue, kind);
   const { data: servers } = useServers();
-  const { data: swc } = useServerWithCredential(servers?.[0]?.id);
+  const serverId = servers?.[0]?.id;
+  // Decorative: an unreadable cover strip stays hidden.
+  const { data: albums = [] } = useTagAlbums(rawValue, kind, serverId);
+  const { data: swc } = useServerWithCredential(serverId);
 
   const tiles = albums
     .map((a) => ({
       ...a,
-      url:
-        swc && a.artwork_url
-          ? getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, a.artwork_url, size * 2)
-          : null,
+      url: swc && a.artwork_url ? getCoverArtUrl(swc.server.id, a.artwork_url, size * 2) : null,
     }))
     .filter((a) => a.url)
     .slice(0, max);
@@ -78,6 +77,7 @@ export const SOURCE_META: Record<string, { cls: string; label: string }> = {
   lastfm: { cls: "src-lfm", label: "Last.fm" },
   musicbrainz: { cls: "src-mb", label: "MusicBrainz" },
   "musicbrainz-folksonomy": { cls: "src-mb-folk", label: "Folksonomy" },
+  discogs: { cls: "src-discogs", label: "Discogs" },
   file: { cls: "src-file", label: "File tags" },
 };
 

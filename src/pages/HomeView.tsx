@@ -1,5 +1,4 @@
-import { Search, X } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { PinMenuItem } from "../features/pins/components/PinMenuItem";
@@ -23,7 +22,6 @@ import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import type { ForYouCategoryConfig } from "../lib/forYouGroups";
-import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { CanonIcon } from "../ui/CanonIcon";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
@@ -31,6 +29,7 @@ import { AlbumCarousel } from "./home/AlbumCarousel";
 import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, ForYouRail, mergeForYouConfig } from "./home/ForYouRail";
 import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { GenreChipsLine } from "./home/GenreChipsLine";
+import { HomeSearchBox } from "./home/HomeSearchBox";
 import {
   buildSpotlightCandidates,
   dedupePicks,
@@ -113,13 +112,12 @@ export function HomeView({
     setContextMenu({ x: e.clientX, y: e.clientY, album });
   }, []);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const { data: searchResults, isError: searchError } = useSearch(homeSearchQuery, server.id);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums();
+  const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums(server.id);
   const { genres: recentGenres, error: recentGenresError, retry: retryRecentGenres } = useRecentGenres();
   const {
     onRepeat,
@@ -130,7 +128,7 @@ export function HomeView({
     almostDone,
     playedAlbumIds,
     isLoading: statsLoading,
-  } = useListeningStats();
+  } = useListeningStats(server.id);
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
   const recentItems = useMemo(() => recentRaw?.map((a) => naviToAlbumRow(a, server.id)), [recentRaw, server.id]);
@@ -266,12 +264,23 @@ export function HomeView({
     ],
   );
 
+  const forYouLoading = statsLoading || recentLoading || allLoading;
   const spotlightIds = useMemo(() => spotlightPicks.map((p) => p.album.id), [spotlightPicks]);
   const {
     groups: forYouGroups,
     perTab: forYouPerTab,
     setPerTab: setForYouPerTab,
-  } = useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
+    toggleLock: toggleForYouLock,
+    isLoading: forYouGroupsLoading,
+  } = useForYouGroups({
+    spotlightIds,
+    sources: forYouSources,
+    library: allAlbums,
+    config: categoryConfig,
+    serverId: server.id,
+    seed: forYouSeed,
+    isReady: !forYouLoading,
+  });
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const newAlbumsCheck = useNewAlbumsCheck({
@@ -289,9 +298,7 @@ export function HomeView({
       const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
       const t = rows[0];
       if (!t) return;
-      const coverArtUrl = t.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
-        : null;
+      const coverArtUrl = t.artwork_url ? getCoverArtUrl(server.id, t.artwork_url, 64) : null;
       const track: CurrentTrack = {
         id: t.id,
         title: t.title,
@@ -305,7 +312,6 @@ export function HomeView({
       };
       await startRadio({
         tracks: [track],
-        streamUrlFor: makeStreamUrlBuilder(server, credential),
         mode: "same-genre",
         label: genreLabel,
       });
@@ -325,38 +331,11 @@ export function HomeView({
             <CanonIcon size={38} className="home-greeting__logo" />
             <h1 className="home-greeting__text">{getGreeting()}</h1>
           </div>
-          <div className="home-search-bar">
-            <Search size={13} className="search-bar-icon" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="search-bar-input"
-              placeholder="Search…"
-              value={homeSearchRaw}
-              onChange={(e) => onHomeSearchRawChange(e.target.value)}
-            />
-            {homeSearchRaw ? (
-              <button
-                className="search-bar-clear"
-                onClick={(e) => {
-                  searchInputRef.current?.blur();
-                  e.currentTarget.blur();
-                  onHomeSearchRawChange("");
-                }}
-                title="Clear"
-              >
-                <X size={13} />
-              </button>
-            ) : (
-              <button
-                className="home-search-palette-hint"
-                onClick={onOpenCommandPalette}
-                title="Command palette: search tracks, artists, albums, and navigate anywhere"
-              >
-                <kbd>⌘K</kbd>
-              </button>
-            )}
-          </div>
+          <HomeSearchBox
+            value={homeSearchRaw}
+            onChange={onHomeSearchRawChange}
+            onOpenCommandPalette={onOpenCommandPalette}
+          />
           {allAlbums != null && !isSearching && (
             <span className="home-greeting__sub">
               {allAlbums.length.toLocaleString()} {plural(allAlbums.length, "album")}
@@ -440,11 +419,12 @@ export function HomeView({
               unlocked edit state. */}
           <ForYouRail
             groups={forYouGroups}
-            isLoading={statsLoading || recentLoading || allLoading}
+            isLoading={forYouGroupsLoading}
             serverWithCred={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
             onRefresh={refreshForYou}
+            onToggleLock={toggleForYouLock}
             onCardContextMenu={openCardContextMenu}
             config={categoryConfig}
             onConfigChange={handleForYouConfigChange}

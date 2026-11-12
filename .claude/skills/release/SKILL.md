@@ -91,12 +91,32 @@ Release Canon to main. Run these steps in order — do not skip any.
    ```
    Omit a subheading if it has zero items. Summarize all changes since the last release — run `git log main..development --oneline` before writing to make sure nothing is missed.
 
-   **Release note tone**: write for users, not developers. Describe what changed from the user's perspective — what they can now do, what no longer breaks, what behaves differently. No internal names (function names, SQL, hook names, variable names). No jargon. Each bullet should be one plain sentence a non-technical user can understand.
+   **Release note tone**: write for users, not developers, and keep it skimmable: the update prompt shows every release between the installed and new version, stacked. No internal names (function names, SQL, hook names, variable names), no jargon.
 
-   Good: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
-   Bad: "Refresh button clears lyricsOverride before calling lyricsRefresh()."
+   **Length** (hard limits):
+   - Each bullet ≤ 10 words. Say what changed, not how or why. No "instead of ...", no "even when ...", no edge-case conditions.
+   - At most 5 bullets per section, 8 in the whole note. Lead with what users notice most.
+   - A change gets its own bullet only if most users would notice it in normal use. Anything that shows up only in a rare situation (a failed load, a busy database, returning to a page mid-save, a niche flow) goes into one closing bullet per section: "Smaller fixes to playback, sync and covers." When in doubt, fold it.
+   - Leave out what users never see (logging, internal speedups, accessibility labels, test or build changes).
+   - Security fixes always get their own bullet.
 
-   Good: "Tags with multiple spellings (e.g. Post-Rock and Post Rock) are now fully removed when you undo a mapping."
+   Example (v0.58.1, 15 bullets cut to 6):
+   ```
+   ### Fixed
+   - Cover picker marks your current cover "In use".
+   - Changing a cover updates the tint, icon and media controls.
+   - Smaller cover picker fixes.
+
+   ### Changed
+   - Cover picker shows each cover's size, with larger previews.
+   - Unusable covers (disc scans, watermarks) are no longer offered.
+   - Updated a networking library past a security advisory.
+   ```
+
+   Good: "Lyrics Refresh returns to the original lyrics."
+   Bad: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
+
+   Good: "Undoing a genre mapping removes every spelling."
    Bad: "deleteMapping clears track_tags by norm_value instead of raw_value."
 
 7. **Push**: `git push` — CI reads the version from `tauri.conf.json`, creates the `vX.Y.Z` tag, and builds Windows / macOS / Linux artifacts automatically.

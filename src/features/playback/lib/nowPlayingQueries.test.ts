@@ -2,14 +2,17 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
-vi.mock("../../../clients/lastfm", () => ({
-  fetchArtistTopTracks: vi.fn(async () => []),
-  fetchSimilarArtists: vi.fn(async () => []),
+vi.mock("../../enrichment/lib/similarArtists", () => ({
+  fetchSimilarArtistScores: vi.fn(async () => []),
+}));
+vi.mock("../../enrichment/lib/popularTracks", () => ({
+  fetchPopularTrackRanking: vi.fn(async () => ({ source: "deezer", tracks: [] })),
 }));
 
-import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { fetchPopularTrackRanking } from "../../enrichment/lib/popularTracks";
+import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import {
   fetchArtistAlbums,
   fetchArtistTopTracksForNowPlaying,
@@ -72,7 +75,7 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
     vi.mocked(getDb).mockResolvedValue(db as never);
     // Empty Last.fm response takes the fallback branch, which runs the same `artistMatch`
     // fragment as the intersected branch - one select, no ranking noise in the assertions.
-    vi.mocked(fetchArtistTopTracks).mockResolvedValue([]);
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({ source: "deezer", tracks: [] });
   });
 
   function seed(...artists: string[]): void {
@@ -126,6 +129,11 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
       "Burial ft. Four Tet",
       "Burial featuring Four Tet",
     ]);
+  });
+
+  it("matches the artist in any case, as it already did their collaborations", async () => {
+    seed("burial", "BURIAL feat. Four Tet");
+    expect(await artistsFor("Burial")).toEqual(["burial", "BURIAL feat. Four Tet"]);
   });
 
   it("matches a bare 'feat.' but needs the space the 'featuring' pattern spells out", async () => {
@@ -204,8 +212,8 @@ describe("server scoping", () => {
     vi.clearAllMocks();
     db = await createMigratedTestDb();
     vi.mocked(getDb).mockResolvedValue(db as never);
-    vi.mocked(fetchArtistTopTracks).mockResolvedValue([]);
-    vi.mocked(fetchSimilarArtists).mockResolvedValue([]);
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({ source: "deezer", tracks: [] });
+    vi.mocked(fetchSimilarArtistScores).mockResolvedValue([]);
   });
 
   function seedAlbum(serverId: string, suffix: string, artist: string): void {
@@ -244,12 +252,30 @@ describe("server scoping", () => {
   it("returns only the selected server's top tracks when Last.fm ranks them", async () => {
     seedTrack("alpha", "1", "Burial");
     seedTrack("beta", "2", "Burial");
-    vi.mocked(fetchArtistTopTracks).mockResolvedValue([
-      { name: "Title 2", playcount: 10 },
-      { name: "Title 1", playcount: 5 },
-    ] as never);
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({
+      source: "lastfm",
+      tracks: [
+        { title: "Title 2", playcount: 10, albumTitle: null },
+        { title: "Title 1", playcount: 5, albumTitle: null },
+      ],
+    });
     const rows = await fetchArtistTopTracksForNowPlaying("Burial", "alpha");
     expect(rows.map((r) => r.id)).toEqual(["alpha:t1"]);
+  });
+
+  it("orders by Deezer's ranking when Last.fm has none", async () => {
+    seedTrack("alpha", "1", "Burial");
+    seedTrack("alpha", "2", "Burial");
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({
+      source: "deezer",
+      tracks: [
+        { title: "Title 2", playcount: null, albumTitle: null },
+        { title: "Title 1", playcount: null, albumTitle: null },
+      ],
+    });
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t2", "alpha:t1"]);
+    expect(fetchPopularTrackRanking).toHaveBeenCalledWith({ artistName: "Burial", lastfmName: "Burial" });
   });
 
   it("keeps the feat.-variant match inside the server scope rather than widening it", async () => {
@@ -263,7 +289,7 @@ describe("server scoping", () => {
   it("returns only the selected server's suggested tracks", async () => {
     seedTrack("alpha", "1", "Four Tet");
     seedTrack("beta", "2", "Four Tet");
-    vi.mocked(fetchSimilarArtists).mockResolvedValue(["Four Tet"]);
+    vi.mocked(fetchSimilarArtistScores).mockResolvedValue([{ name: "Four Tet", match: 0.4 }]);
     const rows = await fetchSuggestedTracksForNowPlaying("Burial", null, "alpha");
     expect(rows.map((r) => r.id)).toEqual(["alpha:t1"]);
   });
@@ -271,8 +297,30 @@ describe("server scoping", () => {
   it("still excludes the current track inside the server scope", async () => {
     seedTrack("alpha", "1", "Four Tet");
     seedTrack("alpha", "2", "Four Tet");
-    vi.mocked(fetchSimilarArtists).mockResolvedValue(["Four Tet"]);
+    vi.mocked(fetchSimilarArtistScores).mockResolvedValue([{ name: "Four Tet", match: 0.4 }]);
     const rows = await fetchSuggestedTracksForNowPlaying("Burial", "alpha:t1", "alpha");
     expect(rows.map((r) => r.id)).toEqual(["alpha:t2"]);
+  });
+});
+
+describe("fetchArtistTopTracksForNowPlaying: tied fallback order", () => {
+  it("orders tracks sharing a number and title by id, so the cut at ten is stable", async () => {
+    vi.clearAllMocks();
+    const db = await createMigratedTestDb();
+    vi.mocked(getDb).mockResolvedValue(db as never);
+    vi.mocked(fetchPopularTrackRanking).mockResolvedValue({ source: "deezer", tracks: [] });
+    // Descending id order, so scan order disagrees with id order on the tie.
+    for (let i = 12; i >= 1; i--) {
+      db.raw
+        .prepare(
+          `INSERT INTO tracks (id, server_id, server_type, title, artist, track_number)
+           VALUES (?, 'srv', 'navidrome', 'Intro', 'Burial', 1)`,
+        )
+        .run(`srv:t${String(i).padStart(2, "0")}`);
+    }
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "srv");
+    expect(rows.map((r) => r.id)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `srv:t${String(i + 1).padStart(2, "0")}`),
+    );
   });
 });

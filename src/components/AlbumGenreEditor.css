@@ -94,6 +94,11 @@
   opacity: var(--opacity-75);
 }
 
+.age-chip--discogs {
+  border-style: dotted;
+  opacity: var(--opacity-75);
+}
+
 .age-chip--musicbrainz-folksonomy {
   border-style: dotted;
   opacity: var(--opacity-60);

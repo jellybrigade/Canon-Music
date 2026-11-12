@@ -15,13 +15,17 @@ vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../lib/radio", () => ({ getRadioCandidates: vi.fn() }));
 vi.mock("../../../clients/lastfm", () => ({
-  fetchSimilarArtistsFull: vi.fn(async () => []),
   fetchSimilarTracks: vi.fn(async () => []),
+}));
+vi.mock("../../enrichment/lib/similarArtists", () => ({
+  fetchSimilarArtistScores: vi.fn(async () => []),
 }));
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { trackRenders } from "../../../test/perf";
+import { fetchSimilarArtistScores } from "../../enrichment/lib/similarArtists";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import type { RadioCandidate } from "../lib/radio";
@@ -29,6 +33,8 @@ import { getRadioCandidates } from "../lib/radio";
 import { useRadio } from "./useRadio";
 
 const PICK_ID = "srv:pick";
+/** useRadio fills until this many tracks wait past the current one. */
+const LOOKAHEAD = 10;
 
 /** The store's own append, captured before any test replaces it with a spy. */
 const realAddToQueue = usePlayerStore.getState().addToQueue;
@@ -72,7 +78,7 @@ function candidateArgs(nth = 0) {
 
 // Boundary mock: the radio fill reads scrobble_history for exclusions, then one row per pick.
 // The track row is derived from the bound id so a test can tell *which* candidate was picked.
-function mockDb(recentIds: string[] = []) {
+function mockDb(recentIds: string[] = [], artistOf = (id: string) => (id === PICK_ID ? "Other" : `Artist ${id}`)) {
   const db = {
     select: vi.fn(async (sql: string, params?: unknown[]) => {
       if (sql.includes("scrobble_history")) return recentIds.map((id) => ({ track_id: id }));
@@ -81,7 +87,7 @@ function mockDb(recentIds: string[] = []) {
         {
           id,
           title: `Title ${id}`,
-          artist: id === PICK_ID ? "Other" : `Artist ${id}`,
+          artist: artistOf(id),
           duration: 180,
           artwork_url: null,
           album_id: `${id}-alb`,
@@ -138,7 +144,7 @@ describe("useRadio auto-advance", () => {
       isLoading: false,
       streamUrlFor: () => "http://stream",
       playFromQueueIndex: playFromQueueIndex as unknown as (i: number) => Promise<void>,
-      addToQueue: addToQueue as unknown as (t: CurrentTrack, f: (t: CurrentTrack) => string) => void,
+      addToQueue: addToQueue as unknown as (t: CurrentTrack) => void,
     });
   });
 
@@ -300,6 +306,42 @@ describe("useRadio auto-advance", () => {
     });
   });
 
+  describe("similar artists", () => {
+    it("weights candidates by the similar artists any source found for the seed", async () => {
+      vi.mocked(fetchSimilarArtistScores).mockResolvedValue([{ name: "Asian Glow", match: 0.75 }]);
+      usePlayerStore.setState({ radioMode: "similar-artists" });
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
+      expect(fetchSimilarArtistScores).toHaveBeenCalledWith("Artist");
+      expect(candidateArgs().artistSimilarity).toEqual(
+        new Map([
+          ["artist", 1],
+          ["asian glow", 0.75],
+        ]),
+      );
+    });
+
+    it("counts every artist of the seed's credit as the seed artist", async () => {
+      const seed = { ...makeTrack("srv:1"), artist: "Drake feat. Sampha" };
+      usePlayerStore.setState({ radioMode: "similar-artists", queue: [seed], currentTrack: seed });
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
+      expect(candidateArgs().artistSimilarity.get("drake")).toBe(1);
+    });
+
+    it("asks for similar artists and tracks by the credit's lead artist", async () => {
+      const seed = { ...makeTrack("srv:1"), artist: "Drake feat. Sampha", title: "Too Much" };
+      usePlayerStore.setState({ radioMode: "curated", queue: [seed], currentTrack: seed });
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(candidatesMock()).toHaveBeenCalled());
+      expect(fetchSimilarArtistScores).toHaveBeenCalledWith("Drake");
+      expect(fetchSimilarTracks).toHaveBeenCalledWith("Drake", "Too Much");
+    });
+  });
+
   describe("exclusions", () => {
     it("excludes every track already in the queue", async () => {
       seedQueue(3, 2);
@@ -329,7 +371,8 @@ describe("useRadio auto-advance", () => {
         // stamp is the only record of it.
         const call = db.select.mock.calls.find((c) => String(c[0]).includes("played_at"))!;
         expect(call[1]).toEqual([
-          "srv:%",
+          "srv:",
+          "srv;",
           Math.floor(new Date("2026-08-10T12:00:00Z").getTime() / 1000) - 3600,
           "srv",
           "2026-08-10T11:00:00.000Z",
@@ -407,6 +450,45 @@ describe("useRadio auto-advance", () => {
 
       await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(2));
       expect(addToQueue.mock.calls[1]![0].id).toBe("srv:same-artist");
+    });
+
+    it("decays a featured credit together with its primary artist", async () => {
+      mockDb([], (id) => (id === "srv:drake" ? "Drake" : `Artist ${id}`));
+      serveCandidates(
+        [candidate("srv:drake", 1, "Drake", "srv:alb2")],
+        [
+          candidate("srv:drake-feat", 1, "Drake feat. Sampha", "srv:alb3"),
+          candidate("srv:fresh", 0.5, "Fresh", "srv:alb4"),
+        ],
+      );
+      renderHook(() => useRadio());
+
+      await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(2));
+      expect(addToQueue.mock.calls[1]![0].id).toBe("srv:fresh");
+    });
+
+    it("keeps a thin pool's strongest artist from returning every few picks", async () => {
+      // Lamp radio: every Lamp track outscores everything else by 5x, other artists are one-offs.
+      const picks = 25;
+      mockDb([], (id) => (id.startsWith("srv:lamp") ? "Lamp" : `Artist ${id}`));
+      let fill = 0;
+      candidatesMock().mockImplementation(async () => {
+        fill += 1;
+        return [
+          candidate(`srv:lamp-${fill}`, 1, "Lamp", `srv:lamp-alb-${fill}`),
+          candidate(`srv:other-${fill}`, 0.2, `Artist srv:other-${fill}`, `srv:other-alb-${fill}`),
+        ];
+      });
+      renderHook(() => useRadio());
+
+      while (addToQueue.mock.calls.length < picks) {
+        await waitFor(() => expect(addToQueue.mock.calls.length).toBeGreaterThanOrEqual(LOOKAHEAD - 1));
+        const before = addToQueue.mock.calls.length;
+        act(() => usePlayerStore.setState((s) => ({ queueIndex: s.queue.length - 1 })));
+        await waitFor(() => expect(addToQueue.mock.calls.length).toBeGreaterThan(before));
+      }
+      const lampPicks = addToQueue.mock.calls.slice(0, picks).filter(([track]) => track.artist === "Lamp").length;
+      expect(lampPicks).toBeLessThanOrEqual(3);
     });
 
     it("still appends when every candidate shares the just-played artist", async () => {

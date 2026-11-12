@@ -1,15 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { getFanartApiKey, setFanartApiKey } from "../../../clients/fanart";
-import { getMinTagCount, setApiKey as setLastfmApiKey, setMinTagCount } from "../../../clients/lastfm";
+import {
+  getMinTagCount,
+  getApiKey as loadLastfmApiKey,
+  setApiKey as setLastfmApiKey,
+  setMinTagCount,
+} from "../../../clients/lastfm";
 import { getMinFolksonomyCount, setMinFolksonomyCount } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
+import { useApiKeyField } from "../../../hooks/useApiKeyField";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
-import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import {
   ALBUM_SHAPE_COLUMNS,
-  ALBUM_SHAPE_JOIN,
+  mbReleaseFacts,
   persistAlbumIdentity,
   recordFailedLookup,
 } from "../../enrichment/hooks/useAlbumIdentity";
@@ -41,38 +46,16 @@ function useLastRefreshed() {
 export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const queryClient = useQueryClient();
 
-  const [lastfmKey, setLastfmKeyState] = useState("");
-  const [lastfmKeyFocused, setLastfmKeyFocused] = useState(false);
-  useEffect(() => {
-    keychain
-      .get("canon.lastfm", "api_key")
-      .then((k) => {
-        if (k) setLastfmKeyState(k);
-      })
-      .catch(() => {});
-  }, []);
-  async function setLastfmKey(k: string) {
-    setLastfmKeyState(k);
-    await setLastfmApiKey(k);
-  }
-  const lastfmKeyDisplay =
-    !lastfmKeyFocused && lastfmKey.length > 8 ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}` : lastfmKey;
-
-  const [fanartKey, setFanartKeyState] = useState("");
-  const [fanartKeyFocused, setFanartKeyFocused] = useState(false);
-  useEffect(() => {
-    getFanartApiKey()
-      .then((k) => {
-        if (k) setFanartKeyState(k);
-      })
-      .catch(() => {});
-  }, []);
-  async function handleSetFanartKey(k: string) {
-    setFanartKeyState(k);
-    await setFanartApiKey(k);
-  }
-  const fanartKeyDisplay =
-    !fanartKeyFocused && fanartKey.length > 8 ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}` : fanartKey;
+  const lastfmKeyField = useApiKeyField({
+    load: loadLastfmApiKey,
+    save: setLastfmApiKey,
+    onSaved: async () => {
+      await queryClient.invalidateQueries({ queryKey: QK.artistEnrichmentAll() });
+      await queryClient.invalidateQueries({ queryKey: QK.artistPopularTracksAll() });
+      await queryClient.invalidateQueries({ queryKey: QK.artistEssentialAlbumsAll() });
+    },
+  });
+  const fanartKeyField = useApiKeyField({ load: getFanartApiKey, save: setFanartApiKey });
 
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
@@ -113,12 +96,11 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     const unmatched = await db.select<Row[]>(
       `SELECT a.id, a.artist, a.name, a.year, a.mb_release_id, ${ALBUM_SHAPE_COLUMNS}
        FROM albums a
-       ${ALBUM_SHAPE_JOIN}
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
        )
-       ORDER BY a.name`,
+       ORDER BY a.name, a.id`,
     );
     if (unmatched.length > 0) {
       setPullProgress({ done: 0, total: unmatched.length });
@@ -145,11 +127,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               lastfmMatchConfirmed: false,
               combinedGenres: result.combinedGenres,
               combinedTags: result.combinedTags,
-              label: result.release?.label ?? null,
-              country: result.release?.country ?? null,
-              catalogNumber: result.release?.catalogNumber ?? null,
-              barcode: result.release?.barcode ?? null,
-              releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+              ...mbReleaseFacts(result.release, result.detail),
               autoMatched: true,
               matchScore: Math.round(result.score * 100),
               confirmedAt: now,
@@ -169,38 +147,13 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       await queryClient.invalidateQueries({ queryKey: QK.albumIdentityAll() });
     }
 
-    type FullRow = {
-      id: string;
-      artist: string | null;
-      name: string;
-      lastfm_artist_name: string | null;
-      lastfm_album_name: string | null;
-      combined_genres_json: string | null;
-      combined_tags_json: string | null;
-    };
-    const albums = await db.select<FullRow[]>(
-      `SELECT a.id, a.artist, a.name,
-              ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
-       FROM albums a
-       LEFT JOIN album_identity ai ON ai.album_id = a.id
-       ORDER BY a.name`,
-    );
+    type FullRow = { id: string; name: string };
+    const albums = await db.select<FullRow[]>("SELECT id, name FROM albums ORDER BY name");
     setPullProgress({ done: 0, total: albums.length });
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i]!;
       try {
-        const combinedMbGenres = album.combined_genres_json
-          ? (JSON.parse(album.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null;
-        const combinedMbTags = album.combined_tags_json
-          ? (JSON.parse(album.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null;
-        await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-          lastfmArtistName: album.lastfm_artist_name,
-          lastfmAlbumName: album.lastfm_album_name,
-          combinedMbGenres,
-          combinedMbTags,
-        });
+        await normalizeAlbum(album.id);
       } catch (e) {
         console.warn("Last.fm sync failed for:", album.name, e);
       }
@@ -225,14 +178,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             is written to your files.
           </p>
           <SettingRow title="API key" stacked>
-            <input
-              type="text"
-              placeholder="Paste your Last.fm API key"
-              value={lastfmKeyDisplay}
-              onFocus={() => setLastfmKeyFocused(true)}
-              onBlur={() => setLastfmKeyFocused(false)}
-              onChange={(e) => void setLastfmKey(e.target.value)}
-            />
+            <input type="text" placeholder="Paste your Last.fm API key" {...lastfmKeyField.inputProps} />
           </SettingRow>
           <SettingRow
             title="Enrich per-track genres"
@@ -324,14 +270,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             at fanart.tv.
           </p>
           <SettingRow title="API key" stacked>
-            <input
-              type="text"
-              placeholder="Paste your Fanart.tv API key"
-              value={fanartKeyDisplay}
-              onFocus={() => setFanartKeyFocused(true)}
-              onBlur={() => setFanartKeyFocused(false)}
-              onChange={(e) => void handleSetFanartKey(e.target.value)}
-            />
+            <input type="text" placeholder="Paste your Fanart.tv API key" {...fanartKeyField.inputProps} />
           </SettingRow>
         </section>
       )}

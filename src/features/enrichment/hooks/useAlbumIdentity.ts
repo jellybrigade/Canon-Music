@@ -33,6 +33,8 @@ export interface AlbumIdentityRow {
   catalog_number: string | null;
   barcode: string | null;
   release_date: string | null;
+  /** The release group's first release, kept apart from the matched edition's own date. */
+  first_release_date: string | null;
   confirmed_at: number | null;
   /** 1 = auto-matched silently; 0 = user-confirmed via dialog */
   auto_matched: number;
@@ -83,7 +85,7 @@ export function useConfirmedArtistMbid(artistName: string) {
         `SELECT ai.mb_artist_id FROM album_identity ai
          INNER JOIN albums a ON a.id = ai.album_id
          WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL AND ai.auto_matched = 0
-         ORDER BY ai.confirmed_at DESC
+         ORDER BY ai.confirmed_at DESC, ai.album_id
          LIMIT 1`,
         [artistName],
       );
@@ -268,11 +270,55 @@ export interface SaveAlbumIdentityInput {
   catalogNumber: string | null;
   barcode: string | null;
   releaseDate: string | null;
+  firstReleaseDate: string | null;
   /** True when auto-identified silently (not user-confirmed via dialog). */
   autoMatched?: boolean;
   /** Our fuzzy match score * 100 at time of auto-lookup. */
   matchScore?: number | null;
 }
+
+type MbReleaseFacts = Pick<
+  SaveAlbumIdentityInput,
+  "label" | "country" | "catalogNumber" | "barcode" | "releaseDate" | "firstReleaseDate"
+>;
+
+/** What a MusicBrainz match says about the album; the release's own date falls back to the group's first. */
+export function mbReleaseFacts(
+  release: MbReleaseDetail | null | undefined,
+  group: Pick<MbReleaseGroupDetail, "firstReleaseDate"> | null | undefined,
+): MbReleaseFacts {
+  const firstReleaseDate = group?.firstReleaseDate || null;
+  return {
+    label: release?.label ?? null,
+    country: release?.country ?? null,
+    catalogNumber: release?.catalogNumber ?? null,
+    barcode: release?.barcode ?? null,
+    releaseDate: release?.date || firstReleaseDate,
+    firstReleaseDate,
+  };
+}
+
+// Only the identity's own columns: the Last.fm bio stored beside them is keyed by release group and must survive a save.
+const IDENTITY_COLUMNS = [
+  "mb_release_group_id",
+  "mb_release_id",
+  "mb_artist_id",
+  "lastfm_artist_name",
+  "lastfm_album_name",
+  "lastfm_match_confirmed",
+  "combined_genres_json",
+  "combined_tags_json",
+  "label",
+  "country",
+  "catalog_number",
+  "barcode",
+  "release_date",
+  "first_release_date",
+  "confirmed_at",
+  "auto_matched",
+  "match_score",
+  "looked_up_at",
+] as const;
 
 /** Accepts an optional confirmedAt so bulk callers can supply their own timestamp
  * instead of calling Date.now() twice. */
@@ -280,12 +326,10 @@ export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { con
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   await db.execute(
-    `INSERT OR REPLACE INTO album_identity
-       (album_id, mb_release_group_id, mb_release_id, mb_artist_id,
-        lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed,
-        combined_genres_json, combined_tags_json, label, country, catalog_number, barcode,
-        release_date, confirmed_at, auto_matched, match_score, looked_up_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO album_identity
+       (album_id, ${IDENTITY_COLUMNS.join(", ")})
+     VALUES (?, ${IDENTITY_COLUMNS.map(() => "?").join(", ")})
+     ON CONFLICT(album_id) DO UPDATE SET ${IDENTITY_COLUMNS.map((c) => `${c} = excluded.${c}`).join(", ")}`,
     [
       input.albumId,
       input.mbReleaseGroupId,
@@ -301,6 +345,7 @@ export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { con
       input.catalogNumber,
       input.barcode,
       input.releaseDate,
+      input.firstReleaseDate,
       input.confirmedAt ?? now,
       input.autoMatched ? 1 : 0,
       input.matchScore ?? null,
@@ -374,15 +419,10 @@ export function useRecordFailedLookup() {
   });
 }
 
-/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. Needs `ALBUM_SHAPE_JOIN`. */
-export const ALBUM_SHAPE_COLUMNS =
-  "COALESCE(shape.track_count, 0) AS track_count, COALESCE(shape.duration_seconds, 0) AS duration_seconds";
-
-export const ALBUM_SHAPE_JOIN = `LEFT JOIN (
-    SELECT album_id, server_id, COUNT(*) AS track_count,
-      CASE WHEN COUNT(*) = COUNT(NULLIF(duration, 0)) THEN SUM(duration) ELSE 0 END AS duration_seconds
-    FROM tracks GROUP BY album_id, server_id
-  ) shape ON shape.album_id = a.id AND shape.server_id = a.server_id`;
+/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. Counted per album, not over the whole tracks table. */
+export const ALBUM_SHAPE_COLUMNS = `(SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count,
+  (SELECT CASE WHEN COUNT(*) = COUNT(NULLIF(t.duration, 0)) THEN COALESCE(SUM(t.duration), 0) ELSE 0 END
+     FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS duration_seconds`;
 
 export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
@@ -399,7 +439,6 @@ export async function readFailedLookupAlbums(
     `SELECT a.*, ${ALBUM_SHAPE_COLUMNS}
      FROM albums a
      INNER JOIN album_identity ai ON ai.album_id = a.id
-     ${ALBUM_SHAPE_JOIN}
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
      ORDER BY a.artist, a.name, a.id`,
     [serverId],

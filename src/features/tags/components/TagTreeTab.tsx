@@ -1,6 +1,7 @@
 import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { LoadError } from "../../../components/LoadError";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
@@ -270,7 +271,8 @@ interface TagTreeTabProps {
 }
 
 export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNode, onDeleteNode }: TagTreeTabProps) {
-  const { data: userNodes = [] } = useUserNodes();
+  const { data: userNodes, error: userNodesError, refetch: refetchUserNodes } = useUserNodes();
+  // Decorative: an unreadable changelog stays hidden.
   const { data: changelog = [] } = useUserTreeChangelog();
 
   return (
@@ -293,7 +295,13 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
       )}
 
       <div className="tree-scroll">
-        {userNodes.length === 0 ? (
+        {userNodesError ? (
+          <LoadError
+            title="Couldn't load your custom nodes"
+            error={userNodesError}
+            onRetry={() => void refetchUserNodes()}
+          />
+        ) : !userNodes ? null : userNodes.length === 0 ? (
           <p className="tags-empty">No custom nodes yet.</p>
         ) : (
           <>

@@ -23,14 +23,9 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
-import {
-  getCoverArtUrl,
-  getStreamUrl,
-  initCoverServer,
-  setStreamMaxBitrate,
-  updateCoverProxyConfig,
-} from "./clients/navidromeUrls";
+import { getCoverArtUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
 import { getDb } from "./db";
+import { useDiscogsLookups } from "./features/albumFacts/hooks/useDiscogsLookups";
 import { loadCoverOverrides } from "./features/covers/albumCoverOverrides";
 import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
 import { useMediaSession } from "./features/playback/hooks/useMediaSession";
@@ -46,7 +41,9 @@ import type { RadioMode } from "./features/playback/store/playerTypes";
 import { usePlaylists } from "./features/playlists/usePlaylists";
 import { useRadio } from "./features/radio/hooks/useRadio";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
+import { loadArtistSeedTrack } from "./features/radio/lib/artistSeed";
 import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
+import { useReleaseDateLookups } from "./features/releaseDates/hooks/useReleaseDateLookups";
 import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
 import { useLibrarySync } from "./features/sync/useLibrarySync";
 import { useBackgroundNormalizer } from "./features/tags/hooks/useBackgroundNormalizer";
@@ -61,6 +58,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useGenres } from "./hooks/useGenres";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useLoved } from "./hooks/useLoved";
+import { useQuitHandshake } from "./hooks/useQuitHandshake";
 import { useRemoteNotice } from "./hooks/useRemoteNotice";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
@@ -91,6 +89,7 @@ function runBackgroundUpdateCheck(onFound: (update: Update) => void): void {
 export default function App() {
   useWakeLock();
   useAppActivityTracking();
+  useQuitHandshake();
   useRadio();
   useBackgroundNormalizer();
 
@@ -165,6 +164,8 @@ export default function App() {
   useNowPlayingPrefetch(server?.id ?? null);
 
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
+  useReleaseDateLookups(lastSyncedAt, server?.id ?? null);
+  useDiscogsLookups(lastSyncedAt, server?.id ?? null);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   // One signal for "an overlay above the app owns the keyboard", read by the search shortcuts,
@@ -282,25 +283,24 @@ export default function App() {
     void loadSettings();
   }, [loadSettings]);
 
-  // Cover art proxy: push credentials to Rust first, then enable proxy URLs only after config is confirmed.
-  // Sequenced in one effect to prevent a window where proxy URLs are returned but the Rust config is still None.
+  // Cover requests for this server wait in Rust until its config lands; artist portraits wait for initCoverServer.
   useEffect(() => {
     if (!serverWithCred) return;
     void (async () => {
       try {
-        await updateCoverProxyConfig(
-          serverWithCred.server.url,
-          serverWithCred.server.alt_url,
-          serverWithCred.server.username,
-          serverWithCred.credential,
-        );
-        // Before the switch to cover:// so no URL is built without its chosen-cover revision.
+        await updateCoverProxyConfig({
+          serverId: serverWithCred.server.id,
+          baseUrl: serverWithCred.server.url,
+          altUrl: serverWithCred.server.alt_url,
+          username: serverWithCred.server.username,
+          credential: serverWithCred.credential,
+        });
         await loadCoverOverrides(serverWithCred.server.id).catch((err: unknown) => {
           console.error("Chosen album covers could not be loaded", err);
         });
         initCoverServer();
-      } catch {
-        // proxy unavailable; getCoverArtUrl falls back to direct Navidrome URL
+      } catch (err: unknown) {
+        console.error("The cover proxy could not be configured", err);
       }
     })();
   }, [serverWithCred]);
@@ -340,11 +340,7 @@ export default function App() {
 
   useEffect(() => {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
-    setStreamUrlFor((track) => {
-      const navTrackId = track.id.slice(srv.id.length + 1);
-      return getStreamUrl(srv.url, srv.username, credential, navTrackId);
-    });
+    setStreamUrlFor(makeStreamUrlBuilder(serverWithCred.server, serverWithCred.credential));
   }, [serverWithCred, setStreamUrlFor]);
 
   useTrackAccent();
@@ -361,7 +357,7 @@ export default function App() {
 
   async function handlePlayTrack(trackId: string) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
+    const { server: srv } = serverWithCred;
     const db = await getDb();
     const rows = await db.select<PlayableTrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id, ${REPLAY_GAIN_COLUMNS},
@@ -373,7 +369,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    await play(currentTrackFromRow(t, srv, credential), makeStreamUrlBuilder(srv, credential));
+    await play(currentTrackFromRow(t, srv));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -391,9 +387,7 @@ export default function App() {
     if (rows.length === 0) return;
     const topHalf = rows.slice(0, Math.max(1, Math.ceil(rows.length / 2)));
     const t = topHalf[Math.floor(Math.random() * topHalf.length)]!;
-    const coverArtUrl = album.artwork_url
-      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
-      : null;
+    const coverArtUrl = album.artwork_url ? getCoverArtUrl(srv.id, album.artwork_url, 64) : null;
     const track = {
       id: t.id,
       title: t.title,
@@ -405,17 +399,14 @@ export default function App() {
       albumId: album.id,
       replayGain: replayGainFromRow(t),
     };
-    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
+    await startRadio({ tracks: [track], mode });
   }
 
   async function handleAddAlbumToQueue(album: AlbumRow) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const rows = await loadAlbumTracksForPlay(srv, credential, album);
-    const coverArtUrl = album.artwork_url
-      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
-      : null;
-    const streamUrlFor = makeStreamUrlBuilder(srv, credential);
+    const coverArtUrl = album.artwork_url ? getCoverArtUrl(srv.id, album.artwork_url, 64) : null;
     for (const t of rows) {
       const track = {
         id: t.id,
@@ -428,19 +419,18 @@ export default function App() {
         albumId: album.id,
         replayGain: replayGainFromRow(t),
       };
-      addToQueue(track, streamUrlFor);
+      addToQueue(track);
     }
   }
 
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
+    const { server: srv } = serverWithCred;
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
-    const tracks = rows.map((t) => currentTrackFromRow(t, srv, credential));
+    const tracks = rows.map((t) => currentTrackFromRow(t, srv));
     await startRadio({
       tracks,
-      streamUrlFor: makeStreamUrlBuilder(srv, credential),
       mode: "same-genre",
       label: genreLabel,
     });
@@ -448,21 +438,11 @@ export default function App() {
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
-    const { server: srv, credential } = serverWithCred;
-    const db = await getDb();
-    const rows = await db.select<PlayableTrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
-              ${REPLAY_GAIN_COLUMNS}
-       FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-       WHERE t.server_id = ?
-         AND (t.artist = ? OR a.artist = ?)
-       ORDER BY random() LIMIT 1`,
-      [srv.id, artist.name, artist.name],
-    );
-    const t = rows[0];
+    const { server: srv } = serverWithCred;
+    const t = await loadArtistSeedTrack(srv.id, artist.name);
     if (!t) return;
-    const track = currentTrackFromRow(t, srv, credential);
-    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
+    const track = currentTrackFromRow(t, srv);
+    await startRadio({ tracks: [track], mode });
   }
 
   // Resolve an album id to a full row, then open it. Used where callers only

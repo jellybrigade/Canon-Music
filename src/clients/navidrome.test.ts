@@ -25,12 +25,18 @@ import {
   getPlayQueue,
   type NavidromeAlbum,
   reportNowPlaying,
+  savePlayQueue,
   scrobbleTrack,
   setRating,
   songExists,
   starTrack,
 } from "./navidrome";
-import { addTrackToNavidromePlaylist, fetchPlaylists } from "./navidromePlaylists";
+import {
+  addTrackToNavidromePlaylist,
+  createNavidromePlaylist,
+  fetchPlaylists,
+  replaceNavidromePlaylistTracks,
+} from "./navidromePlaylists";
 import { SubsonicError } from "./navidromeTransport";
 import type { NavidromeCredential } from "./navidromeUrls";
 
@@ -546,6 +552,90 @@ describe("non-idempotent endpoints", () => {
 
     // scrobble.view (suffixed) and createPlaylist (bare) are both in the set.
     await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000))).rejects.toThrow("failed after 1 attempt");
+  });
+});
+
+describe("a newer write to the same thing", () => {
+  // A retried write still on its ladder can land after a newer one and put the old value back.
+  function ratingOf(n: number): string | null {
+    return body(n).get("rating");
+  }
+
+  it("withdraws an older rating still retrying, which then settles quietly", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new URLSearchParams(init.body as string).get("rating") === "5"
+        ? Promise.reject(new TypeError("Load failed"))
+        : Promise.resolve(ok()),
+    );
+
+    const older = setRating(BASE, "alice", cred, "tr-1", 5);
+    await vi.advanceTimersByTimeAsync(10);
+    const newer = setRating(BASE, "alice", cred, "tr-1", 0);
+
+    await expect(settle(older)).resolves.toBeUndefined();
+    await expect(settle(newer)).resolves.toBeUndefined();
+    expect(bodies().map((_, i) => ratingOf(i))).toEqual(["5", "0"]);
+  });
+
+  it("leaves a rating for another track alone", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new URLSearchParams(init.body as string).get("id") === "tr-1"
+        ? Promise.reject(new TypeError("Load failed"))
+        : Promise.resolve(ok()),
+    );
+
+    const first = setRating(BASE, "alice", cred, "tr-1", 5).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(10);
+    await settle(setRating(BASE, "alice", cred, "tr-2", 3));
+
+    expect(String(await settle(first))).toContain("failed after 3 attempts");
+    expect(bodies().filter((b) => b.get("id") === "tr-1")).toHaveLength(3);
+  });
+
+  it("withdraws an older queue save still retrying", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new URLSearchParams(init.body as string).get("current") === "old"
+        ? Promise.reject(new TypeError("Load failed"))
+        : Promise.resolve(ok()),
+    );
+
+    const older = savePlayQueue(BASE, "alice", cred, ["old"], "old", 0);
+    await vi.advanceTimersByTimeAsync(10);
+    const newer = savePlayQueue(BASE, "alice", cred, ["new"], "new", 0);
+
+    await expect(settle(older)).resolves.toBeUndefined();
+    await settle(newer);
+    expect(bodies().map((b) => b.get("current"))).toEqual(["old", "new"]);
+  });
+});
+
+describe("createNavidromePlaylist", () => {
+  it("creates the playlist with its tracks in order in one request", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(ok({ status: "ok", playlist: { id: "pl-9", name: "Mix", songCount: 3 } })),
+    );
+
+    const created = await settle(createNavidromePlaylist(BASE, "alice", cred, "Mix", ["c", "a", "b"]));
+
+    expect(urls()).toEqual([`${BASE}/rest/createPlaylist`]);
+    expect(body().get("name")).toBe("Mix");
+    expect(body().getAll("songId")).toEqual(["c", "a", "b"]);
+    expect(created.id).toBe("pl-9");
+  });
+});
+
+describe("replaceNavidromePlaylistTracks", () => {
+  it("replaces the server's whole list without trusting a locally stored count", async () => {
+    // Removing indices 0..n-1 by the local count left any surplus on a longer server list,
+    // and the playlist grew on every smart refresh.
+    fetchMock.mockImplementation(() => Promise.resolve(ok()));
+
+    await settle(replaceNavidromePlaylistTracks(BASE, "alice", cred, "pl-1", ["a", "b"]));
+
+    expect(urls()).toEqual([`${BASE}/rest/createPlaylist`]);
+    expect(body().get("playlistId")).toBe("pl-1");
+    expect(body().getAll("songId")).toEqual(["a", "b"]);
+    expect(body().has("songIndexToRemove")).toBe(false);
   });
 });
 

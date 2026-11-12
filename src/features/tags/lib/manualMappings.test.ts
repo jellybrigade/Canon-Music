@@ -76,19 +76,53 @@ describe("getManualGenreMappings", () => {
     expect(map2).toBe(map1);
   });
 
-  it("last row wins when two raw_values collapse to the same canonicalKey (SELECT has no ORDER BY)", async () => {
-    const { canonicalKey } = await import("./canonicalize");
-    const select = vi.fn(async () => [
-      { raw_value: "R&B", canonical_id: "first" },
-      { raw_value: "R and B", canonical_id: "second" },
-    ]);
-    // both raw_values collapse through the r&b alias table to the same canonicalKey
-    expect(canonicalKey("R&B")).toBe(canonicalKey("R and B"));
-    const { getManualGenreMappings } = await freshModule(select);
+  describe("colliding spellings, against the real table", () => {
+    async function moduleOver(rows: { raw: string; id: string; locked?: number }[]) {
+      const { createMigratedTestDb } = await import("../../../test/sqlite");
+      const db = await createMigratedTestDb();
+      db.raw.prepare("DELETE FROM tag_mappings").run();
+      for (const row of rows) {
+        db.raw
+          .prepare(
+            "INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, locked, norm_value) VALUES (?, 'genre', ?, 'manual', ?, ?)",
+          )
+          .run(row.raw, row.id, row.locked ?? 0, row.raw.toLowerCase());
+      }
+      vi.resetModules();
+      vi.doMock("../../../db", () => ({ getDb: async () => db }));
+      const module = await import("./manualMappings");
+      const { tagMatchKey } = await import("./canonicalize");
+      return { map: await module.getManualGenreMappings(), tagMatchKey };
+    }
 
-    const map = await getManualGenreMappings();
+    it("takes the locked spelling's decision whatever order the rows were written in", async () => {
+      for (const order of [
+        [
+          { raw: "R&B", id: "locked", locked: 1 },
+          { raw: "R and B", id: "other" },
+        ],
+        [
+          { raw: "R and B", id: "other" },
+          { raw: "R&B", id: "locked", locked: 1 },
+        ],
+      ]) {
+        const { map, tagMatchKey } = await moduleOver(order);
+        expect(map.get(tagMatchKey("R&B"))).toBe("locked");
+      }
+    });
 
-    expect(map.get(canonicalKey("R&B"))).toBe("second");
+    it("keeps tags with no Latin letters apart, so ignoring one doesn't ignore them all", async () => {
+      const { map, tagMatchKey } = await moduleOver([{ raw: "!!!", id: "__ignored__" }]);
+
+      expect(map.get(tagMatchKey("!!!"))).toBe("__ignored__");
+      expect(map.get(tagMatchKey("ロック"))).toBeUndefined();
+    });
+
+    it("never keys a blank spelling", async () => {
+      const { map } = await moduleOver([{ raw: "  ", id: "rock" }]);
+
+      expect(map.size).toBe(0);
+    });
   });
 
   describe("invalidateManualMappings", () => {

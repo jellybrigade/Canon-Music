@@ -149,6 +149,19 @@ fn repair_dangling_genre_id_in(
 /// holding a genre no node matched, since the new tree may match it now. Runs before the carry,
 /// while the old ids are still there to find. Every `album_*` holder keys its rows by `album_id`.
 fn mark_albums_for_renormalize(tx: &Transaction, froms: &[&str]) -> Result<(), String> {
+    mark_albums_holding(tx, froms)?;
+    tx.execute(
+        "UPDATE albums SET computed_at = NULL WHERE computed_at IS NOT NULL
+           AND id IN (SELECT album_id FROM album_unresolved_genres)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Albums holding any of `froms` re-derive their genres. Ancestor rows name the parents, not
+/// the id, so this is the only way they leave when the id's node changes or goes.
+pub(super) fn mark_albums_holding(tx: &Transaction, froms: &[&str]) -> Result<(), String> {
     for from in froms {
         for (table, column) in GENRE_ID_COLUMNS
             .iter()
@@ -164,12 +177,6 @@ fn mark_albums_for_renormalize(tx: &Transaction, froms: &[&str]) -> Result<(), S
             .map_err(|e| e.to_string())?;
         }
     }
-    tx.execute(
-        "UPDATE albums SET computed_at = NULL WHERE computed_at IS NOT NULL
-           AND id IN (SELECT album_id FROM album_unresolved_genres)",
-        [],
-    )
-    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

@@ -22,7 +22,7 @@ function parseUrl(url: string): URL | undefined {
 // Not URL.canParse: older WebKitGTK lacks it, and the throw dropped the whole notice.
 function parseNoticeLink(url: unknown): NoticeLink | undefined {
   const parsed = typeof url === "string" ? parseUrl(url) : undefined;
-  if (!parsed || parsed.protocol !== "https:") return undefined;
+  if (parsed?.protocol !== "https:") return undefined;
   return { href: parsed.href, host: parsed.hostname.replace(/^www\./, "") };
 }
 

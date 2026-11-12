@@ -14,7 +14,7 @@ vi.mock("../db", () => ({ getDb: vi.fn() }));
 vi.mock("../lib/artColor", () => ({ extractAccent: vi.fn() }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
@@ -36,8 +36,8 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client: queryClient }, children);
 }
 
-function storedAccent(): string | null | undefined {
-  const row = db.raw.prepare("SELECT accent_color FROM albums WHERE id = ?").get(ALBUM_ID) as
+function storedAccent(albumId = ALBUM_ID): string | null | undefined {
+  const row = db.raw.prepare("SELECT accent_color FROM albums WHERE id = ?").get(albumId) as
     | { accent_color: string | null }
     | undefined;
   return row?.accent_color;
@@ -143,6 +143,37 @@ describe("useAlbumAccent", () => {
 
     resolveExtract("rgb(9, 9, 9)");
     await waitFor(() => expect(view.result.current).toBe("rgb(9, 9, 9)"));
+  });
+
+  it("ignores a decode for the previous album that finishes after switching", async () => {
+    await db.execute("INSERT INTO albums (id, server_id, server_type, name) VALUES (?, ?, ?, ?)", [
+      "srv-a:alb2",
+      SERVER_ID,
+      "navidrome",
+      "Isn't Anything",
+    ]);
+    const resolvers: ((color: string | null) => void)[] = [];
+    vi.mocked(extractAccent).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const view = renderHook(({ id }: { id: string }) => useAlbumAccent(id, null, ART_URL, SERVER_ID), {
+      wrapper,
+      initialProps: { id: ALBUM_ID },
+    });
+    view.rerender({ id: "srv-a:alb2" });
+    expect(resolvers).toHaveLength(2);
+
+    await act(async () => resolvers[0]?.("rgb(1, 1, 1)"));
+    expect(view.result.current).toBeNull();
+
+    resolvers[1]?.("rgb(2, 2, 2)");
+    // Album 2's write lands after album 1's would have, so album 1 staying blank is no race.
+    await waitFor(() => expect(storedAccent("srv-a:alb2")).toBe("rgb(2, 2, 2)"));
+    expect(view.result.current).toBe("rgb(2, 2, 2)");
+    expect(storedAccent()).toBeNull();
   });
 
   it("leaves the album untinted when the cover cannot be decoded", async () => {

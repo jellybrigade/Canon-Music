@@ -11,7 +11,7 @@ import { boundedFetch } from "../clients/boundedFetch";
 import { getDb } from "../db";
 import { QK } from "../lib/queryKeys";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { refreshAlbumCover, useAlbumCoverMap } from "./useCoverCache";
+import { getMissingCoverCount, refreshAlbumCover, useAlbumCoverMap, useCoverCachePopulator } from "./useCoverCache";
 import type { ServerWithCredential } from "./useServer";
 
 let db: FakeDatabase;
@@ -127,5 +127,40 @@ describe("refreshAlbumCover", () => {
 
     expect(await storedDataUrl("fail-1")).toBeUndefined();
     await waitFor(() => expect(result.current.get("fail-1")).toBeUndefined());
+  });
+});
+
+describe("caching missing covers", () => {
+  const swc = {
+    server: { id: "srv-a", url: "http://music.example", username: "alice" },
+    credential: { type: "md5", token: "t", salt: "s" },
+  } as ServerWithCredential;
+
+  beforeEach(() => {
+    db.raw.exec(`INSERT INTO albums (id, server_id, server_type, name, artwork_url) VALUES
+      ('srv-a:al1', 'srv-a', 'navidrome', 'A1', 'al-1'),
+      ('srv-a:al2', 'srv-a', 'navidrome', 'A2', 'al-2'),
+      ('srv-b:al1', 'srv-b', 'navidrome', 'B1', 'al-1')`);
+    vi.mocked(boundedFetch).mockClear();
+    vi.mocked(boundedFetch).mockImplementation(
+      async () => ({ ok: true, blob: async () => new Blob(["img"], { type: "image/png" }) }) as Response,
+    );
+  });
+
+  // Every server's albums were fetched through the active server, so a second server's albums
+  // were cached with whatever the active one served under the same cover id.
+  it("caches only the active server's albums", async () => {
+    renderHook(() => useCoverCachePopulator(swc), { wrapper });
+    await waitFor(async () => {
+      const rows = await db.select<{ album_id: string }[]>("SELECT album_id FROM album_covers ORDER BY album_id");
+      expect(rows.map((r) => r.album_id)).toEqual(["srv-a:al1", "srv-a:al2"]);
+    });
+    expect(boundedFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("counts the active server's missing covers without reading every row", async () => {
+    expect(await getMissingCoverCount("srv-a")).toBe(2);
+    const selects = db.queryLog.filter((q) => q.kind === "select");
+    expect(selects[selects.length - 1]?.sql).toMatch(/COUNT\(\*\)/);
   });
 });

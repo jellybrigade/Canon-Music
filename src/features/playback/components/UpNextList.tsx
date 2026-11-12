@@ -11,7 +11,8 @@ import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../../radio/hooks/useStartRadio";
 import { albumRowOfTrack } from "../lib/trackAlbum";
 import { usePlayerStore } from "../store/player";
-import type { CurrentTrack } from "../store/playerTypes";
+import { canUndoClearQueue } from "../store/playerTypes";
+import { queueInPlayOrder } from "../store/queueOrder";
 import "./UpNextList.css";
 import { CoverImg } from "../../../components/CoverImg";
 
@@ -30,17 +31,15 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const isClearUndoable = usePlayerStore(canUndoClearQueue);
+  const undoClearQueue = usePlayerStore((s) => s.undoClearQueue);
   const startRadio = useStartRadio();
   const albumDisplayName = useAlbumDisplayName();
   const [upNextMenu, setUpNextMenu] = useState<{ x: number; y: number; position: number } | null>(null);
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
 
   const orderedTracks = useMemo(
-    () =>
-      Array.from({ length: queue.length }, (_, pos) => {
-        const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-        return { position: pos, track: queue[idx] };
-      }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
+    () => queueInPlayOrder(queue, isShuffled, shuffleOrder),
     [queue, isShuffled, shuffleOrder],
   );
   const menuTrack = upNextMenu ? orderedTracks.find((t) => t.position === upNextMenu.position)?.track : undefined;
@@ -50,9 +49,18 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   return (
     <>
       {orderedTracks.length === 0 ? (
-        <p className="now-playing-empty">
-          Nothing queued. Play an album or track, or use "Add to queue" from any track menu.
-        </p>
+        isClearUndoable ? (
+          <p className="now-playing-empty">
+            Queue cleared.{" "}
+            <button type="button" className="now-playing-empty-action" onClick={undoClearQueue}>
+              Undo
+            </button>
+          </p>
+        ) : (
+          <p className="now-playing-empty">
+            Nothing queued. Play an album or track, or use "Add to queue" from any track menu.
+          </p>
+        )
       ) : (
         orderedTracks.map(({ position, track }) => (
           <button
@@ -74,7 +82,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
             {track.artworkRef ? (
               <CoverImg
                 className="now-playing-up-next-thumb"
-                src={getCoverArtUrl(server.url, server.username, credential, track.artworkRef, 64)}
+                src={getCoverArtUrl(server.id, track.artworkRef, 64)}
                 alt=""
                 loading="lazy"
                 decoding="async"
@@ -172,10 +180,9 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
           <StartRadioSubmenu
             onSelect={(mode) => {
               if (menuTrack) {
-                void playFromQueueIndex(upNextMenu.position).then(() => {
-                  const { streamUrlFor } = usePlayerStore.getState();
-                  if (streamUrlFor) return startRadio({ tracks: [], seed: menuTrack, streamUrlFor, mode });
-                });
+                void playFromQueueIndex(upNextMenu.position).then(() =>
+                  startRadio({ tracks: [], seed: menuTrack, mode }),
+                );
               }
               setUpNextMenu(null);
             }}

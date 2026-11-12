@@ -1,11 +1,10 @@
 import { ListEnd, Play, PlayCircle } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { BandsintownEvent } from "../../../clients/bandsintown";
-import { getCoverArtUrl, getStreamUrl } from "../../../clients/navidromeUrls";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { TourCard } from "../../../components/TourCard";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import { stripServerPrefix } from "../../../lib/ids";
 import { formatDuration } from "../../../lib/trackCells";
 import type { AlbumRow } from "../../../types/library";
 import { ContextMenu } from "../../../ui/ContextMenu";
@@ -57,10 +56,7 @@ export function NowPlayingAbout({
   const albumDisplayName = useAlbumDisplayName();
   const [albumChipMenu, setAlbumChipMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [trackMenu, setTrackMenu] = useState<{ x: number; y: number; track: AboutTrack } | null>(null);
-  const { server, credential } = serverWithCredential;
-
-  const streamUrlFor = (ct: CurrentTrack) =>
-    getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id));
+  const { server } = serverWithCredential;
 
   function buildTrack(t: AboutTrack): CurrentTrack {
     return {
@@ -68,7 +64,7 @@ export function NowPlayingAbout({
       title: t.title,
       artist: t.artist,
       duration: t.duration,
-      coverArtUrl: t.artwork_url ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64) : null,
+      coverArtUrl: t.artwork_url ? getCoverArtUrl(server.id, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null,
       album: t.album_name ?? null,
       albumId: t.album_id ?? null,
@@ -88,16 +84,16 @@ export function NowPlayingAbout({
   }
 
   function handlePlayTrack(t: AboutTrack) {
-    playNext(buildTrack(t), streamUrlFor);
+    playNext(buildTrack(t));
     void next();
   }
 
   function handleAddToQueue(t: AboutTrack) {
-    addToQueue(buildTrack(t), streamUrlFor);
+    addToQueue(buildTrack(t));
   }
 
   function handlePlayNext(t: AboutTrack) {
-    playNext(buildTrack(t), streamUrlFor);
+    playNext(buildTrack(t));
   }
 
   function renderTrackRow(track: AboutTrack, placeholder: ReactNode, subtitle: ReactNode) {
@@ -111,11 +107,7 @@ export function NowPlayingAbout({
         }}
       >
         {track.artwork_url ? (
-          <CoverImg
-            className="now-playing-track-thumb"
-            src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
-            alt=""
-          />
+          <CoverImg className="now-playing-track-thumb" src={getCoverArtUrl(server.id, track.artwork_url, 64)} alt="" />
         ) : (
           placeholder
         )}
@@ -187,9 +179,7 @@ export function NowPlayingAbout({
           <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
           <div className="now-playing-album-scroll">
             {otherAlbums.map((album) => {
-              const thumbUrl = album.artwork_url
-                ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 120)
-                : null;
+              const thumbUrl = album.artwork_url ? getCoverArtUrl(server.id, album.artwork_url, 120) : null;
               return (
                 <button
                   key={album.id}

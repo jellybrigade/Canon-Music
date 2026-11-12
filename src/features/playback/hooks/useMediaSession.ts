@@ -44,15 +44,7 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
   const hasTrack = currentTrack != null;
   const artworkRef = currentTrack?.artworkRef ?? null;
   const ownArt = useCoverUrl(
-    artworkRef && serverWithCred
-      ? getCoverArtUrl(
-          serverWithCred.server.url,
-          serverWithCred.server.username,
-          serverWithCred.credential,
-          artworkRef,
-          ART_SIZE,
-        )
-      : null,
+    artworkRef && serverWithCred ? getCoverArtUrl(serverWithCred.server.id, artworkRef, ART_SIZE) : null,
   );
   const fallbackArt = useCoverUrl(currentTrack?.coverArtUrl ?? null);
 

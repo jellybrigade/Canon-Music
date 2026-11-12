@@ -3,9 +3,11 @@ export const QK = {
   serverCredential: (serverId: string | undefined) => ["server-credential", serverId] as const,
 
   albums: (sort?: string, canonicalIds?: unknown) => ["albums", sort, canonicalIds] as const,
-  albumsListeningStats: () => ["albums", "listening-stats"] as const,
+  albumsListeningStats: (serverId: string) => ["albums", "listening-stats", serverId] as const,
+  albumsListeningStatsAll: () => ["albums", "listening-stats"] as const,
   /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
-  albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
+  albumsPartiallyHeard: (serverId: string) => ["albums", "partially-heard", serverId] as const,
+  albumsPartiallyHeardAll: () => ["albums", "partially-heard"] as const,
   /** One album row for the detail route; nested under `albums` for broad invalidation,
    * scoped by server since the row alone doesn't guarantee the selected server. */
   albumById: (albumId: string | undefined, serverId: string | undefined) =>
@@ -33,7 +35,8 @@ export const QK = {
   /** Under `tagVocab` so every mapping or tree write that refreshes the vocabulary re-sweeps it. */
   danglingGenreIds: () => ["tag-vocab", "dangling-genre-ids"] as const,
   tagMappings: () => ["tag_mappings"] as const,
-  tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,
+  tagAlbums: (rawValue: string, kind: string, serverId: string | undefined) =>
+    ["tag-albums", rawValue, kind, serverId] as const,
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,
@@ -43,7 +46,10 @@ export const QK = {
   albumsTagsRefreshedAt: (albumId: string) => ["albums", "tags_refreshed_at", albumId] as const,
   albumsStale: (staleDays: number) => ["albums", "stale", staleDays] as const,
 
-  recentlyReleased: (limit: number) => ["recently-released", limit] as const,
+  recentlyReleased: (serverId: string, limit: number) => ["recently-released", serverId, limit] as const,
+  recentlyReleasedAll: () => ["recently-released"] as const,
+  lookedUpFacts: (albumId: string, serverId: string) => ["looked-up-facts", albumId, serverId] as const,
+  lookedUpFactsAll: () => ["looked-up-facts"] as const,
   spotlightGenres: (albumId: string) => ["spotlight-genres", albumId] as const,
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
@@ -53,8 +59,7 @@ export const QK = {
   artistSeedTrack: (artistName: string, serverId: string) => ["artist-seed-track", artistName, serverId] as const,
   artistAppearsOn: (artistName: string, serverId: string) => ["artist-appears-on", artistName, serverId] as const,
   artistGenres: (artistName: string, serverId: string) => ["artist-genres", artistName, serverId] as const,
-  lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
-  similarInLibrary: (names: string[]) => ["similar-in-library", names] as const,
+  similarInLibrary: (names: string[], serverId: string) => ["similar-in-library", names, serverId] as const,
   similarArtistAlbums: (names: string[], serverId: string) => ["similar-artist-albums", names, serverId] as const,
 
   trackRawTags: (trackId: string | undefined) => ["track-raw-tags", trackId] as const,
@@ -79,9 +84,18 @@ export const QK = {
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
   confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
+  artistEnrichmentAll: () => ["artist-enrichment"] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
-  lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
-  lastfmTrackMatch: (artistName: string, trackIds: string[]) => ["lastfm-track-match", artistName, trackIds] as const,
+  artistPopularTracksAll: () => ["artist-popular-tracks"] as const,
+  artistPopularTracks: (lastfmName: string, artistName: string) =>
+    ["artist-popular-tracks", lastfmName, artistName] as const,
+  artistEssentialAlbumsAll: () => ["artist-essential-albums"] as const,
+  artistEssentialAlbumsOf: (lastfmName: string, artistName: string) =>
+    ["artist-essential-albums", lastfmName, artistName] as const,
+  artistEssentialAlbums: (lastfmName: string, artistName: string, albumIds: string[]) =>
+    ["artist-essential-albums", lastfmName, artistName, albumIds] as const,
+  popularTrackMatch: (artistName: string, source: string | null, trackIds: string[]) =>
+    ["popular-track-match", artistName, source, trackIds] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>
     ["identify-artist", artistName, mbArtistId] as const,
 
@@ -104,6 +118,8 @@ export const QK = {
     ["suggested-tracks", artistName, trackId, serverId] as const,
 
   userTreeNodes: () => ["user-tree-nodes"] as const,
+  /** Under `userTreeNodes`: every user node write busts the tree and refreshes that key. */
+  canonTreeNodes: () => ["user-tree-nodes", "canon-tree"] as const,
   userTreeChangelog: () => ["user-tree-changelog"] as const,
 
   settingsLastfmMinTagCount: () => ["settings", "lastfm.min_tag_count"] as const,
@@ -123,7 +139,11 @@ export const QK = {
     inputs: { releaseMbid: string | null; releaseGroupMbid: string | null; hasFanartKey: boolean | null },
   ) => ["album-cover-candidates", serverId, albumId, inputs] as const,
   albumCoverOverride: (serverId: string, albumId: string) => ["album-cover-override", serverId, albumId] as const,
-  albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
+  /** No server = every server's count, for invalidation. */
+  albumCoversMissingCount: (serverId?: string) =>
+    serverId === undefined
+      ? (["album-covers", "missing-count"] as const)
+      : (["album-covers", "missing-count", serverId] as const),
 
   artistCovers: () => ["artist-covers"] as const,
   artistCoversMissingCount: () => ["artist-covers", "missing-count"] as const,

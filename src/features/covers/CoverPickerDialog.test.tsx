@@ -11,7 +11,7 @@ vi.mock("../../clients/musicbrainz", () => ({ lookupRelease: vi.fn() }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { boundedFetch } from "../../clients/boundedFetch";
 import { fetchCaaFrontCovers } from "../../clients/coverArtArchive";
 import { fetchFanartAlbumCovers, getFanartApiKey } from "../../clients/fanart";
@@ -194,6 +194,14 @@ describe("CoverPickerDialog", () => {
     expect(screen.queryByText(/Showing/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Use server cover" })).toBeNull();
     expect(previewImage("Current")).toBeTruthy();
+  });
+
+  it("says nothing about the server's cover when no cover was picked", async () => {
+    renderDialog();
+
+    expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
+    await act(async () => {});
+    expect(screen.queryByText(/Showing/)).toBeNull();
   });
 
   it("says when it could not read whether a cover was picked", async () => {

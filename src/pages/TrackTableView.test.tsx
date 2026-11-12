@@ -325,7 +325,7 @@ describe("TrackTableView selection", () => {
     fireEvent.click(rowFor("Song A"));
     expect(selectedTitles()).toEqual([]);
     expect(playQueue).toHaveBeenCalledTimes(1);
-    expect(playQueue.mock.calls[0]![2]).toBe(0);
+    expect(playQueue.mock.calls[0]![1]).toBe(0);
   });
 
   it("selects without playing on a ctrl-click and toggles the same row off", () => {
@@ -392,7 +392,7 @@ describe("TrackTableView selection", () => {
     renderTable();
     fireEvent.keyDown(rowFor("Song D"), { key: "Enter" });
     expect(playQueue).toHaveBeenCalledTimes(1);
-    expect(playQueue.mock.calls[0]![2]).toBe(3);
+    expect(playQueue.mock.calls[0]![1]).toBe(3);
   });
 
   it("does nothing for keys the table does not handle", () => {
@@ -528,7 +528,7 @@ describe("TrackTableView context menu", () => {
     renderTable();
     const menu = openMenuOn("Song D");
     fireEvent.click(menu.getByText("Play Now"));
-    expect(playQueue.mock.calls[0]![2]).toBe(3);
+    expect(playQueue.mock.calls[0]![1]).toBe(3);
   });
 
   it("clears the selection from the bulk menu", () => {

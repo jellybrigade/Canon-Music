@@ -65,11 +65,16 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<{ id: string; attempts: number } | null>(null);
-  // Nothing aborts an in-flight syncLibrary, so its settle handler can land after
-  // the hook is gone. Everything the handler does then is either dead or wrong.
+  // A stopped syncLibrary still settles a moment later, after the hook may be gone.
+  // Everything the handler does then is either dead or wrong.
   const mountedRef = useRef(true);
+  const runRef = useRef<{ serverId: string; controller: AbortController } | null>(null);
   const fanoutTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const queuedRef = useRef<QueuedSync | null>(null);
+
+  function stopRunUnlessFor(serverId: string | undefined) {
+    if (runRef.current && runRef.current.serverId !== serverId) runRef.current.controller.abort();
+  }
 
   function clearRetryTimer() {
     if (retryTimerRef.current === null) return;
@@ -131,6 +136,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     }
     const { onSettled, queueIfBusy: _, ...syncOptions } = options ?? {};
     syncingRef.current = true;
+    const controller = new AbortController();
+    runRef.current = { serverId: s.server.id, controller };
     clearRetryTimer();
     let failed = false;
     let outcome: SyncOutcome = { status: "error", albumsChanged: false, error: "" };
@@ -154,7 +161,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         lastInvalidate = now;
         useAlbumBrowseSessionStore.getState().bumpRefresh();
       },
-      syncOptions,
+      { ...syncOptions, signal: controller.signal },
     )
       .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
         if (!mountedRef.current) return;
@@ -212,6 +219,10 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         }, 600);
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) {
+          outcome = { status: "error", albumsChanged: false, error: "Sync stopped." };
+          return;
+        }
         failed = true;
         console.error("Sync failed:", err);
         if (!mountedRef.current) return;
@@ -220,6 +231,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         setSyncError(outcome.error);
       })
       .finally(() => {
+        if (runRef.current?.controller === controller) runRef.current = null;
         if (!mountedRef.current) return;
         // Here rather than in `.then`, so a throw later in that handler can't settle the run twice.
         onSettled?.(outcome);
@@ -230,7 +242,12 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         const latest = serverRef.current;
         const queued = queuedRef.current;
         queuedRef.current = null;
-        if (!latest) return;
+        // A stopped run read nothing to completion, so its server is not synced yet.
+        if (controller.signal.aborted && syncedRef.current === s.server.id) syncedRef.current = null;
+        if (!latest) {
+          if (controller.signal.aborted) setSyncStatus("idle");
+          return;
+        }
         // Asked for by the user after this run read the server, so it outranks the backoff.
         if (queued && queued.target.server.id === latest.server.id) {
           runSync(latest, {
@@ -261,6 +278,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   }
 
   useEffect(() => {
+    // An equal-but-new object for the same server keeps its run.
+    stopRunUnlessFor(target?.server.id);
     if (!target) return;
     syncIfNeeded(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,6 +292,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      runRef.current?.controller.abort();
       clearRetryTimer();
       clearFanoutTimers();
     };

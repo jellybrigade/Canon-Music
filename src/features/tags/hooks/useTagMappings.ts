@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import type { TagKind } from "../lib/canonicalize";
-import { sqlNorm } from "../lib/canonicalize";
+import { sqlNorm, sqlNormExpression } from "../lib/canonicalize";
 import { invalidateManualMappings } from "../lib/manualMappings";
 
 export const ACCEPTED = "__accepted__";
@@ -15,58 +15,80 @@ export interface TagVocabRow {
   kind: TagKind;
   /** COUNT(DISTINCT album_id). 0 = tag no longer in library (stale). */
   album_count: number;
-  /** Comma-separated tag data sources: file, lastfm, musicbrainz, musicbrainz-folksonomy */
+  /** Comma-separated tag data sources: file, lastfm, musicbrainz, discogs, musicbrainz-folksonomy */
   sources: string | null;
   canonical_id: string | null;
   mapping_source: "auto" | "manual" | null;
   locked: number;
 }
 
+type SaveMappingInput = {
+  rawValue: string;
+  kind: TagKind;
+  canonicalId: string;
+  source?: "auto" | "manual";
+  matchType?: "exact" | "fuzzy" | null;
+};
+
+/**
+ * Every write keys on the spelling group (`norm_value`), the unit the Tags list shows one decision for.
+ * One transaction in Rust: the lock check, the group's decision and its track tags change together.
+ */
+export async function saveTagMapping({
+  rawValue,
+  kind,
+  canonicalId,
+  source = "manual",
+  matchType = null,
+}: SaveMappingInput): Promise<void> {
+  // Migrations first: the Rust connection shares canon.db with no schema of its own.
+  await getDb();
+  try {
+    await invoke("save_tag_mapping", {
+      rawValue,
+      kind,
+      normValue: sqlNorm(rawValue),
+      canonicalId,
+      source,
+      matchType,
+    });
+  } finally {
+    invalidateManualMappings();
+  }
+}
+
+export async function deleteTagMapping({ rawValue, kind }: { rawValue: string; kind: TagKind }): Promise<void> {
+  await getDb();
+  try {
+    await invoke("delete_tag_mapping", { rawValue, kind, normValue: sqlNorm(rawValue) });
+  } finally {
+    invalidateManualMappings();
+  }
+}
+
+export async function lockTagMapping({
+  rawValue,
+  kind,
+  locked,
+}: {
+  rawValue: string;
+  kind: TagKind;
+  locked: boolean;
+}): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE tag_mappings SET locked = ? WHERE norm_value = ? AND kind = ?", [
+    locked ? 1 : 0,
+    sqlNorm(rawValue),
+    kind,
+  ]);
+  invalidateManualMappings();
+}
+
 export function useTagMappings() {
   const queryClient = useQueryClient();
 
   const saveMapping = useMutation({
-    mutationFn: async ({
-      rawValue,
-      kind,
-      canonicalId,
-      source = "manual",
-      matchType = null,
-    }: {
-      rawValue: string;
-      kind: TagKind;
-      canonicalId: string;
-      source?: "auto" | "manual";
-      matchType?: "exact" | "fuzzy" | null;
-    }) => {
-      const db = await getDb();
-      const existing = await db.select<{ locked: number }[]>(
-        "SELECT locked FROM tag_mappings WHERE raw_value = ? AND kind = ?",
-        [rawValue, kind],
-      );
-      if (existing[0]?.locked === 1) {
-        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
-      }
-      await db.execute(
-        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
-        [rawValue, kind, canonicalId, source, matchType, sqlNorm(rawValue)],
-      );
-      invalidateManualMappings();
-      // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
-      if (canonicalId === ACCEPTED || canonicalId === IGNORED) {
-        await db.execute("UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?", [
-          rawValue,
-          kind,
-        ]);
-      } else {
-        await db.execute("UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?", [
-          canonicalId,
-          rawValue,
-          kind,
-        ]);
-      }
-    },
+    mutationFn: saveTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
@@ -79,24 +101,7 @@ export function useTagMappings() {
   });
 
   const deleteMapping = useMutation({
-    mutationFn: async ({ rawValue, kind }: { rawValue: string; kind: TagKind }) => {
-      const db = await getDb();
-      const norm = sqlNorm(rawValue);
-      const existing = await db.select<{ locked: number }[]>(
-        "SELECT locked FROM tag_mappings WHERE norm_value = ? AND kind = ?",
-        [norm, kind],
-      );
-      if (existing.some((r) => r.locked === 1)) {
-        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
-      }
-      await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
-      invalidateManualMappings();
-      // Clear all raw variants that share the same norm_value, not just the one passed in
-      await db.execute(
-        "UPDATE track_tags SET canonical_id = NULL WHERE LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')) = ? AND kind = ?",
-        [norm, kind],
-      );
-    },
+    mutationFn: deleteTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
@@ -106,15 +111,7 @@ export function useTagMappings() {
   });
 
   const lockMapping = useMutation({
-    mutationFn: async ({ rawValue, kind, locked }: { rawValue: string; kind: TagKind; locked: boolean }) => {
-      const db = await getDb();
-      await db.execute("UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?", [
-        locked ? 1 : 0,
-        rawValue,
-        kind,
-      ]);
-      invalidateManualMappings();
-    },
+    mutationFn: lockTagMapping,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
@@ -125,6 +122,67 @@ export function useTagMappings() {
   return { saveMapping, deleteMapping, lockMapping };
 }
 
+/** One decision per spelling group: a locked one, then a manual one, then the first spelling. */
+export const TAG_VOCAB_SQL = `
+  WITH ranked AS (
+    SELECT raw_value, norm_value, kind, canonical_id, source, locked,
+      ROW_NUMBER() OVER (
+        PARTITION BY norm_value, kind ORDER BY locked DESC, source = 'manual' DESC, raw_value
+      ) AS group_rank
+    FROM tag_mappings
+  ),
+  decision AS (SELECT * FROM ranked WHERE group_rank = 1)
+  SELECT
+    c.raw_value,
+    c.kind,
+    c.album_count,
+    c.sources,
+    decision.canonical_id,
+    decision.source AS mapping_source,
+    COALESCE(decision.locked, 0) AS locked
+  FROM tag_vocab_cache c
+  LEFT JOIN decision ON decision.norm_value = c.norm_value AND decision.kind = c.kind
+  UNION ALL
+  SELECT
+    decision.raw_value,
+    decision.kind,
+    0 AS album_count,
+    NULL AS sources,
+    decision.canonical_id,
+    decision.source AS mapping_source,
+    COALESCE(decision.locked, 0) AS locked
+  FROM decision
+  WHERE NOT EXISTS (
+    SELECT 1 FROM tag_vocab_cache c WHERE c.norm_value = decision.norm_value AND c.kind = decision.kind
+  )
+  ORDER BY album_count DESC, raw_value, kind`;
+
+/** Up to four of the server's albums carrying any spelling of a tag, most tagged tracks first. */
+export const TAG_ALBUMS_SQL = `
+  SELECT a.id AS album_id, a.name AS album_name, a.artwork_url
+  FROM track_tags tt
+  JOIN tracks t ON t.id = tt.track_id
+  JOIN albums a ON a.id = t.album_id
+  WHERE ${sqlNormExpression("tt.raw_value")} = ? AND tt.kind = ? AND t.server_id = ?
+  GROUP BY a.id
+  ORDER BY COUNT(DISTINCT tt.track_id) DESC, a.id
+  LIMIT 4`;
+
+/** Tags on albums with no decision for any of their spellings. */
+export const UNRESOLVED_TAG_COUNT_SQL = `
+  SELECT COUNT(*) AS n FROM (
+    SELECT DISTINCT tt.raw_value, tt.kind
+    FROM track_tags tt
+    JOIN tracks t ON t.id = tt.track_id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM tag_mappings tm
+      WHERE tm.norm_value = ${sqlNormExpression("tt.raw_value")}
+        AND tm.kind = tt.kind
+    )
+    GROUP BY tt.raw_value, tt.kind
+    HAVING COUNT(DISTINCT t.album_id) > 0
+  )`;
+
 /**
  * Every distinct (raw_value, kind) tag joined with its tag_mappings decision, with album counts.
  * Classified in JS: unresolved, accepted, ignored, mapped, or stale (decision, no albums left).
@@ -134,37 +192,7 @@ export function useTagVocab() {
     queryKey: QK.tagVocab(),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<TagVocabRow[]>(`
-        SELECT
-          c.raw_value,
-          c.kind,
-          c.album_count,
-          c.sources,
-          tm.canonical_id,
-          tm.source AS mapping_source,
-          COALESCE(tm.locked, 0) AS locked
-        FROM tag_vocab_cache c
-        LEFT JOIN (
-          SELECT norm_value, kind, canonical_id, source, locked
-          FROM tag_mappings
-          GROUP BY norm_value, kind
-        ) tm ON tm.norm_value = c.norm_value AND tm.kind = c.kind
-        UNION ALL
-        SELECT
-          tm.raw_value,
-          tm.kind,
-          0 AS album_count,
-          NULL AS sources,
-          tm.canonical_id,
-          tm.source AS mapping_source,
-          COALESCE(tm.locked, 0) AS locked
-        FROM tag_mappings tm
-        WHERE NOT EXISTS (
-          SELECT 1 FROM tag_vocab_cache c WHERE c.norm_value = tm.norm_value AND c.kind = tm.kind
-        )
-        GROUP BY tm.norm_value, tm.kind
-        ORDER BY album_count DESC, raw_value
-      `);
+      return db.select<TagVocabRow[]>(TAG_VOCAB_SQL);
     },
   });
 }
@@ -186,25 +214,15 @@ export function useUnmappedTagCount() {
 }
 
 /** Album art for a tag, works for both resolved and unresolved tags. */
-export function useTagAlbums(rawValue: string, kind: TagKind) {
+export function useTagAlbums(rawValue: string, kind: TagKind, serverId: string | undefined) {
   return useQuery({
-    queryKey: QK.tagAlbums(rawValue, kind),
+    queryKey: QK.tagAlbums(rawValue, kind, serverId),
     queryFn: async () => {
       const db = await getDb();
       type Row = { album_id: string; album_name: string; artwork_url: string | null };
-      return db.select<Row[]>(
-        `SELECT a.id as album_id, a.name as album_name, a.artwork_url
-         FROM track_tags tt
-         JOIN tracks t ON tt.track_id = t.id
-         JOIN albums a ON t.album_id = a.id
-         WHERE tt.raw_value = ? AND tt.kind = ?
-         GROUP BY a.id, a.name
-         ORDER BY COUNT(tt.track_id) DESC
-         LIMIT 4`,
-        [rawValue, kind],
-      );
+      return db.select<Row[]>(TAG_ALBUMS_SQL, [sqlNorm(rawValue), kind, serverId]);
     },
-    enabled: !!rawValue,
+    enabled: !!rawValue && !!serverId,
   });
 }
 
@@ -269,21 +287,7 @@ export function useAutoMapExact() {
       }
 
       // Count remaining unresolved tags that still have albums in the library
-      const remainingRows = await db.select<{ n: number }[]>(`
-        SELECT COUNT(*) AS n FROM (
-          SELECT DISTINCT tt.raw_value, tt.kind
-          FROM track_tags tt
-          JOIN tracks t ON t.id = tt.track_id
-          WHERE NOT EXISTS (
-            SELECT 1 FROM tag_mappings tm
-            WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
-                = LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
-              AND tm.kind = tt.kind
-          )
-          GROUP BY tt.raw_value, tt.kind
-          HAVING COUNT(DISTINCT t.album_id) > 0
-        )
-      `);
+      const remainingRows = await db.select<{ n: number }[]>(UNRESOLVED_TAG_COUNT_SQL);
       const remaining = remainingRows[0]?.n ?? 0;
 
       return { mapped, remaining };
@@ -294,6 +298,16 @@ export function useAutoMapExact() {
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
     },
   });
+}
+
+/** An automatic rule: it yields to a manual or locked decision on any spelling of Rap. */
+export async function setRapToHipHop(enable: boolean): Promise<void> {
+  await getDb();
+  try {
+    await invoke("set_rap_to_hip_hop", { enabled: enable });
+  } finally {
+    invalidateManualMappings();
+  }
 }
 
 export function useRapToHipHop() {
@@ -309,30 +323,7 @@ export function useRapToHipHop() {
   });
 
   const toggle = useMutation({
-    mutationFn: async (enable: boolean) => {
-      const db = await getDb();
-      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)", [
-        enable ? "true" : "false",
-      ]);
-      if (enable) {
-        await db.execute(
-          "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), 'rap')",
-        );
-        invalidateManualMappings();
-        await db.execute("UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'");
-      } else {
-        const rows = await db.select<{ canonical_id: string }[]>(
-          "SELECT canonical_id FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'",
-        );
-        if (rows[0]?.canonical_id === "hip-hop") {
-          await db.execute("DELETE FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'");
-          invalidateManualMappings();
-          await db.execute(
-            "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id = 'hip-hop'",
-          );
-        }
-      }
-    },
+    mutationFn: setRapToHipHop,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagRapToHipHop() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });

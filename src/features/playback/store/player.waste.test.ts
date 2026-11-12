@@ -84,7 +84,7 @@ async function runClock(ms: number) {
 
 describe("player store - waste", () => {
   it("a second of elapsed ticks does not re-render a subscriber that only reads currentTrack", async () => {
-    await usePlayerStore.getState().playQueue([makeTrack("a"), makeTrack("b")], streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue([makeTrack("a"), makeTrack("b")], 0);
     await vi.advanceTimersByTimeAsync(0);
 
     const probe = trackRenders(() => usePlayerStore((s) => s.currentTrack));
@@ -100,7 +100,7 @@ describe("player store - waste", () => {
   });
 
   it("a subscriber that reads elapsed renders once per tick, not more", async () => {
-    await usePlayerStore.getState().playQueue([makeTrack("a")], streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue([makeTrack("a")], 0);
     await vi.advanceTimersByTimeAsync(0);
 
     const probe = trackRenders(() => usePlayerStore((s) => s.elapsed));
@@ -115,7 +115,7 @@ describe("player store - waste", () => {
   });
 
   it("a playback error renders its subscriber once, and not again as unrelated state moves", async () => {
-    await usePlayerStore.getState().playQueue([makeTrack("a")], streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue([makeTrack("a")], 0);
     await vi.advanceTimersByTimeAsync(0);
 
     const probe = trackRenders(() => usePlayerStore((s) => s.error));
@@ -143,7 +143,7 @@ describe("player store - waste", () => {
   });
 
   it("restarting playback leaves one poll loop running, not two", async () => {
-    await usePlayerStore.getState().playQueue([makeTrack("a")], streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue([makeTrack("a")], 0);
     await vi.advanceTimersByTimeAsync(0);
 
     // resume() arms the ticker without stopping it first, and it is reachable while already
@@ -161,7 +161,7 @@ describe("player store - waste", () => {
 
   it("queuing a 30 track album streams one track, not thirty", async () => {
     const tracks = Array.from({ length: 30 }, (_, i) => makeTrack(String(i)));
-    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    await usePlayerStore.getState().playQueue(tracks, 0);
     await vi.advanceTimersByTimeAsync(0);
 
     // Nothing but the track being listened to is fetched at queue time. The next one is warmed

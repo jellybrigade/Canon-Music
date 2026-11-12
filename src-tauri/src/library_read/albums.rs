@@ -18,10 +18,10 @@ pub struct AlbumRowDto {
 // boundary as a plain string.
 fn order_by_clause(sort: &str) -> Result<&'static str, String> {
     match sort {
-        "artist" => Ok("a.artist COLLATE NOCASE, a.name COLLATE NOCASE"),
-        "alphabetical" => Ok("a.name COLLATE NOCASE"),
-        "year" => Ok("a.year DESC, a.name COLLATE NOCASE"),
-        "recently_added" => Ok("COALESCE(a.navidrome_created, a.created_at) DESC"),
+        "artist" => Ok("a.artist COLLATE NOCASE, a.name COLLATE NOCASE, a.id"),
+        "alphabetical" => Ok("a.name COLLATE NOCASE, a.id"),
+        "year" => Ok("a.year DESC, a.name COLLATE NOCASE, a.id"),
+        "recently_added" => Ok("COALESCE(a.navidrome_created, a.created_at) DESC, a.id"),
         other => Err(format!("unknown album sort: {other}")),
     }
 }
@@ -37,11 +37,14 @@ pub fn get_albums(
     // query_albums re-validates so it is self-contained; don't "simplify" this line away.
     order_by_clause(&sort)?;
 
-    state.with_conn(&app, |conn| query_albums(conn, &sort, &canonical_ids))
+    state.with_active_server(&app, |conn, server_id| {
+        query_albums(conn, server_id, &sort, &canonical_ids)
+    })
 }
 
 fn query_albums(
     conn: &Connection,
+    server_id: &str,
     sort: &str,
     canonical_ids: &[String],
 ) -> Result<Vec<AlbumRowDto>, String> {
@@ -62,11 +65,11 @@ fn query_albums(
     if canonical_ids.is_empty() {
         let sql = format!(
             "SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type, a.accent_color
-             FROM albums a ORDER BY {order}"
+             FROM albums a WHERE a.server_id = ? ORDER BY {order}"
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([], map_row)
+            .query_map([server_id], map_row)
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
@@ -83,11 +86,13 @@ fn query_albums(
             "SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type, a.accent_color
              FROM albums a
              JOIN album_genres ag ON ag.album_id = a.id
-             WHERE ag.canonical_id IN ({placeholders})
+             WHERE a.server_id = ? AND ag.canonical_id IN ({placeholders})
              ORDER BY {order}"
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let params = rusqlite::params_from_iter(canonical_ids.iter());
+        let params = rusqlite::params_from_iter(
+            std::iter::once(server_id).chain(canonical_ids.iter().map(String::as_str)),
+        );
         let rows = stmt
             .query_map(params, map_row)
             .map_err(|e| e.to_string())?
@@ -112,19 +117,19 @@ mod tests {
     fn each_allowlisted_sort_key_maps_to_its_own_order_by_fragment() {
         assert_eq!(
             order_by_clause("artist").unwrap(),
-            "a.artist COLLATE NOCASE, a.name COLLATE NOCASE"
+            "a.artist COLLATE NOCASE, a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("alphabetical").unwrap(),
-            "a.name COLLATE NOCASE"
+            "a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("year").unwrap(),
-            "a.year DESC, a.name COLLATE NOCASE"
+            "a.year DESC, a.name COLLATE NOCASE, a.id"
         );
         assert_eq!(
             order_by_clause("recently_added").unwrap(),
-            "COALESCE(a.navidrome_created, a.created_at) DESC"
+            "COALESCE(a.navidrome_created, a.created_at) DESC, a.id"
         );
     }
 
@@ -210,12 +215,12 @@ mod tests {
         insert_genre(&conn, "s1:al1", "rock", "direct");
 
         for sort in SORT_KEYS {
-            let unfiltered = query_albums(&conn, sort, &[]).unwrap_or_else(|e| {
+            let unfiltered = query_albums(&conn, "s1", sort, &[]).unwrap_or_else(|e| {
                 panic!("unfiltered {sort} must be valid SQL: {e}");
             });
             assert_eq!(ids(&unfiltered), ["s1:al1"]);
 
-            let filtered = query_albums(&conn, sort, &["rock".to_string()])
+            let filtered = query_albums(&conn, "s1", sort, &["rock".to_string()])
                 .unwrap_or_else(|e| panic!("genre-filtered {sort} must be valid SQL: {e}"));
             assert_eq!(ids(&filtered), ["s1:al1"]);
         }
@@ -224,21 +229,25 @@ mod tests {
     #[test]
     fn an_unknown_sort_is_rejected_by_query_albums_before_any_sql_runs() {
         let conn = Connection::open_in_memory().expect("db with no albums table at all");
-        assert!(query_albums(&conn, "popularity", &[]).is_err());
+        assert!(query_albums(&conn, "s1", "popularity", &[]).is_err());
     }
 
     #[test]
-    fn each_album_row_reports_the_server_id_stored_on_that_row() {
+    fn only_the_requested_servers_albums_are_listed_with_or_without_a_genre_filter() {
         let conn = fixture_conn();
         insert_album(&conn, "s1:al1", "s1", "A", "Artist");
         insert_album(&conn, "s2:al1", "s2", "B", "Artist");
+        insert_genre(&conn, "s1:al1", "rock", "direct");
+        insert_genre(&conn, "s2:al1", "rock", "direct");
 
-        let rows = query_albums(&conn, "alphabetical", &[]).expect("query");
-        let owners: Vec<(&str, &str)> = rows
-            .iter()
-            .map(|r| (r.id.as_str(), r.server_id.as_str()))
-            .collect();
-        assert_eq!(owners, [("s1:al1", "s1"), ("s2:al1", "s2")]);
+        for filter in [vec![], vec!["rock".to_string()]] {
+            let rows = query_albums(&conn, "s2", "alphabetical", &filter).expect("query");
+            let owners: Vec<(&str, &str)> = rows
+                .iter()
+                .map(|r| (r.id.as_str(), r.server_id.as_str()))
+                .collect();
+            assert_eq!(owners, [("s2:al1", "s2")], "filter {filter:?}");
+        }
     }
 
     #[test]
@@ -248,7 +257,7 @@ mod tests {
         insert_album(&conn, "s1:a", "s1", "Alpha", "X");
         insert_album(&conn, "s1:c", "s1", "Gamma", "X");
 
-        let rows = query_albums(&conn, "alphabetical", &[]).expect("query");
+        let rows = query_albums(&conn, "s1", "alphabetical", &[]).expect("query");
         assert_eq!(ids(&rows), ["s1:a", "s1:b", "s1:c"]);
     }
 
@@ -263,7 +272,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_albums(&conn, "year", &[]).expect("query");
+        let rows = query_albums(&conn, "s1", "year", &[]).expect("query");
         assert_eq!(ids(&rows), ["s1:a", "s1:z", "s1:old"]);
     }
 
@@ -278,8 +287,28 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_albums(&conn, "recently_added", &[]).expect("query");
+        let rows = query_albums(&conn, "s1", "recently_added", &[]).expect("query");
         assert_eq!(ids(&rows), ["s1:nav", "s1:local", "s1:older"]);
+    }
+
+    #[test]
+    fn every_sort_breaks_full_ties_by_album_id() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO albums (id, server_id, name, artist, year, created_at) VALUES
+               ('s1:al2', 's1', 'Same', 'Same', 2020, '2026-01-01'),
+               ('s1:al1', 's1', 'Same', 'Same', 2020, '2026-01-01')",
+        )
+        .expect("seed");
+
+        for sort in SORT_KEYS {
+            let rows = query_albums(&conn, "s1", sort, &[]).expect("query");
+            assert_eq!(
+                ids(&rows),
+                ["s1:al1", "s1:al2"],
+                "{sort} must order ties by id"
+            );
+        }
     }
 
     #[test]
@@ -290,7 +319,7 @@ mod tests {
         insert_genre(&conn, "s1:rock", "rock", "direct");
         insert_genre(&conn, "s1:jazz", "jazz", "direct");
 
-        let rows = query_albums(&conn, "alphabetical", &["jazz".to_string()]).expect("query");
+        let rows = query_albums(&conn, "s1", "alphabetical", &["jazz".to_string()]).expect("query");
         assert_eq!(ids(&rows), ["s1:jazz"]);
     }
 
@@ -302,11 +331,11 @@ mod tests {
         insert_genre(&conn, "s1:anc", "rock", "ancestor");
         insert_genre(&conn, "s1:raw", "raw:weird tag", "direct");
 
-        let anc = query_albums(&conn, "alphabetical", &["rock".to_string()]).expect("query");
+        let anc = query_albums(&conn, "s1", "alphabetical", &["rock".to_string()]).expect("query");
         assert_eq!(ids(&anc), ["s1:anc"]);
 
-        let raw =
-            query_albums(&conn, "alphabetical", &["raw:weird tag".to_string()]).expect("query");
+        let raw = query_albums(&conn, "s1", "alphabetical", &["raw:weird tag".to_string()])
+            .expect("query");
         assert_eq!(ids(&raw), ["s1:raw"]);
     }
 
@@ -319,6 +348,7 @@ mod tests {
 
         let rows = query_albums(
             &conn,
+            "s1",
             "alphabetical",
             &["rock".to_string(), "pop".to_string()],
         )

@@ -10,10 +10,14 @@ function classifyRelease(name: string, releaseType?: string | null | undefined):
     if (rt === "compilation" || rt === "live" || rt === "remix") return "compilation";
     if (rt === "album") return "album";
   }
+  // Only a trailing marker names the release type; the same word mid-title ("Single Mothers",
+  // "Best of Both Worlds") is just part of an album's name.
   const n = name.toLowerCase().trim();
-  if (/\bsingle\b|-\s*single\s*$/.test(n)) return "single";
-  if (/\bep\b|-\s*ep\s*$/.test(n)) return "ep";
-  if (/compilation|greatest hits|best of\b|anthology|the collection|box set/.test(n)) return "compilation";
+  if (/(?:-\s*|\(|\[)single[)\]]?$/.test(n)) return "single";
+  if (/(?:\s|\(|\[)ep[)\]]?$/.test(n)) return "ep";
+  if (/^the (?:very )?best of\b|greatest hits|^anthology\b|box set$|(?:-\s*|\(|\[)compilation[)\]]?$/.test(n)) {
+    return "compilation";
+  }
   return "album";
 }
 

@@ -203,6 +203,64 @@ describe("runMigrations", () => {
     expect(mappings[0]?.norm_value).toBe("hip hop");
   });
 
+  it("re-keys every search row by its track's row and drops rows no track backs", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 73);
+    db.raw.exec(`
+      INSERT INTO albums (id, server_id, server_type, name) VALUES ('s1:al', 's1', 'navidrome', 'Album');
+      INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('s1:t1', 's1', 'navidrome', 'One', 's1:al');
+      INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('s1:t2', 's1', 'navidrome', 'Two', 's1:al');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (900, 's1:t2', 'Two', '', 'Album', '');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (901, 's1:t1', 'One', '', 'Album', '');
+      INSERT INTO tracks_fts (rowid, id, title, artist, album, genre) VALUES (902, 's1:gone', 'Gone', '', 'Album', '');
+    `);
+    await runMigrations(db);
+
+    const rows = db.raw
+      .prepare(
+        "SELECT f.id, f.rowid = t.rowid AS keyed FROM tracks_fts f LEFT JOIN tracks t ON t.id = f.id ORDER BY f.id",
+      )
+      .all();
+    expect(rows).toEqual([
+      { id: "s1:t1", keyed: 1 },
+      { id: "s1:t2", keyed: 1 },
+    ]);
+  });
+
+  it("drops fetched tags naming their track's artist and re-normalizes those albums only", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 74);
+    db.raw.exec(`
+      INSERT INTO albums (id, server_id, server_type, name, artist, computed_at)
+        VALUES ('s1:sting', 's1', 'navidrome', 'Ten Summoner''s Tales', 'Sting', 100),
+               ('s1:other', 's1', 'navidrome', 'Souvlaki', 'Slowdive', 100);
+      INSERT INTO tracks (id, server_id, server_type, title, artist, album_artist, album_id)
+        VALUES ('s1:t1', 's1', 'navidrome', 'Shape of My Heart', 'Sting', 'Sting', 's1:sting'),
+               ('s1:t2', 's1', 'navidrome', 'Alison', 'Slowdive', 'Slowdive', 's1:other'),
+               ('s1:t3', 's1', 'navidrome', 'Feat', 'Guest', 'STING', 's1:sting');
+      INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES
+        ('s1:t1', 'genre', 'sting', 'swing', 'lastfm-track'),
+        ('s1:t1', 'genre', 'sting', NULL, 'lastfm'),
+        ('s1:t1', 'genre', 'Sting', NULL, 'server'),
+        ('s1:t1', 'genre', 'rock', 'rock', 'lastfm'),
+        ('s1:t3', 'genre', ' Sting ', 'swing', 'lastfm-track'),
+        ('s1:t2', 'genre', 'shoegaze', 'shoegaze', 'lastfm');
+    `);
+    await runMigrations(db);
+
+    expect(
+      db.raw.prepare("SELECT track_id, raw_value, source FROM track_tags ORDER BY track_id, raw_value").all(),
+    ).toEqual([
+      { track_id: "s1:t1", raw_value: "Sting", source: "server" },
+      { track_id: "s1:t1", raw_value: "rock", source: "lastfm" },
+      { track_id: "s1:t2", raw_value: "shoegaze", source: "lastfm" },
+    ]);
+    expect(db.raw.prepare("SELECT id, computed_at FROM albums ORDER BY id").all()).toEqual([
+      { id: "s1:other", computed_at: 100 },
+      { id: "s1:sting", computed_at: null },
+    ]);
+  });
+
   it("points every chained artist alias at the end of its chain", async () => {
     const db = createTestDb();
     await migrateThrough(db, 57);
@@ -339,9 +397,11 @@ describe("post-migration schema", () => {
     expect(userTables(db)).toEqual([
       "album_cover_overrides",
       "album_covers",
+      "album_discogs",
       "album_genre_exclusions",
       "album_genres",
       "album_identity",
+      "album_release_lookups",
       "album_unresolved_genres",
       "album_user_genres",
       "albums",
@@ -397,16 +457,26 @@ describe("post-migration schema", () => {
       }[]
     ).map((r) => r.name);
     expect(indexes).toEqual([
+      "idx_album_genre_exclusions_canonical",
       "idx_album_genres_canonical",
+      "idx_album_user_genres_canonical",
       "idx_albums_artist",
       "idx_albums_artist_server_artwork",
+      "idx_albums_year",
       "idx_artist_aliases_canonical",
+      "idx_artists_server_name",
+      "idx_playlist_resume_track",
+      "idx_playlist_tracks_track",
+      "idx_scrobble_queue_track",
+      "idx_tag_mappings_canonical",
       "idx_tag_mappings_norm",
       "idx_track_tags_canonical",
-      "idx_track_tags_track",
+      "idx_track_tags_norm_kind",
+      "idx_track_tags_raw_kind",
       "idx_tracks_album_id",
       "idx_tracks_artist",
-      "idx_tracks_genre",
+      "idx_tracks_artist_nocase",
+      "idx_tracks_server_album",
     ]);
   });
 

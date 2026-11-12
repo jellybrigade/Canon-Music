@@ -17,9 +17,9 @@ export interface PartialAlbumRow extends AlbumStatRow {
   total: number;
 }
 
-export function useListeningStats() {
+export function useListeningStats(serverId: string) {
   const query = useQuery<AlbumStatRow[]>({
-    queryKey: QK.albumsListeningStats(),
+    queryKey: QK.albumsListeningStats(serverId),
     queryFn: async () => {
       const db = await getDb();
       return db.select<AlbumStatRow[]>(
@@ -50,11 +50,11 @@ export function useListeningStats() {
            JOIN tracks t2 ON t2.id = sq.track_id
            GROUP BY t2.album_id
          ) q ON q.album_id = a.id
-         WHERE a.artwork_url IS NOT NULL
+         WHERE a.server_id = ? AND a.artwork_url IS NOT NULL
          GROUP BY a.id
          HAVING plays > 0
          ORDER BY plays DESC`,
-        [],
+        [serverId],
       );
     },
     staleTime: HOME_STALE_TIME,
@@ -64,7 +64,7 @@ export function useListeningStats() {
   // One partially-heard pass serves both "finish the album" and "almost done" (used to be
   // two queries over the same join, differing only in HAVING); almost-done is the >= half subset.
   const partialQuery = useQuery<PartialAlbumRow[]>({
-    queryKey: QK.albumsPartiallyHeard(),
+    queryKey: QK.albumsPartiallyHeard(serverId),
     queryFn: async () => {
       const db = await getDb();
       return db.select<PartialAlbumRow[]>(
@@ -76,11 +76,11 @@ export function useListeningStats() {
          FROM albums a
          JOIN tracks t ON t.album_id = a.id
          LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
-         WHERE a.artwork_url IS NOT NULL
+         WHERE a.server_id = ? AND a.artwork_url IS NOT NULL
          GROUP BY a.id
          HAVING heard > 0 AND heard < total
          ORDER BY a.name`,
-        [],
+        [serverId],
       );
     },
     staleTime: HOME_STALE_TIME,

@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronDown, Disc, ExternalLink, GitMerge, Mic2, MoreHorizontal, Play, Radio, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { normalizeTrackTitle, resolvePortraitUrl } from "../clients/lastfm";
+import { resolvePortraitUrl } from "../clients/lastfm";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { TourCard } from "../components/TourCard";
 import { ArtistMergeModal } from "../features/enrichment/components/ArtistMergeModal";
@@ -14,6 +14,7 @@ import {
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
 import { useTourEvents } from "../features/enrichment/hooks/useTourEvents";
+import { artistFactsLine, storedArtistFacts } from "../features/enrichment/lib/artistFacts";
 import { usePlayerStore } from "../features/playback/store/player";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
@@ -26,7 +27,6 @@ import { extractAccent } from "../lib/artColor";
 import { mostPlayedHere } from "../lib/artistRanking";
 import { plural } from "../lib/plural";
 import { shuffleArray } from "../lib/shuffle";
-import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
@@ -37,9 +37,9 @@ import {
   useAppearsOnAlbums,
   useArtistGenres,
   useArtistTopTracks,
-  useLastfmTopAlbums,
-  useLastfmTopTracks,
+  useEssentialAlbumOrder,
   useMatchedTracks,
+  usePopularTrackRanking,
 } from "./artist/artistQueries";
 import { groupAlbums, type ReleaseGroup } from "./artist/releaseGroups";
 import { SimilarArtistCard } from "./artist/SimilarArtistCard";
@@ -69,6 +69,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { server, credential } = serverWithCredential;
   const { data: albums } = useArtistAlbums(artist.name, server.id);
   const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name, server.id);
+  // Decorative: an unreadable genre line stays hidden.
   const { data: canonGenres = [] } = useArtistGenres(artist.name, server.id);
   const { data: rawTracks } = useArtistTopTracks(artist.name, server.id);
   const {
@@ -76,7 +77,11 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     isRefreshing,
     error: enrichError,
     refresh,
-  } = useEnrichArtist(artist.name, { serverWithCredential, identifyIfUnidentified: true });
+  } = useEnrichArtist(artist.name, {
+    serverWithCredential,
+    identifyIfUnidentified: true,
+    includeFacts: true,
+  });
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -90,12 +95,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { events: tourEvents, isLoading: tourLoading } = useTourEvents(artist.name, bandsintownEnabled);
 
   const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
+  // Decorative: unreadable aliases hide the badge and chip row.
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
   const removeAlias = useRemoveArtistAlias();
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
-  const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
-  const { data: lastfmAlbums, isLoading: lastfmAlbumsLoading } = useLastfmTopAlbums(lastfmName);
+  const { data: popularRanking } = usePopularTrackRanking(artist.name, lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = useStartRadio();
@@ -107,24 +112,24 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
-  const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, lastfmTitles);
+  const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, popularRanking);
   const topTracks = useMemo(() => {
     const source = matchedTracks ?? rawTracks ?? [];
     const rank = (t: TopTrack) => t.lastfmPlaycount ?? -1;
     return [...source].sort((a, b) => {
       const byPlaycount = rank(b) - rank(a);
       if (byPlaycount !== 0) return byPlaycount;
-      return (a.lastfmRank ?? Infinity) - (b.lastfmRank ?? Infinity);
+      return (a.popularRank ?? Infinity) - (b.popularRank ?? Infinity);
     });
   }, [matchedTracks, rawTracks]);
   const lovedTracks = useMemo(() => topTracks.filter((t) => lovedTrackIds.has(t.id)), [topTracks, lovedTrackIds]);
-  // Popular is Last.fm's ranking, which is what the world plays. This is what this
+  // Popular is Last.fm's ranking (Deezer's without one), which is what the world plays. This is what this
   // server has played, from every client, and the two answer different questions - so
   // it is a second list rather than a fallback or a rename.
   const mostPlayedTracks = useMemo(() => mostPlayedHere(rawTracks ?? [], POPULAR_TRACKS_MIN), [rawTracks]);
   const lfmOnlyTracks = useMemo(
-    () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
-    [rawTracks, lastfmTitles],
+    () => (rawTracks && popularRanking ? lastfmOnlyTracks(rawTracks, popularRanking) : []),
+    [rawTracks, popularRanking],
   );
 
   const popularTracks = topTracks.slice(0, popularExpanded ? POPULAR_TRACKS_MAX : POPULAR_TRACKS_MIN);
@@ -132,28 +137,21 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const albumGroups = useMemo(() => (albums ? groupAlbums(albums) : []), [albums]);
   const ownedAlbumsOnly = albumGroups.find((g) => g.group === "album")?.items ?? [];
 
+  const hasEssentialSection = ownedAlbumsOnly.length > ESSENTIAL_MIN_ALBUMS;
+  const { data: essentialOrder, isPending: essentialOrderPending } = useEssentialAlbumOrder({
+    artistName: artist.name,
+    lastfmName,
+    albums: ownedAlbumsOnly,
+    enabled: hasEssentialSection,
+  });
+  // A failed ranking still shows the section, in the library's own order.
   const essentialAlbums = useMemo(() => {
-    if (ownedAlbumsOnly.length <= ESSENTIAL_MIN_ALBUMS) return [];
-    if (lastfmAlbumsLoading) return [];
+    if (!hasEssentialSection || essentialOrderPending) return [];
     const cap = Math.ceil(ownedAlbumsOnly.length * ESSENTIAL_RATIO);
-    if (lastfmAlbums && lastfmAlbums.length > 0) {
-      const localByNorm = new Map(ownedAlbumsOnly.map((a) => [normalizeTrackTitle(a.name), a]));
-      const matched: AlbumRow[] = [];
-      for (const lfmAlbum of lastfmAlbums) {
-        const local = localByNorm.get(normalizeTrackTitle(lfmAlbum.name));
-        if (local && !matched.includes(local)) matched.push(local);
-        if (matched.length >= cap) break;
-      }
-      if (matched.length < cap) {
-        for (const album of ownedAlbumsOnly) {
-          if (matched.length >= cap) break;
-          if (!matched.includes(album)) matched.push(album);
-        }
-      }
-      if (matched.length > 0) return matched;
-    }
-    return ownedAlbumsOnly.slice(0, cap);
-  }, [ownedAlbumsOnly, lastfmAlbums, lastfmAlbumsLoading]);
+    const byId = new Map(ownedAlbumsOnly.map((album) => [album.id, album]));
+    const ranked = (essentialOrder ?? []).flatMap((id) => byId.get(id) ?? []);
+    return [...new Set([...ranked, ...ownedAlbumsOnly])].slice(0, cap);
+  }, [hasEssentialSection, ownedAlbumsOnly, essentialOrder, essentialOrderPending]);
 
   const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
@@ -184,7 +182,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
       return [];
     }
   }, [enrichment?.similar_json]);
-  const { data: inLibrarySet } = useSimilarInLibrary(similar);
+  const { data: inLibrarySet } = useSimilarInLibrary(similar, server.id);
   const similarInLibrary = useMemo(() => similar.filter((name) => inLibrarySet?.has(name)), [similar, inLibrarySet]);
   const similarNotInLibrary = useMemo(
     () => similar.filter((name) => !inLibrarySet?.has(name)),
@@ -192,6 +190,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   );
   const effectiveSimilarTab = similarInLibrary.length === 0 ? "out" : similarTab;
   const bio = enrichment?.bio ?? null;
+  const storedFacts = enrichment ? storedArtistFacts(enrichment) : null;
+  const factsLine = storedFacts ? artistFactsLine(storedFacts) : null;
 
   const metaItems: string[] = [
     enrichment?.listeners != null
@@ -200,12 +200,14 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     enrichment?.playcount != null
       ? `${formatCount(enrichment.playcount)} ${plural(enrichment.playcount, "scrobble")}`
       : null,
+    // A different, smaller scale than Last.fm's, so it shows only in place of it and says whose.
+    enrichment?.listeners == null && enrichment?.listenbrainz_listens != null
+      ? `${formatCount(enrichment.listenbrainz_listens)} ${plural(enrichment.listenbrainz_listens, "listen")} on ListenBrainz`
+      : null,
     `${artist.album_count} ${plural(artist.album_count, "album")} in library`,
   ].filter((x): x is string => x !== null);
 
-  const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server, credential), [server, credential]);
-
-  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
+  const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server), [server, credential]);
 
   const handleAlbumClick = useCallback(
     (albumId: string) => {
@@ -219,27 +221,27 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     (track: TopTrack) => {
       if (!topTracks.length) return;
       const startIndex = topTracks.findIndex((t) => t.id === track.id);
-      playQueue(topTracks.map(toTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+      playQueue(topTracks.map(toTrackObj), startIndex >= 0 ? startIndex : 0);
     },
-    [topTracks, playQueue, streamUrlFor],
+    [topTracks, playQueue],
   );
 
   function handlePlayAll() {
     if (!topTracks.length) return;
-    playQueue(topTracks.map(toTrackObj), streamUrlFor, 0);
+    playQueue(topTracks.map(toTrackObj), 0);
   }
 
   function handleShuffleAll() {
     if (!topTracks.length) return;
     const shuffled = shuffleArray(topTracks);
-    playQueue(shuffled.map(toTrackObj), streamUrlFor, 0);
+    playQueue(shuffled.map(toTrackObj), 0);
   }
 
   function handleStartRadio() {
     const seed = topTracks[0];
     if (!seed) return;
     const track = toTrackObj(seed);
-    void startRadio({ tracks: [track], streamUrlFor });
+    void startRadio({ tracks: [track] });
   }
 
   const handleTrackContextMenu = useCallback((e: React.MouseEvent, track: TopTrack) => {
@@ -277,6 +279,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           {heroArt}
           <div className="artist-hero-info">
             <h1 className="artist-hero-name">{artist.name}</h1>
+            {factsLine && <p className="artist-hero-facts">{factsLine}</p>}
             <div className="artist-hero-meta-row">
               {metaItems.map((item, i) => (
                 <span key={i}>{i > 0 ? `· ${item}` : item}</span>
@@ -361,7 +364,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                       currentTrack={currentTrack}
                       isPlaying={isPlaying}
                       server={server}
-                      credential={credential}
                       onPlay={handlePlayTrack}
                       lastfmPlaycount={track.lastfmPlaycount}
                       lastfmCombined={track.lastfmCombined}
@@ -392,7 +394,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                         currentTrack={currentTrack}
                         isPlaying={isPlaying}
                         server={server}
-                        credential={credential}
                         onPlay={handlePlayTrack}
                         onAlbumClick={handleAlbumClick}
                         onContextMenu={handleTrackContextMenu}
@@ -414,7 +415,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                         currentTrack={currentTrack}
                         isPlaying={isPlaying}
                         server={server}
-                        credential={credential}
                         onPlay={handlePlayTrack}
                         lastfmPlaycount={track.lastfmPlaycount}
                         lastfmCombined={track.lastfmCombined}
@@ -625,7 +625,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              playNext(toTrackObj(contextMenu.track), streamUrlFor);
+              playNext(toTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -633,7 +633,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              addToQueue(toTrackObj(contextMenu.track), streamUrlFor);
+              addToQueue(toTrackObj(contextMenu.track));
               setContextMenu(null);
             }}
           >
@@ -642,7 +642,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = toTrackObj(contextMenu.track);
-              void startRadio({ tracks: [track], streamUrlFor, mode });
+              void startRadio({ tracks: [track], mode });
               setContextMenu(null);
             }}
           />

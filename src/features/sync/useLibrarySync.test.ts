@@ -67,6 +67,7 @@ const SRV_B = makeServer("b");
  */
 interface Run {
   server: Server;
+  signal: AbortSignal | undefined;
   emitProgress: (p: SyncProgress) => void;
   resolve: (r?: PartialSyncResult) => void;
   reject: (e: unknown) => void;
@@ -75,10 +76,13 @@ interface Run {
 let runs: Run[] = [];
 
 function armSyncLibrary() {
-  vi.mocked(syncLibrary).mockImplementation((server, _credential, onAlbumBatch) => {
+  vi.mocked(syncLibrary).mockImplementation((server, _credential, onAlbumBatch, options) => {
     return new Promise<SyncResult>((res, rej) => {
+      // The real sync rejects once stopped; the hook's settle path is what's under test.
+      options?.signal?.addEventListener("abort", () => rej(new DOMException("Sync stopped", "AbortError")));
       runs.push({
         server,
+        signal: options?.signal,
         emitProgress: (p) => onAlbumBatch?.(p),
         resolve: (r) => res({ ...CLEAN, ...r, changed: { ...CLEAN.changed, ...r?.changed } }),
         reject: rej,
@@ -130,6 +134,12 @@ function renderSync(server: ServerWithCredential | undefined) {
     wrapper: ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client: queryClient }, children),
   });
+}
+
+/** The options a run was started with, minus the stop signal every run carries. */
+function syncOptionsOf(index: number) {
+  const { signal: _, ...options } = vi.mocked(syncLibrary).mock.calls[index]?.[3] ?? {};
+  return options;
 }
 
 /** Server ids in call order, which is what every switching test actually asserts on. */
@@ -237,7 +247,7 @@ describe("useLibrarySync queued request", () => {
     await settle(1);
 
     expect(syncLibrary).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(syncLibrary).mock.calls[1]?.[3]).toEqual({ forceTrackPass: true });
+    expect(syncOptionsOf(1)).toEqual({ forceTrackPass: true });
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
   });
@@ -281,14 +291,14 @@ describe("useLibrarySync options", () => {
       result.current.runSync(SRV_A, { forceTrackPass: true });
     });
 
-    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({ forceTrackPass: true });
+    expect(syncOptionsOf(0)).toEqual({ forceTrackPass: true });
   });
 
   it("asks for nothing extra on a run nobody requested", async () => {
     renderSync(SRV_A);
     await tick();
 
-    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({});
+    expect(syncOptionsOf(0)).toEqual({});
   });
 
   it("keeps the caller's settle callback out of the sync's own options", async () => {
@@ -299,7 +309,7 @@ describe("useLibrarySync options", () => {
       result.current.runSync(SRV_A, { forceTrackPass: true, onSettled: vi.fn() });
     });
 
-    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({ forceTrackPass: true });
+    expect(syncOptionsOf(0)).toEqual({ forceTrackPass: true });
   });
 
   it("tells the caller once whether the run it started changed albums", async () => {
@@ -465,15 +475,13 @@ describe("useLibrarySync server claim", () => {
 });
 
 describe("useLibrarySync server switching", () => {
-  it("syncs the server selected now, not the one the finished run started for", async () => {
+  it("syncs the server selected now, not the one the stopped run started for", async () => {
     const { rerender } = renderSync(SRV_A);
     await tick();
 
     rerender({ server: SRV_B });
     await tick();
-    expect(syncLibrary).toHaveBeenCalledTimes(1);
 
-    await settle(0);
     expect(calledServerIds()).toEqual(["a", "b"]);
   });
 
@@ -866,5 +874,77 @@ describe("useLibrarySync retry countdown", () => {
 
     expect(syncLibrary).toHaveBeenCalledTimes(1);
     expect(result.current.nextRetryAt).toBeNull();
+  });
+});
+
+describe("useLibrarySync stopping a run", () => {
+  it("stops the old server's run on a switch and syncs the new one right away", async () => {
+    const { rerender } = renderSync(SRV_A);
+    await tick();
+
+    rerender({ server: SRV_B });
+    await tick();
+
+    expect(openRun(0).signal?.aborted).toBe(true);
+    expect(calledServerIds()).toEqual(["a", "b"]);
+    expect(openRun(1).signal?.aborted).toBe(false);
+  });
+
+  it("does not report a stopped run as a failure or retry it", async () => {
+    const { result, rerender } = renderSync(SRV_A);
+    await tick();
+
+    rerender({ server: SRV_B });
+    await tick(60 * MINUTE);
+
+    expect(result.current.syncStatus).toBe("syncing");
+    expect(result.current.syncError).toBe("");
+    expect(result.current.nextRetryAt).toBeNull();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(calledServerIds()).toEqual(["a", "b"]);
+  });
+
+  it("stops the run when the server is cleared", async () => {
+    const { result, rerender } = renderSync(SRV_A);
+    await tick();
+
+    rerender({ server: undefined });
+    await tick();
+
+    expect(openRun(0).signal?.aborted).toBe(true);
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    expect(result.current.syncStatus).toBe("idle");
+  });
+
+  it("stops the run on unmount", async () => {
+    const { unmount } = renderSync(SRV_A);
+    await tick();
+
+    unmount();
+
+    expect(openRun(0).signal?.aborted).toBe(true);
+  });
+
+  it("leaves a run alone when the same server arrives as a new object", async () => {
+    const { rerender } = renderSync(SRV_A);
+    await tick();
+
+    rerender({ server: { ...SRV_A } });
+    await tick();
+
+    expect(openRun(0).signal?.aborted).toBe(false);
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+  });
+
+  it("still syncs once under StrictMode's mount, unmount, mount", async () => {
+    renderHook(() => useLibrarySync(SRV_A), {
+      reactStrictMode: true,
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    });
+    await tick();
+
+    const liveRuns = runs.filter((run) => run.signal?.aborted !== true);
+    expect(liveRuns).toHaveLength(1);
   });
 });

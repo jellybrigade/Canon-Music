@@ -6,7 +6,6 @@ import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { resolveArtistImageUrl, useArtistImageMap } from "../../hooks/useArtistImageCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { makeStreamUrlBuilder } from "../../lib/track";
 import type { AlbumRow, ArtistRow } from "../../types/library";
 import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
 import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
@@ -203,7 +202,7 @@ export function SearchResults({
   onStartRadioFromArtist,
   onAddAlbumToPlaylist,
 }: Props) {
-  const { server, credential } = serverWithCredential;
+  const { server } = serverWithCredential;
   // State, not a ref: the sections' layout effects run before this element's ref attaches, so
   // only a re-render once it exists can bind their virtualizers to it.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
@@ -211,7 +210,6 @@ export function SearchResults({
   const artistImageMap = useArtistImageMap();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllTracks, setShowAllTracks] = useState(false);
@@ -228,9 +226,7 @@ export function SearchResults({
       title: track.title,
       artist: track.artist,
       duration: track.duration,
-      coverArtUrl: track.artwork_url
-        ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512)
-        : null,
+      coverArtUrl: track.artwork_url ? getCoverArtUrl(server.id, track.artwork_url, 512) : null,
       artworkRef: track.artwork_url,
       album: track.album_name,
       albumId: track.album_id,
@@ -318,11 +314,7 @@ export function SearchResults({
               >
                 <div className="search-album-thumb">
                   {album.artwork_url ? (
-                    <CoverImg
-                      src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 64)}
-                      alt={album.name}
-                      loading="lazy"
-                    />
+                    <CoverImg src={getCoverArtUrl(server.id, album.artwork_url, 64)} alt={album.name} loading="lazy" />
                   ) : (
                     <Music size={18} />
                   )}
@@ -362,7 +354,7 @@ export function SearchResults({
                 <div className="search-track-thumb">
                   {track.artwork_url ? (
                     <CoverImg
-                      src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
+                      src={getCoverArtUrl(server.id, track.artwork_url, 64)}
                       alt={track.album_name ?? track.title}
                       loading="lazy"
                     />
@@ -448,7 +440,7 @@ export function SearchResults({
           </button>
           <button
             onClick={() => {
-              playNext(buildTrackObj(trackMenu.track), streamUrlFor);
+              playNext(buildTrackObj(trackMenu.track));
               setTrackMenu(null);
             }}
           >
@@ -456,7 +448,7 @@ export function SearchResults({
           </button>
           <button
             onClick={() => {
-              addToQueue(buildTrackObj(trackMenu.track), streamUrlFor);
+              addToQueue(buildTrackObj(trackMenu.track));
               setTrackMenu(null);
             }}
           >

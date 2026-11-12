@@ -1,10 +1,10 @@
 import { getDb } from "../../../db";
-import { canonicalKey } from "./canonicalize";
+import { tagMatchKey } from "./canonicalize";
 
 // Cached so bulk normalization doesn't re-read `tag_mappings` per album. Every writer of
 // `tag_mappings` must call `invalidateManualMappings()` before it returns.
-let cache: Map<string, string> | null = null;
-let inFlight: Promise<Map<string, string>> | null = null;
+let cache: ReadonlyMap<string, string> | null = null;
+let inFlight: Promise<ReadonlyMap<string, string>> | null = null;
 let generation = 0;
 
 export function invalidateManualMappings(): void {
@@ -13,8 +13,8 @@ export function invalidateManualMappings(): void {
   generation++;
 }
 
-/** raw-value canonical key -> canonical_id, for `kind = 'genre'`, `source = 'manual'`. */
-export async function getManualGenreMappings(): Promise<Map<string, string>> {
+/** `tagMatchKey(raw_value)` -> canonical_id, for `kind = 'genre'`, `source = 'manual'`. */
+export async function getManualGenreMappings(): Promise<ReadonlyMap<string, string>> {
   if (cache) return cache;
   if (inFlight) return inFlight;
 
@@ -24,9 +24,15 @@ export async function getManualGenreMappings(): Promise<Map<string, string>> {
     try {
       const db = await getDb();
       const rows = await db.select<MappingRow[]>(
-        "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'",
+        `SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'
+         ORDER BY locked DESC, raw_value`,
       );
-      const map = new Map(rows.map((r) => [canonicalKey(r.raw_value), r.canonical_id]));
+      // Spellings sharing a key take the first row's decision, ranked like the Tags list.
+      const map = new Map<string, string>();
+      for (const row of rows) {
+        const key = tagMatchKey(row.raw_value);
+        if (key && !map.has(key)) map.set(key, row.canonical_id);
+      }
       // A write that landed while this read was in flight bumped the generation,
       // so the result may already be stale. Return it, but don't cache it.
       if (generation === startGeneration) {

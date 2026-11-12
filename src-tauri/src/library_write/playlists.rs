@@ -1,5 +1,56 @@
 use super::LibraryWriteStore;
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
+
+#[tauri::command]
+pub fn playlist_append_tracks(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryWriteStore>,
+    playlist_id: String,
+    track_ids: Vec<String>,
+) -> Result<(), String> {
+    state.with_conn(&app, |conn| {
+        append_playlist_tracks(conn, &playlist_id, &track_ids)
+    })
+}
+
+/// Reads the end of the list and writes after it in one locked transaction, so two adds in
+/// flight can't both claim the same position.
+fn append_playlist_tracks(
+    conn: &mut Connection,
+    playlist_id: &str,
+    track_ids: &[String],
+) -> Result<(), String> {
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    let next_position: i64 = tx
+        .query_row(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?",
+            [playlist_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    {
+        let mut insert = tx
+            .prepare(
+                "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+            )
+            .map_err(|e| e.to_string())?;
+        for (position, track_id) in (next_position..).zip(track_ids) {
+            insert
+                .execute(rusqlite::params![playlist_id, track_id, position])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    let added = i64::try_from(track_ids.len()).map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE playlists SET track_count = COALESCE(track_count, 0) + ? WHERE id = ?",
+        rusqlite::params![added, playlist_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn playlist_remove_track(
     app: tauri::AppHandle,
@@ -104,6 +155,58 @@ mod tests {
             |row| row.get(0),
         )
         .expect("track_count")
+    }
+
+    #[test]
+    fn appending_twice_puts_each_batch_after_the_last_and_counts_every_row() {
+        // Two adds read the same MAX(position) when run as separate statements, so the second
+        // insert was ignored on the key while the count still rose.
+        let mut conn = fixture_conn();
+        seed_playlist(&conn, "srv-a:p", "srv-a", &["a"]);
+
+        append_playlist_tracks(&mut conn, "srv-a:p", &["b".to_string()]).expect("append");
+        append_playlist_tracks(&mut conn, "srv-a:p", &["c".to_string(), "b".to_string()])
+            .expect("append");
+
+        assert_eq!(
+            rows_of(&conn, "srv-a:p"),
+            [
+                (0, "a".to_string()),
+                (1, "b".to_string()),
+                (2, "c".to_string()),
+                (3, "b".to_string())
+            ]
+        );
+        assert_eq!(track_count_of(&conn, "srv-a:p"), 4);
+    }
+
+    #[test]
+    fn appending_to_an_empty_playlist_starts_at_zero() {
+        let mut conn = fixture_conn();
+        seed_playlist(&conn, "srv-a:p", "srv-a", &[]);
+
+        append_playlist_tracks(&mut conn, "srv-a:p", &["a".to_string()]).expect("append");
+
+        assert_eq!(rows_of(&conn, "srv-a:p"), [(0, "a".to_string())]);
+        assert_eq!(track_count_of(&conn, "srv-a:p"), 1);
+    }
+
+    #[test]
+    fn a_failed_append_leaves_rows_and_count_as_they_were() {
+        let mut conn = fixture_conn();
+        seed_playlist(&conn, "srv-a:p", "srv-a", &["a"]);
+        conn.execute_batch(
+            "CREATE TRIGGER fail_count BEFORE UPDATE ON playlists
+             BEGIN SELECT RAISE(ABORT, 'boom'); END;",
+        )
+        .expect("trigger");
+
+        let err = append_playlist_tracks(&mut conn, "srv-a:p", &["b".to_string()])
+            .expect_err("must fail");
+        assert!(err.contains("boom"), "original error must survive: {err}");
+
+        assert_eq!(rows_of(&conn, "srv-a:p"), [(0, "a".to_string())]);
+        assert_eq!(track_count_of(&conn, "srv-a:p"), 1);
     }
 
     #[test]

@@ -15,19 +15,22 @@ pub fn get_genres(
     app: tauri::AppHandle,
     state: tauri::State<LibraryReadStore>,
 ) -> Result<Vec<GenreRowDto>, String> {
-    state.with_conn(&app, query_genres)
+    state.with_active_server(&app, query_genres)
 }
 
-fn query_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
-    let sql = "SELECT canonical_id, MIN(name) AS name, COUNT(DISTINCT album_id) AS album_count
-         FROM album_genres
-         WHERE relation = 'direct'
-           AND canonical_id NOT LIKE 'raw:%'
-         GROUP BY canonical_id
-         ORDER BY name COLLATE NOCASE";
+fn query_genres(conn: &Connection, server_id: &str) -> Result<Vec<GenreRowDto>, String> {
+    let sql =
+        "SELECT ag.canonical_id, MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS album_count
+         FROM album_genres ag
+         JOIN albums a ON a.id = ag.album_id
+         WHERE a.server_id = ?
+           AND ag.relation = 'direct'
+           AND ag.canonical_id NOT LIKE 'raw:%'
+         GROUP BY ag.canonical_id
+         ORDER BY name COLLATE NOCASE, ag.canonical_id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], map_genre_row)
+        .query_map([server_id], map_genre_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -49,16 +52,17 @@ pub fn get_recent_genres(
     app: tauri::AppHandle,
     state: tauri::State<LibraryReadStore>,
 ) -> Result<Vec<GenreRowDto>, String> {
-    state.with_conn(&app, query_recent_genres)
+    state.with_active_server(&app, query_recent_genres)
 }
 
-fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
+fn query_recent_genres(conn: &Connection, server_id: &str) -> Result<Vec<GenreRowDto>, String> {
     let recent_sql = "WITH recent_albums AS (
-            SELECT t.album_id, MAX(sh.scrobbled_at) AS last_played
+            SELECT t.album_id, MAX(sh.timestamp) AS last_played
             FROM scrobble_history sh
             JOIN tracks t ON t.id = sh.track_id
+            WHERE t.server_id = ?1 AND t.album_id IS NOT NULL
             GROUP BY t.album_id
-            ORDER BY last_played DESC
+            ORDER BY last_played DESC, t.album_id
             LIMIT 10
         )
         SELECT ag.canonical_id, MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS album_count
@@ -69,12 +73,14 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
         GROUP BY ag.canonical_id
         HAVING (
           SELECT COUNT(DISTINCT ag2.album_id) FROM album_genres ag2
-          WHERE ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
+          JOIN albums a2 ON a2.id = ag2.album_id
+          WHERE a2.server_id = ?1
+            AND ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
         ) >= 5
-        ORDER BY MAX(ra.last_played) DESC, name COLLATE NOCASE";
+        ORDER BY MAX(ra.last_played) DESC, name COLLATE NOCASE, ag.canonical_id";
     let mut stmt = conn.prepare(recent_sql).map_err(|e| e.to_string())?;
     let recent = stmt
-        .query_map([], map_genre_row)
+        .query_map([server_id], map_genre_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -83,16 +89,18 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
     }
 
     let fallback_sql =
-        "SELECT canonical_id, MIN(name) AS name, COUNT(DISTINCT album_id) AS album_count
-         FROM album_genres
-         WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
-         GROUP BY canonical_id
-         HAVING COUNT(DISTINCT album_id) >= 5
-         ORDER BY album_count DESC, name COLLATE NOCASE
+        "SELECT ag.canonical_id, MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS album_count
+         FROM album_genres ag
+         JOIN albums a ON a.id = ag.album_id
+         WHERE a.server_id = ?
+           AND ag.relation = 'direct' AND ag.canonical_id NOT LIKE 'raw:%'
+         GROUP BY ag.canonical_id
+         HAVING COUNT(DISTINCT ag.album_id) >= 5
+         ORDER BY album_count DESC, name COLLATE NOCASE, ag.canonical_id
          LIMIT 18";
     let mut stmt = conn.prepare(fallback_sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], map_genre_row)
+        .query_map([server_id], map_genre_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -121,7 +129,7 @@ mod tests {
             insert_genre(&conn, album, canonical, relation);
         }
 
-        let rows = query_genres(&conn).expect("query");
+        let rows = query_genres(&conn, "s1").expect("query");
         assert_eq!(
             genre_ids(&rows),
             ["jazz", "rock"],
@@ -131,9 +139,57 @@ mod tests {
     }
 
     #[test]
+    fn genres_count_only_the_requested_servers_albums() {
+        let conn = fixture_conn();
+        insert_album(&conn, "s2:al1", "s2", "Theirs", "X");
+        insert_album(&conn, "s2:al2", "s2", "Theirs too", "X");
+        insert_genre(&conn, "s1:al1", "rock", "direct");
+        insert_genre(&conn, "s2:al1", "rock", "direct");
+        insert_genre(&conn, "s2:al2", "jazz", "direct");
+
+        let rows = query_genres(&conn, "s1").expect("query");
+        assert_eq!(genre_ids(&rows), ["rock"]);
+        assert_eq!(rows[0].album_count, 1);
+    }
+
+    #[test]
+    fn recent_genres_take_neither_plays_nor_library_weight_from_another_server() {
+        let conn = fixture_conn();
+        // s1 plays g0, which clears the threshold only with s2's albums counted.
+        insert_genre(&conn, "a0", "g0", "direct");
+        for f in 0..4 {
+            let album = format!("s2:filler{f}");
+            insert_album(&conn, &album, "s2", "F", "X");
+            insert_genre(&conn, &album, "g0", "direct");
+        }
+        // s2 plays g1, which clears it on s2 alone.
+        for f in 0..5 {
+            let album = format!("s2:g1-{f}");
+            insert_album(&conn, &album, "s2", "G", "X");
+            insert_genre(&conn, &album, "g1", "direct");
+        }
+        conn.execute_batch(
+            "INSERT INTO tracks (id, server_id, title, album_id) VALUES
+               ('t0', 's1', 'T', 'a0'), ('t1', 's2', 'T', 's2:g1-0');
+             INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at) VALUES
+               ('t0', 1, 'x'), ('t1', 2, 'x')",
+        )
+        .expect("seed");
+
+        assert!(
+            query_recent_genres(&conn, "s1").expect("query").is_empty(),
+            "g0 has one s1 album, g1 was played on s2 only"
+        );
+        assert_eq!(
+            genre_ids(&query_recent_genres(&conn, "s2").expect("query")),
+            ["g1"]
+        );
+    }
+
+    #[test]
     fn genres_are_empty_when_nothing_is_tagged() {
         let conn = fixture_conn();
-        assert!(query_genres(&conn).expect("query").is_empty());
+        assert!(query_genres(&conn, "s1").expect("query").is_empty());
     }
 
     /// Album `a{i}` tagged `g{i}`, with `fillers` extra albums carrying the same
@@ -166,7 +222,7 @@ mod tests {
             seed_scrobble(&conn, i, &format!("2026-01-{:02}", i + 1));
         }
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         let found = genre_ids(&rows);
         assert_eq!(found.len(), 10);
         assert!(
@@ -174,6 +230,51 @@ mod tests {
             "the 11th-most-recent album must fall outside the LIMIT 10 window: {found:?}"
         );
         assert_eq!(found[0], "g10", "ordered by most recently played first");
+    }
+
+    #[test]
+    fn recent_genres_order_by_when_the_album_was_played_not_when_the_play_was_sent() {
+        let conn = fixture_conn();
+        for i in 0..2 {
+            seed_genre_with_library_weight(&conn, i, 4);
+        }
+        for (i, played, sent) in [(0, 200, "2026-01-01"), (1, 100, "2026-01-02")] {
+            conn.execute(
+                "INSERT INTO tracks (id, server_id, title, album_id) VALUES (?, 's1', 'T', ?)",
+                [&format!("t{i}"), &format!("a{i}")],
+            )
+            .expect("track");
+            conn.execute(
+                "INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at) VALUES (?, ?, ?)",
+                rusqlite::params![format!("t{i}"), played, sent],
+            )
+            .expect("scrobble");
+        }
+
+        let rows = query_recent_genres(&conn, "s1").expect("query");
+        assert_eq!(genre_ids(&rows), ["g0", "g1"]);
+    }
+
+    #[test]
+    fn plays_of_tracks_with_no_album_take_none_of_the_ten_recent_album_slots() {
+        let conn = fixture_conn();
+        for i in 0..10 {
+            seed_genre_with_library_weight(&conn, i, 4);
+            seed_scrobble(&conn, i, &format!("2026-01-{:02}", i + 1));
+        }
+        conn.execute(
+            "INSERT INTO tracks (id, server_id, title, album_id) VALUES ('loose', 's1', 'T', NULL)",
+            [],
+        )
+        .expect("track");
+        conn.execute(
+            "INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at) VALUES ('loose', 999, '2026-02-01')",
+            [],
+        )
+        .expect("scrobble");
+
+        let rows = query_recent_genres(&conn, "s1").expect("query");
+        assert_eq!(genre_ids(&rows).len(), 10);
     }
 
     #[test]
@@ -185,7 +286,7 @@ mod tests {
         seed_scrobble(&conn, 0, "2026-01-01");
         seed_scrobble(&conn, 1, "2026-01-02");
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         assert_eq!(genre_ids(&rows), ["g0"]);
     }
 
@@ -197,7 +298,7 @@ mod tests {
         seed_genre_with_library_weight(&conn, 0, 4);
         seed_scrobble(&conn, 0, "2026-01-01");
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         assert_eq!(genre_ids(&rows), ["g0"]);
         assert_eq!(rows[0].album_count, 1, "count is over the recent window");
     }
@@ -209,7 +310,7 @@ mod tests {
         seed_genre_with_library_weight(&conn, 1, 4); // 5 albums
         seed_genre_with_library_weight(&conn, 2, 3); // 4 albums, below threshold
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         assert_eq!(
             genre_ids(&rows),
             ["g0", "g1"],
@@ -227,7 +328,7 @@ mod tests {
         seed_scrobble(&conn, 0, "2026-01-01");
         seed_genre_with_library_weight(&conn, 9, 5); // unplayed, 6 albums
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         assert_eq!(genre_ids(&rows), ["g9"]);
     }
 
@@ -239,7 +340,7 @@ mod tests {
             seed_genre_with_library_weight(&conn, i, 4 + i);
         }
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         assert_eq!(rows.len(), 18);
         assert!(
             !genre_ids(&rows).contains(&"g0"),
@@ -252,12 +353,7 @@ mod tests {
     fn seed_named_genre(conn: &Connection, i: usize, name: &str, fillers: usize) {
         let canonical = format!("g{i:02}");
         for f in 0..=fillers {
-            conn.execute(
-                "INSERT INTO album_genres (album_id, canonical_id, relation, name)
-                 VALUES (?, ?, 'direct', ?)",
-                [&format!("a{i}-{f}"), &canonical, &name.to_string()],
-            )
-            .expect("insert album_genre");
+            insert_named_genre(conn, &format!("a{i}-{f}"), &canonical, "direct", name);
         }
     }
 
@@ -275,7 +371,7 @@ mod tests {
             seed_named_genre(&conn, i, name, 4);
         }
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         let mut expected: Vec<&str> = names.to_vec();
         expected.sort_unstable();
         expected.truncate(18);
@@ -318,7 +414,7 @@ mod tests {
         )
         .expect("scrobble");
 
-        let rows = query_recent_genres(&conn).expect("query");
+        let rows = query_recent_genres(&conn, "s1").expect("query");
         let mut expected: Vec<&str> = names.to_vec();
         expected.sort_unstable();
         assert_eq!(
@@ -341,17 +437,15 @@ mod tests {
             ("a3", "Alt Zydeco"),
             ("a4", "Zydeco"),
         ] {
-            conn.execute(
-                "INSERT INTO album_genres (album_id, canonical_id, relation, name)
-                 VALUES (?, 'zydeco', 'direct', ?)",
-                [album, name],
-            )
-            .expect("insert album_genre");
+            insert_named_genre(&conn, album, "zydeco", "direct", name);
         }
 
-        assert_eq!(query_genres(&conn).expect("query")[0].name, "Alt Zydeco");
         assert_eq!(
-            query_recent_genres(&conn).expect("query")[0].name,
+            query_genres(&conn, "s1").expect("query")[0].name,
+            "Alt Zydeco"
+        );
+        assert_eq!(
+            query_recent_genres(&conn, "s1").expect("query")[0].name,
             "Alt Zydeco",
             "the fallback branch agrees with the full listing"
         );

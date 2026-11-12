@@ -19,17 +19,18 @@ pub fn get_playlists(
     app: tauri::AppHandle,
     state: tauri::State<LibraryReadStore>,
 ) -> Result<Vec<PlaylistRowDto>, String> {
-    state.with_conn(&app, query_playlists)
+    state.with_active_server(&app, query_playlists)
 }
 
-fn query_playlists(conn: &Connection) -> Result<Vec<PlaylistRowDto>, String> {
+fn query_playlists(conn: &Connection, server_id: &str) -> Result<Vec<PlaylistRowDto>, String> {
     let sql = "SELECT id, server_id, name, comment, track_count, cover_art_url,
                 custom_cover_data, is_smart, rules_json
          FROM playlists
-         ORDER BY name ASC";
+         WHERE server_id = ?
+         ORDER BY name COLLATE NOCASE, id";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
+        .query_map([server_id], |row| {
             Ok(PlaylistRowDto {
                 id: row.get(0)?,
                 server_id: row.get(1)?,
@@ -54,7 +55,7 @@ mod tests {
     use crate::library_read::test_fixtures::*;
 
     #[test]
-    fn each_playlist_row_reports_the_server_id_stored_on_that_row() {
+    fn only_the_requested_servers_playlists_are_listed() {
         let conn = fixture_conn();
         conn.execute_batch(
             "INSERT INTO playlists (id, server_id, name, track_count, is_smart) VALUES
@@ -63,12 +64,12 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_playlists(&conn).expect("query");
+        let rows = query_playlists(&conn, "s2").expect("query");
         let owners: Vec<(&str, &str)> = rows
             .iter()
             .map(|r| (r.id.as_str(), r.server_id.as_str()))
             .collect();
-        assert_eq!(owners, [("s1:p", "s1"), ("s2:p", "s2")]);
+        assert_eq!(owners, [("s2:p", "s2")]);
     }
 
     #[test]
@@ -81,7 +82,7 @@ mod tests {
         )
         .expect("seed");
 
-        let rows = query_playlists(&conn).expect("query");
+        let rows = query_playlists(&conn, "s1").expect("query");
         assert_eq!(rows[0].track_count, 0);
         assert_eq!(rows[0].is_smart, 0);
     }
@@ -98,7 +99,7 @@ mod tests {
         )
         .expect("seed");
 
-        let p = &query_playlists(&conn).expect("query")[0];
+        let p = &query_playlists(&conn, "s1").expect("query")[0];
         assert_eq!(p.comment.as_deref(), Some("note"));
         assert_eq!(p.cover_art_url.as_deref(), Some("art://x"));
         assert_eq!(p.custom_cover_data.as_deref(), Some("data:png"));

@@ -1,6 +1,8 @@
 import { getDb } from "../../../db";
+import { selectRandomSample } from "../../../db/randomSample";
 import type { RadioMode } from "../../playback/store/playerTypes";
 import { getCanonTree } from "../../tags/lib/canonicalize";
+import { creditedArtistKeys } from "./artistCredit";
 
 export interface RadioCandidate {
   id: string;
@@ -14,6 +16,11 @@ export interface RadioCandidate {
 }
 
 export const MOOD_WEIGHT = 0.4;
+// A seed track tagged with fewer genres than this also seeds on its album's genres, at this weight:
+// LCD Soundsystem's "45:33 (intro)" carries only Electronic, which alone seeds on all of it.
+const THIN_SEED_GENRE_COUNT = 2;
+export const ALBUM_GENRE_WEIGHT = 0.75;
+const SEED_TAG_WEIGHT: Partial<Record<string, number>> = { mood: MOOD_WEIGHT, album: ALBUM_GENRE_WEIGHT };
 export const CANDIDATE_LIMIT = 200;
 
 export function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
@@ -47,6 +54,30 @@ const TRACK_PROJECTION = `
   a.artwork_url, t.album_id, a.name AS album_name
 `;
 
+const TRACKS_WITH_ALBUM = "tracks t JOIN albums a ON t.album_id = a.id";
+
+/** Artist equality through the NOCASE artist index; `lower()` would scan the server's tracks. */
+export const ARTIST_MATCH = "t.artist = ? COLLATE NOCASE";
+
+/** FTS5 phrase for one name: quotes doubled, so a name can't break out into query syntax. */
+function ftsPhrase(name: string): string {
+  return `"${name.split('"').join('""')}"`;
+}
+
+/**
+ * Tracks credited to any of `names`, alone or beside other artists in any position, through the
+ * artist index for exact credits and the search index's artist column for the rest. The token match
+ * also finds "Drake Bell" for "drake"; the caller drops credits no name scores.
+ */
+export function similarArtistsMatch(serverId: string, names: string[]): { sql: string; params: string[] } {
+  const exact = `SELECT rowid FROM tracks WHERE server_id = ? AND artist COLLATE NOCASE IN (${names.map(() => "?").join(", ")})`;
+  const credited = "SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?";
+  return {
+    sql: `t.rowid IN (${exact}\n  UNION ${credited})`,
+    params: [serverId, ...names, `artist : (${names.map(ftsPhrase).join(" OR ")})`],
+  };
+}
+
 type TrackRow = {
   id: string;
   title: string;
@@ -56,6 +87,27 @@ type TrackRow = {
   album_id: string | null;
   album_name: string | null;
 };
+
+type DbHandle = Awaited<ReturnType<typeof getDb>>;
+
+function sampleSeedPool<T extends TrackRow>(
+  db: DbHandle,
+  seedTrackId: string,
+  pool: { serverId: string; from?: string; where?: string; params?: unknown[]; columns?: string },
+): Promise<T[]> {
+  return selectRandomSample<T>(db, {
+    columns: `${TRACK_PROJECTION}${pool.columns ?? ""}`,
+    from: pool.from ?? TRACKS_WITH_ALBUM,
+    where: `t.server_id = ? AND t.id != ?${pool.where ? ` AND ${pool.where}` : ""}`,
+    params: [pool.serverId, seedTrackId, ...(pool.params ?? [])],
+    orderBy: "t.id",
+    limit: CANDIDATE_LIMIT,
+  });
+}
+
+function bestMatch(keys: string[], scoreOf: (key: string) => number | undefined): number {
+  return Math.max(0, ...keys.map((key) => scoreOf(key) ?? 0));
+}
 
 function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   return {
@@ -70,28 +122,65 @@ function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   };
 }
 
+type AncestorNode = { id: string; parents: string[] };
+
+function subtreeSizer(byId: Map<string, AncestorNode>): (id: string) => number {
+  const children = new Map<string, string[]>();
+  for (const node of byId.values()) {
+    for (const parentId of node.parents) {
+      const list = children.get(parentId);
+      if (list) list.push(node.id);
+      else children.set(parentId, [node.id]);
+    }
+  }
+  return (id) => {
+    const seen = new Set([id]);
+    const stack = [id];
+    for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+      for (const childId of children.get(current) ?? []) {
+        if (seen.has(childId)) continue;
+        seen.add(childId);
+        stack.push(childId);
+      }
+    }
+    return seen.size;
+  };
+}
+
+/**
+ * Halves per hop, then scales each ancestor by the narrowest direct parent's span over its own,
+ * so a root like rock sitting directly above hardcore punk counts for little beside punk rock.
+ */
 export function buildAncestorWeights(
   nodeId: string,
-  byId: Map<string, { id: string; parents: string[] }>,
+  byId: Map<string, AncestorNode>,
   maxDepth = 4,
 ): Map<string, number> {
-  const weights = new Map<string, number>();
-  weights.set(nodeId, 1.0);
+  const weights = new Map<string, number>([[nodeId, 1.0]]);
+  const found: Array<{ id: string; depth: number }> = [];
   const queue: Array<{ id: string; depth: number }> = [{ id: nodeId, depth: 0 }];
   const visited = new Set<string>([nodeId]);
-  while (queue.length > 0) {
-    const item = queue.shift()!;
+  for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
     if (item.depth >= maxDepth) continue;
     const node = byId.get(item.id);
     if (!node) continue;
     for (const parentId of node.parents) {
       if (visited.has(parentId)) continue;
       visited.add(parentId);
-      const w = 1 / 2 ** (item.depth + 1);
-      const existing = weights.get(parentId) ?? 0;
-      weights.set(parentId, Math.max(existing, w));
-      queue.push({ id: parentId, depth: item.depth + 1 });
+      const ancestor = { id: parentId, depth: item.depth + 1 };
+      found.push(ancestor);
+      queue.push(ancestor);
     }
+  }
+  if (found.length === 0) return weights;
+
+  const subtreeSize = subtreeSizer(byId);
+  const sizes = new Map(found.map(({ id }) => [id, subtreeSize(id)]));
+  const directParentSizes = found.filter(({ depth }) => depth === 1).map(({ id }) => sizes.get(id) ?? 1);
+  const nearestFamilySize = Math.min(...directParentSizes);
+  for (const { id, depth } of found) {
+    const breadth = Math.min(1, nearestFamilySize / (sizes.get(id) ?? 1));
+    weights.set(id, breadth / 2 ** depth);
   }
   return weights;
 }
@@ -108,26 +197,30 @@ async function getCuratedCandidates(
   const tree = await getCanonTree();
 
   type TagRow = { canonical_id: string; kind: string };
-  const seedTags = await db.select<TagRow[]>(
-    "SELECT canonical_id, kind FROM track_tags WHERE track_id = ? AND canonical_id IS NOT NULL",
+  const trackTags = await db.select<TagRow[]>(
+    "SELECT DISTINCT canonical_id, kind FROM track_tags WHERE track_id = ? AND canonical_id IS NOT NULL",
     [seedTrackId],
   );
+  const trackGenreCount = trackTags.filter((tag) => tag.kind === "genre").length;
+  const albumTags =
+    seed.albumId && trackGenreCount < THIN_SEED_GENRE_COUNT
+      ? await db.select<TagRow[]>(
+          `SELECT canonical_id, 'album' AS kind FROM album_genres
+           WHERE album_id = ? AND relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
+           ORDER BY canonical_id`,
+          [seed.albumId],
+        )
+      : [];
+  const seedTags = [...trackTags, ...albumTags];
 
   if (seedTags.length === 0) {
-    // No canonical tags, random from same server
-    const fallback = await db.select<TrackRow[]>(
-      `SELECT ${TRACK_PROJECTION}
-       FROM tracks t JOIN albums a ON t.album_id = a.id
-       WHERE t.server_id = ? AND t.id != ?
-       ORDER BY RANDOM() LIMIT ?`,
-      [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-    );
+    const fallback = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
     return fallback.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 0.1));
   }
 
   const combinedWeights = new Map<string, number>();
   for (const tag of seedTags) {
-    const baseWeight = tag.kind === "mood" ? MOOD_WEIGHT : 1.0;
+    const baseWeight = SEED_TAG_WEIGHT[tag.kind] ?? 1.0;
     const aw = buildAncestorWeights(tag.canonical_id, tree.byId);
     for (const [nodeId, w] of aw) {
       const existing = combinedWeights.get(nodeId) ?? 0;
@@ -137,38 +230,35 @@ async function getCuratedCandidates(
 
   if (combinedWeights.size === 0) return [];
 
-  const SAFE_ID = /^[a-zA-Z0-9_\- :.]+$/;
-  const cteParts = Array.from(combinedWeights.entries())
-    .filter(([id]) => SAFE_ID.test(id))
-    .map(([id, w]) => `('${id.replace(/'/g, "''")}', ${w.toFixed(6)})`)
-    .join(", ");
+  const weightRows = Array.from(combinedWeights.entries());
+  const weightValues = weightRows.map(() => "(?, ?)").join(", ");
 
-  if (!cteParts) return [];
-
-  // sum_score + tag_count kept separate so raw tag-count can't inflate score:
-  // heavily-tagged (usually mainstream) tracks otherwise dominate purely by tag volume.
+  // tag_count is every genre the candidate carries, matched or not, so a track tagged Jazz among
+  // ten other genres scores below a pure jazz track instead of level with it.
   type ScoredRow = TrackRow & { sum_score: number; tag_count: number };
 
   const rows = await db.select<ScoredRow[]>(
     `WITH seed_weights(canonical_id, weight) AS (
-       VALUES ${cteParts}
+       VALUES ${weightValues}
      )
      SELECT ${TRACK_PROJECTION},
             SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS sum_score,
-            COUNT(DISTINCT tt.canonical_id) AS tag_count
+            (SELECT COUNT(DISTINCT all_tags.canonical_id) FROM track_tags all_tags
+             WHERE all_tags.track_id = t.id AND all_tags.canonical_id IS NOT NULL) AS tag_count
      FROM tracks t
-     JOIN track_tags tt ON tt.track_id = t.id
+     -- One row per source and spelling is stored; each tag counts once.
+     JOIN (SELECT DISTINCT track_id, canonical_id, kind FROM track_tags) tt ON tt.track_id = t.id
      JOIN seed_weights sw ON sw.canonical_id = tt.canonical_id
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY sum_score DESC
+     -- sum^2 / count orders like sum / sqrt(count) without SQRT(), so the cap keeps the damped best.
+     ORDER BY sum_score * sum_score / tag_count DESC, t.id
      LIMIT ?`,
-    [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
+    [...weightRows.flat(), seed.serverId, seedTrackId, CANDIDATE_LIMIT],
   );
 
   // Dampen by sqrt(tag_count) in JS, not SQL, since target SQLite builds may lack SQRT().
-  // The SQL ORDER BY above stays on raw sum_score, so LIMIT is a coarser pre-filter than this.
   const scored = rows.map((r) => ({ r, d: r.sum_score / Math.sqrt(r.tag_count) }));
   const maxTree = scored.length > 0 ? Math.max(...scored.map((s) => s.d)) : 1;
 
@@ -177,10 +267,10 @@ async function getCuratedCandidates(
     .filter(({ r }) => !excludeIds.has(r.id))
     .map(({ r, d }) => {
       const normalizedTree = maxTree > 0 ? d / maxTree : 0;
-      const artistKey = (r.artist ?? "").toLowerCase();
-      const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
-      const artistCf = artistSimilarity.get(artistKey) ?? 0;
-      const trackCf = trackSimilarity.get(trackKey) ?? 0;
+      const artistKeys = creditedArtistKeys(r.artist);
+      const title = r.title.toLowerCase();
+      const artistCf = bestMatch(artistKeys, (key) => artistSimilarity.get(key));
+      const trackCf = bestMatch(artistKeys, (key) => trackSimilarity.get(`${key}|||${title}`));
       const score = tagW * normalizedTree + trackCfW * trackCf + artistCfW * artistCf;
       return rowToCandidate(r, score);
     })
@@ -220,34 +310,31 @@ export async function getRadioCandidates({
 
     case "similar-artists": {
       if (artistSimilarity.size === 0) return [];
-      const similarArtistNames = Array.from(artistSimilarity.keys());
-      const placeholders = similarArtistNames.map(() => "?").join(", ");
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-           AND lower(t.artist) IN (${placeholders})
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT],
-      );
+      const match = similarArtistsMatch(seed.serverId, Array.from(artistSimilarity.keys()));
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        where: match.sql,
+        params: match.params,
+      });
       return rows
         .filter((r) => !excludeIds.has(r.id))
         .map((r) => {
-          const artistKey = (r.artist ?? "").toLowerCase();
-          return rowToCandidate(r, artistSimilarity.get(artistKey) ?? 0);
+          return rowToCandidate(
+            r,
+            bestMatch(creditedArtistKeys(r.artist), (key) => artistSimilarity.get(key)),
+          );
         })
+        .filter((c) => c.score > 0)
         .sort((a, b) => b.score - a.score);
     }
 
     case "same-artist": {
       if (!seed.artist) return [];
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ? AND lower(t.artist) = lower(?)
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, seed.artist, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        where: ARTIST_MATCH,
+        params: [seed.artist],
+      });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
 
@@ -270,27 +357,18 @@ export async function getRadioCandidates({
 
     case "era": {
       if (seed.year === null) {
-        // No year, fall back to random
-        const rows = await db.select<TrackRow[]>(
-          `SELECT ${TRACK_PROJECTION}
-           FROM tracks t JOIN albums a ON t.album_id = a.id
-           WHERE t.server_id = ? AND t.id != ?
-           ORDER BY RANDOM() LIMIT ?`,
-          [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-        );
+        const rows = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
         return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
       }
       const decadeStart = Math.floor(seed.year / 10) * 10;
       const decadeEnd = decadeStart + 9;
       type EraRow = TrackRow & { year: number | null };
-      const rows = await db.select<EraRow[]>(
-        `SELECT ${TRACK_PROJECTION}, t.year
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-           AND t.year BETWEEN ? AND ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, decadeStart, decadeEnd, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool<EraRow>(db, seedTrackId, {
+        serverId: seed.serverId,
+        columns: ", t.year",
+        where: "t.year BETWEEN ? AND ?",
+        params: [decadeStart, decadeEnd],
+      });
       return rows
         .filter((r) => !excludeIds.has(r.id))
         .map((r) => {
@@ -301,26 +379,15 @@ export async function getRadioCandidates({
     }
 
     case "loved": {
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t
-         JOIN albums a ON t.album_id = a.id
-         JOIN loved_tracks lt ON lt.track_id = t.id
-         WHERE t.server_id = ? AND t.id != ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, {
+        serverId: seed.serverId,
+        from: `${TRACKS_WITH_ALBUM} JOIN loved_tracks lt ON lt.track_id = t.id`,
+      });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
 
     case "random": {
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
-         FROM tracks t JOIN albums a ON t.album_id = a.id
-         WHERE t.server_id = ? AND t.id != ?
-         ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
-      );
+      const rows = await sampleSeedPool(db, seedTrackId, { serverId: seed.serverId });
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
   }

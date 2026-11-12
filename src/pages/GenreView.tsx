@@ -17,12 +17,13 @@ const SECTION_LABELS: Record<NodeSection, string> = {
 };
 
 interface Props {
+  serverId: string | undefined;
   onSelectGenre: (canonicalId: string) => void;
   onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
-export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
-  const { data, error, retry } = useGenreTree();
+export function GenreView({ serverId, onSelectGenre, onPlayGenre }: Props) {
+  const { data, error, retry } = useGenreTree(serverId);
   const [section, setSection] = useState<SectionTab>("genres");
   const [path, setPath] = useState<string[]>([]);
   const [search, setSearch] = useState("");

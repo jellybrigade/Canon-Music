@@ -5,69 +5,57 @@ import { fetchAlbumTracks } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
-import { escapeLike } from "../../lib/sql";
 import type { Server } from "../../types/server";
 import { pruneAlbumTracks } from "./syncPrune";
 import { publishTrackIdRemaps } from "./trackIdRemapEvents";
 import type { TrackIdRemap } from "./trackRemap";
 import { planTrackIdRemap } from "./trackRemap";
 
+/** Deletes the search rows of the given albums' tracks, found by track row. */
+export function ftsDeleteForAlbumsSql(albumPlaceholders: string): string {
+  return `DELETE FROM tracks_fts WHERE rowid IN (SELECT rowid FROM tracks WHERE album_id IN (${albumPlaceholders}))`;
+}
+
 /**
- * Rebuild FTS rows for the moved albums, deleting by stale track id too: a remapped track
- * keeps its row, so neither the prune nor the album subselect reaches the old FTS entry.
+ * Rebuild FTS rows for the moved albums. Each row sits at its track's rowid, which a remapped
+ * track keeps, so the album's delete also reaches the row still naming the old id.
  */
-export async function rebuildTracksFts(
-  db: Database,
-  albumDbIds: readonly string[],
-  staleTrackIds: readonly string[],
-): Promise<void> {
-  if (staleTrackIds.length > 0) {
-    await executeIdChunks(db, [...staleTrackIds], (ph) => `DELETE FROM tracks_fts WHERE id IN (${ph})`);
-  }
+export async function rebuildTracksFts(db: Database, albumDbIds: readonly string[]): Promise<void> {
   if (albumDbIds.length === 0) return;
   const albumIds = [...albumDbIds];
+  await executeIdChunks(db, albumIds, ftsDeleteForAlbumsSql);
   await executeIdChunks(
     db,
     albumIds,
-    (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`,
-  );
-  await executeIdChunks(
-    db,
-    albumIds,
-    (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
-       SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
+    (ph) => `INSERT INTO tracks_fts (rowid, id, title, artist, album, genre)
+       SELECT t.rowid, t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
        FROM tracks t JOIN albums a ON t.album_id = a.id
        WHERE t.album_id IN (${ph})`,
   );
 }
 
+// Counts only tracks the rebuild can index (it joins albums), or one orphan rescans every sync.
+export const HEAL_FTS_COUNTS_SQL = `
+  SELECT (SELECT COUNT(*) FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.server_id = ?) AS stored,
+         (SELECT COUNT(*) FROM tracks t JOIN albums a ON a.id = t.album_id
+          WHERE t.server_id = ? AND EXISTS (SELECT 1 FROM tracks_fts f WHERE f.rowid = t.rowid AND f.id = t.id)) AS indexed`;
+
+export const UNINDEXED_ALBUMS_SQL = `
+  SELECT DISTINCT t.album_id FROM tracks t JOIN albums a ON a.id = t.album_id
+  WHERE t.server_id = ? AND NOT EXISTS (SELECT 1 FROM tracks_fts f WHERE f.rowid = t.rowid AND f.id = t.id)
+  ORDER BY t.album_id`;
+
 /**
  * Index tracks a sync stored but never reached the rebuild for (the app quit mid-pass), which
- * the skip heuristic would otherwise pass over for good. Only a count mismatch pays for the scan.
+ * the skip heuristic would otherwise pass over for good. Only a count mismatch pays for the lookup.
  */
 export async function healTracksFts(db: Database, serverId: string): Promise<void> {
-  const idPrefix = `${escapeLike(serverId)}:%`;
-  const [counts] = await db.select<{ stored: number; indexed: number }[]>(
-    // Counts only tracks the rebuild can index (it joins albums), or one orphan rescans every sync.
-    `SELECT (SELECT COUNT(*) FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.server_id = ?) AS stored,
-            (SELECT COUNT(*) FROM tracks_fts WHERE id LIKE ? ESCAPE '\\') AS indexed`,
-    [serverId, idPrefix],
-  );
+  const [counts] = await db.select<{ stored: number; indexed: number }[]>(HEAL_FTS_COUNTS_SQL, [serverId, serverId]);
   if (counts === undefined || counts.stored === counts.indexed) return;
-  await db.execute(
-    `DELETE FROM tracks_fts WHERE id LIKE ? ESCAPE '\\' AND id NOT IN (SELECT t.id FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.server_id = ?)`,
-    [idPrefix, serverId],
-  );
-  const unindexed = await db.select<{ album_id: string }[]>(
-    `SELECT DISTINCT album_id FROM tracks
-     WHERE server_id = ? AND album_id IS NOT NULL AND id NOT IN (SELECT id FROM tracks_fts)
-     ORDER BY album_id`,
-    [serverId],
-  );
+  const unindexed = await db.select<{ album_id: string }[]>(UNINDEXED_ALBUMS_SQL, [serverId]);
   await rebuildTracksFts(
     db,
     unindexed.map((row) => row.album_id),
-    [],
   );
 }
 
@@ -220,11 +208,7 @@ export async function repairAlbumTrackIds(
     dbAlbumId,
     tracks.map((track) => `${server.id}:${track.id}`),
   );
-  await rebuildTracksFts(
-    db,
-    [dbAlbumId],
-    remaps.map((remap) => remap.oldId),
-  );
+  await rebuildTracksFts(db, [dbAlbumId]);
   return remaps;
 }
 
@@ -238,10 +222,6 @@ export async function syncAlbumTracks(
   const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
   const db = await getDb();
   // Without the carry, a renamed track upserts beside its old row and the album lists it twice.
-  const { remaps } = await writeAlbumTracks(db, { server, albumDbId: dbAlbumId, tracks });
-  await rebuildTracksFts(
-    db,
-    [dbAlbumId],
-    remaps.map((remap) => remap.oldId),
-  );
+  await writeAlbumTracks(db, { server, albumDbId: dbAlbumId, tracks });
+  await rebuildTracksFts(db, [dbAlbumId]);
 }
