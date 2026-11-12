@@ -18,6 +18,7 @@ import {
   type RepeatMode,
   type ReplayGainMode,
 } from "./playerTypes";
+import { clampQueueIndex, normalizeShuffleOrder } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
 import { withdrawGaplessHandOff } from "./withdrawGaplessHandOff";
 
@@ -243,11 +244,17 @@ export function createSettingsActions(
               );
               if (owned && Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
                 const withCover = (t: CurrentTrack) => withCoverFromRef(t, owningServerId(t.id, serverIds));
+                const isShuffled = saved.isShuffled === true;
                 set({
                   queue: saved.queue.map(withCover),
-                  queueIndex: saved.queueIndex ?? 0,
-                  shuffleOrder: saved.shuffleOrder ?? [],
-                  isShuffled: saved.isShuffled ?? false,
+                  queueIndex: clampQueueIndex(saved.queueIndex, saved.queue.length),
+                  shuffleOrder: isShuffled
+                    ? normalizeShuffleOrder(
+                        Array.isArray(saved.shuffleOrder) ? saved.shuffleOrder : [],
+                        saved.queue.length,
+                      )
+                    : [],
+                  isShuffled,
                   currentTrack: saved.currentTrack ? withCover(saved.currentTrack) : null,
                 });
               }

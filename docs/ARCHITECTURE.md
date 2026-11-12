@@ -83,7 +83,7 @@ Rust (`src-tauri/src/`):
 - rusqlite readers await `getDb()` first so migrations have run; a missing DB file errors instead of being created.
 - React Query `queryFn`s never return a `Set` (structural sharing treats all Sets as equal); return arrays, convert in the hook.
 - Stream URLs: App registers one builder per active server (`setStreamUrlFor`, `makeStreamUrlBuilder`), closing over the credential so the store never holds it; `playTrack` builds every URL from it, and with none registered it reports "no server is connected". No queue action takes a URL or builder. Queue position access goes through `resolveTrack` (`queueOrder.ts`). `clearQueue` keeps a `clearedQueue` snapshot (queue, place, shuffle, radio); `undoClearQueue` restores it paused, and only while the queue is still the exact empty array the clear set (`canUndoClearQueue`), so any later queue write retires it.
-- `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load.
+- `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load; a restored queue position is clamped into the queue and its shuffle order repaired to a full permutation (dropped when not shuffled).
 - Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows. They also return `error`: a failed read is never rendered as an empty list or an endless loading line.
 - Sync prune refuses an empty or partial fetch; a failed stage (loved, playlists) leaves stored data untouched and is reported in `skippedStages`.
 - MusicBrainz calls go through `boundedNativeFetch` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.

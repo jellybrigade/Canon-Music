@@ -1,5 +1,10 @@
 import type { CurrentTrack } from "./playerTypes";
 
+export function clampQueueIndex(index: unknown, queueLength: number): number {
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return 0;
+  return Math.min(index, Math.max(queueLength - 1, 0));
+}
+
 export function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
   if (from === currentIdx) return to;
   let adj = currentIdx;
@@ -8,14 +13,13 @@ export function adjustIndexAfterMove(currentIdx: number, from: number, to: numbe
   return adj;
 }
 
-// Callers splice into the result, so a short order is repaired (not replaced) and a fresh
+// Callers splice into the result, so a bad order is repaired (not replaced) and a fresh
 // array is always returned, since handing back the stored order would mutate live state in place.
 export function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
-  if (order.length === queueLength) return [...order];
   const seen = new Set<number>();
   const repaired: number[] = [];
   for (const idx of order) {
-    if (idx >= 0 && idx < queueLength && !seen.has(idx)) {
+    if (Number.isInteger(idx) && idx >= 0 && idx < queueLength && !seen.has(idx)) {
       seen.add(idx);
       repaired.push(idx);
     }

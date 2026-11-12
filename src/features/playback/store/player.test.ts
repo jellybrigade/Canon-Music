@@ -253,6 +253,12 @@ describe("player store - queue/shuffle invariants", () => {
       expect(new Set(result)).toEqual(new Set([0, 1, 2]));
     });
 
+    it("repairs a full-length order that repeats or overruns an index", () => {
+      const result = normalizeShuffleOrder([1, 1, 9], 3);
+      expect(result.slice(0, 1)).toEqual([1]);
+      expect([...result].sort()).toEqual([0, 1, 2]);
+    });
+
     it("repairs an empty order against a non-empty queue", () => {
       const result = normalizeShuffleOrder([], 3);
       expect(result).toEqual([0, 1, 2]);
@@ -1832,6 +1838,62 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     await usePlayerStore.getState().loadSettings();
 
     expect(usePlayerStore.getState().currentTrack?.id).toBe(`${SRV}:saved`);
+  });
+
+  it("repairs a restored shuffle order that doesn't cover the queue", async () => {
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: [makeTrack(`${SRV}:a`), makeTrack(`${SRV}:b`), makeTrack(`${SRV}:c`)],
+        queueIndex: 0,
+        shuffleOrder: [2, 2, 7],
+        isShuffled: true,
+        currentTrack: makeTrack(`${SRV}:c`),
+      }),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const { shuffleOrder } = usePlayerStore.getState();
+    expect(shuffleOrder[0]).toBe(2);
+    expect([...shuffleOrder].sort()).toEqual([0, 1, 2]);
+  });
+
+  it("drops a restored shuffle order when the snapshot wasn't shuffled", async () => {
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: [makeTrack(`${SRV}:a`), makeTrack(`${SRV}:b`)],
+        queueIndex: 0,
+        shuffleOrder: [1],
+        isShuffled: false,
+        currentTrack: makeTrack(`${SRV}:a`),
+      }),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().shuffleOrder).toEqual([]);
+  });
+
+  it.each([
+    [9, 1],
+    [-3, 0],
+    [1.5, 0],
+    [null, 0],
+  ])("clamps a restored queue position of %s into the queue", async (savedIndex, expected) => {
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: [makeTrack(`${SRV}:a`), makeTrack(`${SRV}:b`)],
+        queueIndex: savedIndex,
+        currentTrack: makeTrack(`${SRV}:a`),
+      }),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().queueIndex).toBe(expected);
   });
 
   it("rebuilds restored cover URLs from the cover id, so none keeps a credential or an old server's URL", async () => {
