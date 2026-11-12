@@ -18,7 +18,7 @@ let client: QueryClient;
 
 function render(lastSyncedAt: number | null) {
   const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
-  return renderHook(({ syncedAt }) => useReleaseDateLookups(syncedAt), {
+  return renderHook(({ syncedAt }) => useReleaseDateLookups(syncedAt, "s"), {
     wrapper,
     initialProps: { syncedAt: lastSyncedAt },
   });

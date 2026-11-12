@@ -13,7 +13,11 @@ vi.mock("../../clients/itunesCatalog", () => ({
 import { fetchDeezerAlbum, fetchDeezerDiscography, searchDeezerAlbums } from "../../clients/deezer";
 import { fetchItunesArtistAlbums, searchItunesArtists } from "../../clients/itunesCatalog";
 import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { RELEASE_LOOKUP_RETRY_SECONDS, runReleaseDateLookups } from "./releaseDateLookups";
+import {
+  RELEASE_LOOKUP_FAILED_RETRY_SECONDS,
+  RELEASE_LOOKUP_RETRY_SECONDS,
+  runReleaseDateLookups,
+} from "./releaseDateLookups";
 
 const NOW = new Date("2026-11-04T12:00:00Z");
 const NOW_SECONDS = Math.floor(NOW.getTime() / 1000);
@@ -143,8 +147,8 @@ function itunesRows() {
   return lookupRows("itunes");
 }
 
-function run(at: Date = NOW) {
-  return runReleaseDateLookups(db as never, at);
+function run(at: Date = NOW, shouldStop = () => false) {
+  return runReleaseDateLookups(db as never, at, { serverId: "s", shouldStop });
 }
 
 beforeEach(async () => {
@@ -224,7 +228,7 @@ describe("runReleaseDateLookups", () => {
     ]);
   });
 
-  it("records a failed lookup and retries it on the next pass", async () => {
+  it("records a failed lookup and retries it once the wait is over", async () => {
     seed({ id: "piss" });
     vi.mocked(searchDeezerAlbums).mockRejectedValue(new Error("Deezer returned 502"));
 
@@ -232,8 +236,42 @@ describe("runReleaseDateLookups", () => {
     expect(lookupRows()).toMatchObject([{ status: "failed", release_date: null }]);
 
     answerPissAlbum();
-    await run();
+    await run(new Date(NOW.getTime() + 1000));
+    expect(lookupRows()).toMatchObject([{ status: "failed", release_date: null }]);
+
+    await run(new Date(NOW.getTime() + (RELEASE_LOOKUP_FAILED_RETRY_SECONDS + 60) * 1000));
     expect(lookupRows()).toMatchObject([{ status: "found", release_date: "2026-10-30" }]);
+  });
+
+  it("stops before the next album once asked to", async () => {
+    seed({ id: "piss" });
+    seed({ id: "other", name: "another record" });
+    answerPissAlbum();
+    let lookups = 0;
+    vi.mocked(searchDeezerAlbums).mockImplementation(async () => {
+      lookups += 1;
+      return [];
+    });
+
+    await run(NOW, () => lookups > 0);
+
+    expect(lookups).toBe(1);
+    expect(searchItunesArtists).toHaveBeenCalledTimes(0);
+  });
+
+  it("looks up only the given server's albums", async () => {
+    db.raw
+      .prepare(
+        `INSERT INTO albums (id, server_id, server_type, name, artist, year, release_type)
+         VALUES ('elsewhere', 'other', 'navidrome', 'you made me / skin on linen', 'PISS', 2026, 'album')`,
+      )
+      .run();
+    answerPissAlbum();
+
+    await run();
+
+    expect(searchDeezerAlbums).toHaveBeenCalledTimes(0);
+    expect(lookupRows()).toEqual([]);
   });
 
   it("does not store 'none' when only the edition lookup failed", async () => {
@@ -371,7 +409,7 @@ describe("runReleaseDateLookups, iTunes fallback", () => {
     expect(fetchItunesArtistAlbums).toHaveBeenCalledTimes(2);
   });
 
-  it("records iTunes refusing a request as failed, not as no date, and asks again next pass", async () => {
+  it("records iTunes refusing a request as failed, not as no date, and asks again after the wait", async () => {
     seed({ id: "piss" });
     answerDeezerNothing();
     vi.mocked(searchItunesArtists).mockRejectedValue(new Error("iTunes returned 403"));
@@ -380,7 +418,7 @@ describe("runReleaseDateLookups, iTunes fallback", () => {
     expect(itunesRows()).toMatchObject([{ status: "failed" }]);
 
     answerItunesPiss();
-    await run();
+    await run(new Date(NOW.getTime() + (RELEASE_LOOKUP_FAILED_RETRY_SECONDS + 60) * 1000));
     expect(itunesRows()).toMatchObject([{ status: "found", release_date: "2026-10-30" }]);
   });
 

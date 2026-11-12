@@ -10,7 +10,7 @@ vi.mock("../../clients/musicbrainz", () => ({ fetchReleaseGroupDiscogsMasterId: 
 import { fetchDiscogsMainReleaseId, fetchDiscogsRelease, searchDiscogsReleases } from "../../clients/discogs";
 import { fetchReleaseGroupDiscogsMasterId } from "../../clients/musicbrainz";
 import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { DISCOGS_LOOKUP_RETRY_SECONDS, runDiscogsLookups } from "./discogsLookups";
+import { DISCOGS_FAILED_RETRY_SECONDS, DISCOGS_LOOKUP_RETRY_SECONDS, runDiscogsLookups } from "./discogsLookups";
 import type { DiscogsRelease } from "./lib/discogsMatch";
 
 const NOW = new Date("2026-11-05T12:00:00Z");
@@ -84,7 +84,7 @@ function answerPissSearch(): void {
 }
 
 function run(options: Partial<Parameters<typeof runDiscogsLookups>[2]> = {}, now = NOW) {
-  return runDiscogsLookups(db, now, { shouldStop: () => false, onFound: () => {}, ...options });
+  return runDiscogsLookups(db, now, { serverId: "s", shouldStop: () => false, onFound: () => {}, ...options });
 }
 
 beforeEach(async () => {
@@ -184,7 +184,7 @@ describe("runDiscogsLookups", () => {
     expect(rows()).toMatchObject([{ status: "none", label: null }]);
   });
 
-  it("stops the pass at the first Discogs failure and asks that album again next pass", async () => {
+  it("stops the pass at the first Discogs failure and asks that album again, after the others, once its wait is over", async () => {
     seed({ id: "a1" });
     seed({ id: "a2" });
     vi.mocked(searchDiscogsReleases).mockRejectedValue(new Error("Discogs /database/search returned 401"));
@@ -197,9 +197,50 @@ describe("runDiscogsLookups", () => {
     answerPissSearch();
     await run({}, new Date(NOW.getTime() + 1000));
     expect(rows()).toMatchObject([
+      { album_id: "a1", status: "failed" },
+      { album_id: "a2", status: "found" },
+    ]);
+
+    await run({}, new Date(NOW.getTime() + (DISCOGS_FAILED_RETRY_SECONDS + 60) * 1000));
+    expect(rows()).toMatchObject([
       { album_id: "a1", status: "found" },
       { album_id: "a2", status: "found" },
     ]);
+  });
+
+  it("does not let an album that fails every time end every later pass before the albums after it", async () => {
+    seed({ id: "a1", name: "broken" });
+    seed({ id: "a2" });
+    answerPissSearch();
+    const answerPiss = vi.mocked(searchDiscogsReleases).getMockImplementation();
+    vi.mocked(searchDiscogsReleases).mockImplementation(async (artist, title) => {
+      if (title === "broken") throw new Error("Discogs sent an unreadable answer");
+      return answerPiss === undefined ? [] : answerPiss(artist, title);
+    });
+    await run();
+    expect(rows()).toMatchObject([{ album_id: "a1", status: "failed" }]);
+
+    await run({}, new Date(NOW.getTime() + (DISCOGS_FAILED_RETRY_SECONDS + 60) * 1000));
+
+    expect(rows()).toMatchObject([
+      { album_id: "a1", status: "failed" },
+      { album_id: "a2", status: "found" },
+    ]);
+  });
+
+  it("looks up only the given server's albums", async () => {
+    seed({ id: "a1" });
+    db.raw
+      .prepare(
+        `INSERT INTO albums (id, server_id, server_type, name, artist, year, release_type)
+         VALUES ('b1', 'other', 'navidrome', 'you made me / skin on linen', 'PISS', 2026, 'album')`,
+      )
+      .run();
+    answerPissSearch();
+
+    await run();
+
+    expect(rows()).toMatchObject([{ album_id: "a1" }]);
   });
 
   it("asks again about an album renamed since its lookup", async () => {

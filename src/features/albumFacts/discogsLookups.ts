@@ -15,6 +15,8 @@ type Database = Pick<PluginDatabase, "select" | "execute">;
 
 /** An album Discogs didn't know is asked about again after this long. */
 export const DISCOGS_LOOKUP_RETRY_SECONDS = 7 * 24 * 60 * 60;
+/** A failed album waits this long, so one that fails every time can't end every pass. */
+export const DISCOGS_FAILED_RETRY_SECONDS = 60 * 60;
 
 interface CandidateRow {
   id: string;
@@ -33,13 +35,15 @@ type Outcome =
   | { status: "failed" };
 
 export interface DiscogsLookupOptions {
+  /** Only this server's albums are looked up: the others can't be shown until it changes. */
+  serverId: string;
   /** Read before each album: a long pass ends early when background lookups are switched off. */
   shouldStop: () => boolean;
   onFound: (album: { albumId: string; serverId: string }) => void;
 }
 
-// Albums MusicBrainz knows no label for come first: Discogs is what fills their label line.
-function selectCandidates(db: Database, now: Date): Promise<CandidateRow[]> {
+// Albums never asked come before failed ones, then those MusicBrainz knows no label for: Discogs is what fills their label line.
+function selectCandidates(db: Database, serverId: string, now: Date): Promise<CandidateRow[]> {
   const nowSeconds = Math.floor(now.getTime() / 1000);
   return db.select<CandidateRow[]>(
     `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.release_type, ai.mb_release_group_id,
@@ -47,13 +51,13 @@ function selectCandidates(db: Database, now: Date): Promise<CandidateRow[]> {
      FROM albums a
      LEFT JOIN album_identity ai ON ai.album_id = a.id
      LEFT JOIN album_discogs d ON d.album_id = a.id AND d.server_id = a.server_id
-     WHERE a.artist IS NOT NULL AND lower(trim(a.artist)) != 'various artists'
+     WHERE a.server_id = ? AND a.artist IS NOT NULL AND lower(trim(a.artist)) != 'various artists'
        AND (d.album_id IS NULL
             OR d.looked_up_name IS NOT a.name OR d.looked_up_artist IS NOT a.artist OR d.looked_up_year IS NOT a.year
-            OR d.status = 'failed'
+            OR (d.status = 'failed' AND d.checked_at <= ?)
             OR (d.status = 'none' AND d.checked_at <= ?))
-     ORDER BY ai.label IS NOT NULL, a.year DESC, a.id`,
-    [nowSeconds - DISCOGS_LOOKUP_RETRY_SECONDS],
+     ORDER BY d.status IS 'failed', ai.label IS NOT NULL, a.year DESC, a.id`,
+    [serverId, nowSeconds - DISCOGS_FAILED_RETRY_SECONDS, nowSeconds - DISCOGS_LOOKUP_RETRY_SECONDS],
   );
 }
 
@@ -123,15 +127,15 @@ async function writeLookup(db: Database, row: CandidateRow, outcome: Outcome, ch
 /**
  * Looks every album up on Discogs (by MusicBrainz's link, else by search) and stores its label,
  * catalog number, country, styles and genres. A Discogs failure ends the pass: Discogs is either
- * down, rate limiting or refusing searches, and the rest are asked on the next pass.
+ * down, rate limiting or refusing searches, and the rest are asked on the next pass, before the failed one.
  */
 export async function runDiscogsLookups(
   db: Database,
   now: Date,
-  { shouldStop, onFound }: DiscogsLookupOptions,
+  { serverId, shouldStop, onFound }: DiscogsLookupOptions,
 ): Promise<void> {
   const checkedAt = Math.floor(now.getTime() / 1000);
-  for (const row of await selectCandidates(db, now)) {
+  for (const row of await selectCandidates(db, serverId, now)) {
     if (shouldStop()) return;
     const kind = localReleaseKind(row.release_type, row.track_count);
     if (kind === null) continue;

@@ -10,24 +10,27 @@ import { runDiscogsLookups } from "../discogsLookups";
 // A pass over a whole library takes hours at Discogs' rate, so switching lookups off ends it early.
 let isEnabled = false;
 
-const runUntilSettled = createSettlingRunner(async (queryClient: QueryClient) => {
-  await runDiscogsLookups(await getDb(), new Date(), {
-    shouldStop: () => !isEnabled,
-    onFound: ({ albumId, serverId }) => {
-      void queryClient.invalidateQueries({ queryKey: QK.lookedUpFacts(albumId, serverId) });
-      // Its styles are a genre source.
-      normalizeAlbum(albumId)
-        .then(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
-          void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
-        })
-        .catch((error: unknown) => console.warn("[discogs] refiling genres failed:", albumId, error));
-    },
-  });
-});
+const runUntilSettled = createSettlingRunner(
+  async ({ queryClient, serverId }: { queryClient: QueryClient; serverId: string }) => {
+    await runDiscogsLookups(await getDb(), new Date(), {
+      serverId,
+      shouldStop: () => !isEnabled,
+      onFound: ({ albumId, serverId }) => {
+        void queryClient.invalidateQueries({ queryKey: QK.lookedUpFacts(albumId, serverId) });
+        // Its styles are a genre source.
+        normalizeAlbum(albumId)
+          .then(() => {
+            void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
+            void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
+          })
+          .catch((error: unknown) => console.warn("[discogs] refiling genres failed:", albumId, error));
+      },
+    });
+  },
+);
 
-/** After each library sync, looks albums up on Discogs for label, catalog number, country and styles, refiling the genres of each album found. */
-export function useDiscogsLookups(lastSyncedAt: number | null): void {
+/** After each library sync, looks the server's albums up on Discogs for label, catalog number, country and styles, refiling the genres of each album found. */
+export function useDiscogsLookups(lastSyncedAt: number | null, serverId: string | null): void {
   const [autoRefresh, , isAutoRefreshLoaded] = useSetting("tags.auto_refresh", "true");
   const queryClient = useQueryClient();
   const isAllowed = isAutoRefreshLoaded && autoRefresh === "true";
@@ -40,7 +43,9 @@ export function useDiscogsLookups(lastSyncedAt: number | null): void {
   }, [isAllowed]);
 
   useEffect(() => {
-    if (lastSyncedAt === null || !isAllowed) return;
-    runUntilSettled(queryClient).catch((error: unknown) => console.warn("[discogs] lookup pass failed:", error));
-  }, [lastSyncedAt, isAllowed, queryClient]);
+    if (lastSyncedAt === null || serverId === null || !isAllowed) return;
+    runUntilSettled({ queryClient, serverId }).catch((error: unknown) =>
+      console.warn("[discogs] lookup pass failed:", error),
+    );
+  }, [lastSyncedAt, serverId, isAllowed, queryClient]);
 }

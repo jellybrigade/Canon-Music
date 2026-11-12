@@ -17,6 +17,8 @@ import {
 
 /** An album a source didn't know is asked about again after this long. */
 export const RELEASE_LOOKUP_RETRY_SECONDS = 7 * 24 * 60 * 60;
+/** A failed lookup waits this long, so a source that keeps failing isn't asked on every sync. */
+export const RELEASE_LOOKUP_FAILED_RETRY_SECONDS = 60 * 60;
 // This year's and last year's albums: the only ones Recently Released can show near the top.
 const LOOKUP_YEARS_BACK = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,7 +47,14 @@ interface LookupSource {
 const AFTER_DEEZER_FOUND_NOTHING = `EXISTS (SELECT 1 FROM album_release_lookups deezer
   WHERE ${currentLookupSql("deezer", "a")} AND deezer.source = 'deezer' AND deezer.status = 'none')`;
 
-function selectCandidates(db: Database, source: LookupSource, now: Date): Promise<CandidateRow[]> {
+export interface ReleaseDateLookupOptions {
+  /** Only this server's albums are looked up: the others can't be shown until it changes. */
+  serverId: string;
+  /** Read before each album: a pass ends early when background lookups are switched off. */
+  shouldStop: () => boolean;
+}
+
+function selectCandidates(db: Database, source: LookupSource, serverId: string, now: Date): Promise<CandidateRow[]> {
   const nowSeconds = Math.floor(now.getTime() / 1000);
   return db.select<CandidateRow[]>(
     `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.release_type,
@@ -53,16 +62,22 @@ function selectCandidates(db: Database, source: LookupSource, now: Date): Promis
      FROM albums a
      LEFT JOIN album_identity ai ON ai.album_id = a.id
      LEFT JOIN album_release_lookups l ON l.album_id = a.id AND l.server_id = a.server_id AND l.source = ?
-     WHERE a.year >= ? AND a.artist IS NOT NULL AND lower(trim(a.artist)) != 'various artists'
+     WHERE a.server_id = ? AND a.year >= ? AND a.artist IS NOT NULL AND lower(trim(a.artist)) != 'various artists'
        AND ${ownReleaseDateSql("a", "ai")} IS NULL
        AND NOT ${reissueSql("a", "ai")}
        AND ${source.onlyWhen}
        AND (l.album_id IS NULL
             OR l.looked_up_name IS NOT a.name OR l.looked_up_artist IS NOT a.artist OR l.looked_up_year IS NOT a.year
-            OR l.status = 'failed'
+            OR (l.status = 'failed' AND l.checked_at <= ?)
             OR (l.status = 'none' AND l.checked_at <= ?))
      ORDER BY a.year DESC, a.id`,
-    [source.name, now.getUTCFullYear() - LOOKUP_YEARS_BACK, nowSeconds - RELEASE_LOOKUP_RETRY_SECONDS],
+    [
+      source.name,
+      serverId,
+      now.getUTCFullYear() - LOOKUP_YEARS_BACK,
+      nowSeconds - RELEASE_LOOKUP_FAILED_RETRY_SECONDS,
+      nowSeconds - RELEASE_LOOKUP_RETRY_SECONDS,
+    ],
   );
 }
 
@@ -163,11 +178,17 @@ async function writeLookup(
   );
 }
 
-async function runSource(db: Database, source: LookupSource, now: Date): Promise<{ changed: boolean }> {
+async function runSource(
+  db: Database,
+  source: LookupSource,
+  now: Date,
+  { serverId, shouldStop }: ReleaseDateLookupOptions,
+): Promise<{ changed: boolean }> {
   const checkedAt = Math.floor(now.getTime() / 1000);
   const latestAllowed = new Date(now.getTime() + DAY_MS).toISOString().slice(0, 10);
   let changed = false;
-  for (const row of await selectCandidates(db, source, now)) {
+  for (const row of await selectCandidates(db, source, serverId, now)) {
+    if (shouldStop()) break;
     const kind = localReleaseKind(row.release_type, row.track_count);
     if (kind === null) continue;
     const album = { name: row.name, artist: row.artist, year: row.year, kind, trackCount: row.track_count };
@@ -189,10 +210,15 @@ async function runSource(db: Database, source: LookupSource, now: Date): Promise
  * iTunes for what Deezer didn't know, and stores what it found. Resolves `changed` when Recently
  * Released may now order or filter differently.
  */
-export async function runReleaseDateLookups(db: Database, now: Date): Promise<{ changed: boolean }> {
+export async function runReleaseDateLookups(
+  db: Database,
+  now: Date,
+  options: ReleaseDateLookupOptions,
+): Promise<{ changed: boolean }> {
   let changed = false;
   for (const source of [deezerSource(), itunesSource()]) {
-    if ((await runSource(db, source, now)).changed) changed = true;
+    if (options.shouldStop()) break;
+    if ((await runSource(db, source, now, options)).changed) changed = true;
   }
   return { changed };
 }

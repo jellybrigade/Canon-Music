@@ -23,7 +23,7 @@ function render(lastSyncedAt: number | null) {
   const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
   return renderHook(
     ({ syncedAt }) => {
-      useDiscogsLookups(syncedAt);
+      useDiscogsLookups(syncedAt, "s");
       return useSetting("tags.auto_refresh", "true")[1];
     },
     {

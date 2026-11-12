@@ -6,21 +6,39 @@ import { QK } from "../../../lib/queryKeys";
 import { createSettlingRunner } from "../../../lib/settlingRunner";
 import { runReleaseDateLookups } from "../releaseDateLookups";
 
-const runUntilSettled = createSettlingRunner(async (queryClient: QueryClient) => {
-  const { changed } = await runReleaseDateLookups(await getDb(), new Date());
-  if (changed) {
-    void queryClient.invalidateQueries({ queryKey: QK.recentlyReleasedAll() });
-    void queryClient.invalidateQueries({ queryKey: QK.lookedUpFactsAll() });
-  }
-});
+// A pass costs several slow requests per album, so switching lookups off ends it early.
+let isEnabled = false;
 
-/** After each library sync, looks up release dates for recent albums that have only a year. */
-export function useReleaseDateLookups(lastSyncedAt: number | null): void {
+const runUntilSettled = createSettlingRunner(
+  async ({ queryClient, serverId }: { queryClient: QueryClient; serverId: string }) => {
+    const { changed } = await runReleaseDateLookups(await getDb(), new Date(), {
+      serverId,
+      shouldStop: () => !isEnabled,
+    });
+    if (changed) {
+      void queryClient.invalidateQueries({ queryKey: QK.recentlyReleasedAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.lookedUpFactsAll() });
+    }
+  },
+);
+
+/** After each library sync, looks up release dates for the server's recent albums that have only a year. */
+export function useReleaseDateLookups(lastSyncedAt: number | null, serverId: string | null): void {
   const [autoRefresh, , isAutoRefreshLoaded] = useSetting("tags.auto_refresh", "true");
   const queryClient = useQueryClient();
+  const isAllowed = isAutoRefreshLoaded && autoRefresh === "true";
 
   useEffect(() => {
-    if (lastSyncedAt === null || !isAutoRefreshLoaded || autoRefresh !== "true") return;
-    runUntilSettled(queryClient).catch((error: unknown) => console.warn("[release dates] lookup pass failed:", error));
-  }, [lastSyncedAt, isAutoRefreshLoaded, autoRefresh, queryClient]);
+    isEnabled = isAllowed;
+    return () => {
+      isEnabled = false;
+    };
+  }, [isAllowed]);
+
+  useEffect(() => {
+    if (lastSyncedAt === null || serverId === null || !isAllowed) return;
+    runUntilSettled({ queryClient, serverId }).catch((error: unknown) =>
+      console.warn("[release dates] lookup pass failed:", error),
+    );
+  }, [lastSyncedAt, serverId, isAllowed, queryClient]);
 }

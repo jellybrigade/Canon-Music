@@ -164,8 +164,8 @@ export default function App() {
   useNowPlayingPrefetch(server?.id ?? null);
 
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
-  useReleaseDateLookups(lastSyncedAt);
-  useDiscogsLookups(lastSyncedAt);
+  useReleaseDateLookups(lastSyncedAt, server?.id ?? null);
+  useDiscogsLookups(lastSyncedAt, server?.id ?? null);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   // One signal for "an overlay above the app owns the keyboard", read by the search shortcuts,
