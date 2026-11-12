@@ -14,6 +14,8 @@ export function HomeSearchBox({ value, onChange, onOpenCommandPalette }: HomeSea
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Escape") return;
+    // This box owns the press: window-level Escape handlers (overlays, Now Playing) must not act on it too.
+    e.stopPropagation();
     if (value) onChange("");
     else inputRef.current?.blur();
   };

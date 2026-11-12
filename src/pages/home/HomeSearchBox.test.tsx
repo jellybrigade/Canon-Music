@@ -30,6 +30,21 @@ describe("HomeSearchBox", () => {
     expect(document.activeElement).not.toBe(input());
   });
 
+  it("keeps its Escape from window-level handlers, and lets other keys through", () => {
+    const seen = vi.fn();
+    window.addEventListener("keydown", seen);
+    try {
+      render(<Harness initial="joni" />);
+      input().focus();
+      fireEvent.keyDown(input(), { key: "Escape" });
+      expect(seen).toHaveBeenCalledTimes(0);
+      fireEvent.keyDown(input(), { key: "a" });
+      expect(seen).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", seen);
+    }
+  });
+
   it("leaves other keys to the input", () => {
     render(<Harness initial="joni" />);
     input().focus();
