@@ -52,7 +52,7 @@ Rust (`src-tauri/src/`):
 | `tray.rs` | Tray menu, `tray_update`, `tray_set_visible`, `tray_set_close_to_tray`; emits `tray-action`. |
 | `quit.rs` | Quit handshake: window close (unless close-to-tray) and tray Quit emit `quit-requested`; `useQuitHandshake` runs `runQuitFlushes` (`src/lib/quitFlush.ts`, 3s cap: debounced queue/volume writes, server queue save) then `quit_ready`. Exits at once if no listener reported via `quit_listener_ready` (reset on page load); 5s watchdog otherwise. |
 | `library_read/` | `LibraryReadStore` (lazy rusqlite conn, READ_WRITE for WAL, no CREATE). `get_albums`, `get_artists`, `get_tracks`, `get_all_tracks`, `get_genres`, `get_recent_genres`, `get_loved`, `get_playlists`, `get_unmapped_tag_count`. Albums, artists, all tracks, genres, recent genres and playlists show the active server only (`with_active_server`: oldest `servers` row, as `useServers()[0]`); `get_tracks`/`get_loved` are keyed by server-prefixed ids, tag vocab is global. |
-| `library_write/` | `LibraryWriteStore`. Transactions: `playlist_append_tracks`, `playlist_remove_track`, `delete_user_tree_node`, `carry_genre_renames`, `repair_dangling_genre_id`, `remap_track_ids`, `merge_artist`. |
+| `library_write/` | `LibraryWriteStore`. Transactions: `playlist_append_tracks`, `playlist_remove_track`, `delete_user_tree_node`, `carry_genre_renames`, `repair_dangling_genre_id`, `remap_track_ids`, `merge_artist`, `save_tag_mapping`, `delete_tag_mapping`, `set_rap_to_hip_hop` (a spelling group's lock check, decision and track tags in one; `RAW_VALUE_NORM` mirrors `sqlNormExpression`, pinned by a TS test). |
 
 ## 3. Data flow
 
@@ -145,7 +145,7 @@ Rust (`src-tauri/src/`):
 - DAG: a node may have several parents. `getAncestorIds` expands all parents for `album_genres` ancestor rows. User nodes live in `user_tree_nodes` and are resolved beside the canon tree, never merged into it.
 - Views read the tree through `useCanonTreeNodes` (key under `userTreeNodes`, so every user node write and `refreshGenreIdReads` reads it again); a failed read renders `LoadError`, never an empty picker. Genre cells with unreadable mappings show raw genres (`useGenreMappings` returns null).
 
-## 7. SQLite schema (v75)
+## 7. SQLite schema (v76)
 
 Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids of mirrored rows carry the server prefix.
 
@@ -193,7 +193,7 @@ WAL (set by `runMigrations`); every connection, sqlx pool and rusqlite alike, sy
 
 `servers.sidecar_*` columns are likewise inert. `genre_mappings` was dropped.
 
-Indexes (v69): artists by `(server_id, name COLLATE NOCASE)` for the artist page lookup; `playlist_tracks`, `scrobble_queue` and `playlist_resume` by track id, so a server id rewrite finds each row without a scan; tracks by `(server_id, album_id)` for per-server counts and sweeps; v70 tracks by `(artist COLLATE NOCASE, server_id)` so Now Playing's artist and "feat." lookups seek instead of walking a server's tracks; v71 albums by `year` so Recently Released walks the newest years and stops at the 20th album instead of sorting the library; v72 `tag_mappings`, `album_user_genres` and `album_genre_exclusions` by `canonical_id`, so deleting or renaming a genre finds its rows without a scan; v73 `track_tags` by `(raw_value, kind)` so one tag's rows (album strip, mapping writes) seek, and re-derives every `tag_mappings.norm_value` with SQLite's own normalization (`sqlNorm` mirrors it: spaces-only trim, ASCII-only lowercase), so lookups meet `norm_value` through `idx_tag_mappings_norm` instead of normalizing every mapping per tag. `track_tags` lookups by track ride its unique key. `src/db/queryPlans.test.ts` pins these plans.
+Indexes (v69): artists by `(server_id, name COLLATE NOCASE)` for the artist page lookup; `playlist_tracks`, `scrobble_queue` and `playlist_resume` by track id, so a server id rewrite finds each row without a scan; tracks by `(server_id, album_id)` for per-server counts and sweeps; v70 tracks by `(artist COLLATE NOCASE, server_id)` so Now Playing's artist and "feat." lookups seek instead of walking a server's tracks; v71 albums by `year` so Recently Released walks the newest years and stops at the 20th album instead of sorting the library; v72 `tag_mappings`, `album_user_genres` and `album_genre_exclusions` by `canonical_id`, so deleting or renaming a genre finds its rows without a scan; v73 `track_tags` by `(raw_value, kind)` so one tag's rows (album strip, mapping writes) seek, and re-derives every `tag_mappings.norm_value` with SQLite's own normalization (`sqlNorm` mirrors it: spaces-only trim, ASCII-only lowercase), so lookups meet `norm_value` through `idx_tag_mappings_norm` instead of normalizing every mapping per tag; v76 `track_tags` by `(sqlNormExpression(raw_value), kind)`, so every spelling of one tag (mapping writes, the Tags album strip) seeks. `track_tags` lookups by track ride its unique key. `src/db/queryPlans.test.ts` pins these plans.
 
 ## 8. Migrations
 

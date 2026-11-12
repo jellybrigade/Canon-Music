@@ -1060,6 +1060,14 @@ export const migrations: Migration[] = [
       DROP TABLE artist_name_tags;
     `,
   },
+  {
+    // Every spelling of a tag by its group key (`sqlNormExpression`, frozen here): mapping writes and the album strip.
+    version: 76,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_track_tags_norm_kind
+        ON track_tags(LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')), kind);
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

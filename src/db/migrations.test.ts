@@ -471,6 +471,7 @@ describe("post-migration schema", () => {
       "idx_tag_mappings_canonical",
       "idx_tag_mappings_norm",
       "idx_track_tags_canonical",
+      "idx_track_tags_norm_kind",
       "idx_track_tags_raw_kind",
       "idx_tracks_album_id",
       "idx_tracks_artist",

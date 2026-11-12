@@ -344,6 +344,9 @@ pub fn run() {
             library_write::genre_carry::repair_dangling_genre_id,
             library_write::playlists::playlist_append_tracks,
             library_write::playlists::playlist_remove_track,
+            library_write::tag_mappings::save_tag_mapping,
+            library_write::tag_mappings::delete_tag_mapping,
+            library_write::tag_mappings::set_rap_to_hip_hop,
             library_write::user_tree::delete_user_tree_node,
             library_write::track_remap::remap_track_ids,
         ])

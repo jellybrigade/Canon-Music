@@ -7,6 +7,7 @@ use std::time::Duration;
 pub mod artist_aliases;
 pub mod genre_carry;
 pub mod playlists;
+pub mod tag_mappings;
 pub mod track_remap;
 pub mod user_tree;
 

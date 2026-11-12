@@ -30,17 +30,10 @@ type SaveMappingInput = {
   matchType?: "exact" | "fuzzy" | null;
 };
 
-async function refuseIfGroupLocked(db: Awaited<ReturnType<typeof getDb>>, rawValue: string, kind: TagKind) {
-  const existing = await db.select<{ locked: number }[]>(
-    "SELECT locked FROM tag_mappings WHERE norm_value = ? AND kind = ?",
-    [sqlNorm(rawValue), kind],
-  );
-  if (existing.some((r) => r.locked === 1)) {
-    throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
-  }
-}
-
-/** Every write keys on the spelling group (`norm_value`), the unit the Tags list shows one decision for. */
+/**
+ * Every write keys on the spelling group (`norm_value`), the unit the Tags list shows one decision for.
+ * One transaction in Rust: the lock check, the group's decision and its track tags change together.
+ */
 export async function saveTagMapping({
   rawValue,
   kind,
@@ -48,40 +41,29 @@ export async function saveTagMapping({
   source = "manual",
   matchType = null,
 }: SaveMappingInput): Promise<void> {
-  const db = await getDb();
-  const norm = sqlNorm(rawValue);
-  await refuseIfGroupLocked(db, rawValue, kind);
-  await db.execute(
-    `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
-     VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
-    [rawValue, kind, canonicalId, source, matchType, norm],
-  );
-  // Written after the new row, so a failure here leaves the old decision beside the new one.
-  await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ? AND raw_value != ?", [
-    norm,
-    kind,
-    rawValue,
-  ]);
-  invalidateManualMappings();
-  // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
-  const trackTagId = canonicalId === ACCEPTED || canonicalId === IGNORED ? null : canonicalId;
-  await db.execute(`UPDATE track_tags SET canonical_id = ? WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`, [
-    trackTagId,
-    norm,
-    kind,
-  ]);
+  // Migrations first: the Rust connection shares canon.db with no schema of its own.
+  await getDb();
+  try {
+    await invoke("save_tag_mapping", {
+      rawValue,
+      kind,
+      normValue: sqlNorm(rawValue),
+      canonicalId,
+      source,
+      matchType,
+    });
+  } finally {
+    invalidateManualMappings();
+  }
 }
 
 export async function deleteTagMapping({ rawValue, kind }: { rawValue: string; kind: TagKind }): Promise<void> {
-  const db = await getDb();
-  const norm = sqlNorm(rawValue);
-  await refuseIfGroupLocked(db, rawValue, kind);
-  await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
-  invalidateManualMappings();
-  await db.execute(
-    `UPDATE track_tags SET canonical_id = NULL WHERE ${sqlNormExpression("raw_value")} = ? AND kind = ?`,
-    [norm, kind],
-  );
+  await getDb();
+  try {
+    await invoke("delete_tag_mapping", { rawValue, kind, normValue: sqlNorm(rawValue) });
+  } finally {
+    invalidateManualMappings();
+  }
 }
 
 export async function lockTagMapping({
@@ -175,13 +157,13 @@ export const TAG_VOCAB_SQL = `
   )
   ORDER BY album_count DESC, raw_value, kind`;
 
-/** Up to four of the server's albums carrying a tag, most tagged tracks first. */
+/** Up to four of the server's albums carrying any spelling of a tag, most tagged tracks first. */
 export const TAG_ALBUMS_SQL = `
   SELECT a.id AS album_id, a.name AS album_name, a.artwork_url
   FROM track_tags tt
   JOIN tracks t ON t.id = tt.track_id
   JOIN albums a ON a.id = t.album_id
-  WHERE tt.raw_value = ? AND tt.kind = ? AND t.server_id = ?
+  WHERE ${sqlNormExpression("tt.raw_value")} = ? AND tt.kind = ? AND t.server_id = ?
   GROUP BY a.id
   ORDER BY COUNT(DISTINCT tt.track_id) DESC, a.id
   LIMIT 4`;
@@ -238,7 +220,7 @@ export function useTagAlbums(rawValue: string, kind: TagKind, serverId: string |
     queryFn: async () => {
       const db = await getDb();
       type Row = { album_id: string; album_name: string; artwork_url: string | null };
-      return db.select<Row[]>(TAG_ALBUMS_SQL, [rawValue, kind, serverId]);
+      return db.select<Row[]>(TAG_ALBUMS_SQL, [sqlNorm(rawValue), kind, serverId]);
     },
     enabled: !!rawValue && !!serverId,
   });
@@ -318,43 +300,14 @@ export function useAutoMapExact() {
   });
 }
 
-const RAP_GROUP = sqlNorm("Rap");
-
 /** An automatic rule: it yields to a manual or locked decision on any spelling of Rap. */
 export async function setRapToHipHop(enable: boolean): Promise<void> {
-  const db = await getDb();
-  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)", [
-    enable ? "true" : "false",
-  ]);
-  const trackTagsOfGroup = `${sqlNormExpression("raw_value")} = ? AND kind = 'genre'`;
-  if (enable) {
-    const inserted = await db.execute(
-      `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
-       SELECT 'Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), ?
-       WHERE NOT EXISTS (
-         SELECT 1 FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND (locked = 1 OR source = 'manual')
-       )`,
-      [RAP_GROUP, RAP_GROUP],
-    );
-    if (inserted.rowsAffected === 0) return;
-    await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND raw_value != 'Rap'", [
-      RAP_GROUP,
-    ]);
+  await getDb();
+  try {
+    await invoke("set_rap_to_hip_hop", { enabled: enable });
+  } finally {
     invalidateManualMappings();
-    await db.execute(`UPDATE track_tags SET canonical_id = 'hip-hop' WHERE ${trackTagsOfGroup}`, [RAP_GROUP]);
-    return;
   }
-  const removed = await db.execute(
-    "DELETE FROM tag_mappings WHERE norm_value = ? AND kind = 'genre' AND source = 'auto' AND canonical_id = 'hip-hop' AND locked = 0",
-    [RAP_GROUP],
-  );
-  if (removed.rowsAffected === 0) return;
-  invalidateManualMappings();
-  await db.execute(
-    `UPDATE track_tags SET canonical_id = NULL WHERE ${trackTagsOfGroup} AND canonical_id = 'hip-hop'
-       AND NOT EXISTS (SELECT 1 FROM tag_mappings WHERE norm_value = ? AND kind = 'genre')`,
-    [RAP_GROUP, RAP_GROUP],
-  );
 }
 
 export function useRapToHipHop() {

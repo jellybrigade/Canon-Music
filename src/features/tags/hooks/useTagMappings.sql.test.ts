@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { sqlNorm } from "../lib/canonicalize";
 import { APPLY_TAG_MAPPINGS_SQL } from "../lib/tagNormalize";
 import { TAG_ALBUMS_SQL, TAG_VOCAB_SQL, UNRESOLVED_TAG_COUNT_SQL } from "./useTagMappings";
 
@@ -80,9 +81,22 @@ describe("albums for a tag", () => {
       tag(trackId, "Jazz", "server");
     for (const source of ["lastfm", "musicbrainz", "discogs", "lastfm-track"]) tag("s1:c1", "Jazz", source);
 
-    const rows = await db.select<{ album_id: string }[]>(TAG_ALBUMS_SQL, ["Jazz", "genre", "s1"]);
+    const rows = await db.select<{ album_id: string }[]>(TAG_ALBUMS_SQL, [sqlNorm("Jazz"), "genre", "s1"]);
 
     expect(rows.map((r) => r.album_id)).toEqual(["s1:a", "s1:b", "s1:c"]);
+  });
+
+  it("finds albums carrying any spelling of the tag the list row stands for", async () => {
+    seedTracks([
+      { serverId: "s1", albumId: "s1:a", trackId: "s1:a1" },
+      { serverId: "s1", albumId: "s1:b", trackId: "s1:b1" },
+    ]);
+    tag("s1:a1", "Hip-Hop", "lastfm");
+    tag("s1:b1", "hip hop", "server");
+
+    const rows = await db.select<{ album_id: string }[]>(TAG_ALBUMS_SQL, [sqlNorm("Hip-Hop"), "genre", "s1"]);
+
+    expect(rows.map((r) => r.album_id).sort()).toEqual(["s1:a", "s1:b"]);
   });
 });
 

@@ -136,11 +136,15 @@ describe("query plans", () => {
   });
 
   it.each([
-    ["UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'x' AND kind = 'genre'", []],
-    [TAG_ALBUMS_SQL, ["x", "genre", "s"]],
-  ])("finds every row of one tag without scanning all tags: %#", (sql, params) => {
+    [
+      "mapping writes",
+      `UPDATE track_tags SET canonical_id = NULL WHERE ${sqlNormExpression("raw_value")} = 'x' AND kind = 'genre'`,
+      [],
+    ],
+    ["the album strip", TAG_ALBUMS_SQL, ["x", "genre", "s"]],
+  ])("finds every spelling of one tag without scanning all tags: %s", (_, sql, params) => {
     const plan = planOf(sql, params);
-    expect(plan).toContain("idx_track_tags_raw_kind");
+    expect(plan).toContain("idx_track_tags_norm_kind");
     expect(plan).not.toMatch(/^SCAN tt?$|^SCAN track_tags$/m);
   });
 
