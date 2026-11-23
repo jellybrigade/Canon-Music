@@ -12,7 +12,9 @@ import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 import type { PlaylistRow } from "./usePlaylists";
 import "./PlaylistList.css";
 import { CoverImg } from "../../components/CoverImg";
+import { LoadError } from "../../components/LoadError";
 import { plural } from "../../lib/plural";
+import { reportPlaylistFailure } from "./reportPlaylistFailure";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
 const CARD_MIN = 160; // minmax(160px, 1fr)
@@ -28,6 +30,8 @@ interface Props {
   // has no playlists. Collapsing the two showed the "no playlists" empty state, which
   // tells the user to create one, before the load had a chance to return any.
   playlists: PlaylistRow[] | undefined;
+  loadError?: string | null;
+  onRetry?: () => void;
   serverWithCredential: ServerWithCredential;
   onSelect: (playlist: PlaylistRow) => void;
   onCreatePlaylist: (name: string, swc: ServerWithCredential) => Promise<void>;
@@ -40,6 +44,8 @@ interface Props {
 
 export function PlaylistList({
   playlists: playlistsProp,
+  loadError = null,
+  onRetry,
   serverWithCredential,
   onSelect,
   onCreatePlaylist,
@@ -49,7 +55,7 @@ export function PlaylistList({
   onUpdateSmartRules,
   onSetCustomCover,
 }: Props) {
-  const isLoading = playlistsProp === undefined;
+  const isLoading = playlistsProp === undefined && loadError === null;
   const playlists = useMemo(() => playlistsProp ?? [], [playlistsProp]);
   const { server } = serverWithCredential;
   const [creating, setCreating] = useState(false);
@@ -170,7 +176,7 @@ export function PlaylistList({
     try {
       await onRename(playlist, trimmed, playlist.comment, serverWithCredential);
     } catch (err) {
-      console.error("Failed to rename playlist:", err);
+      reportPlaylistFailure(`Couldn't rename ${playlist.name}`, err);
     }
   }
 
@@ -180,7 +186,7 @@ export function PlaylistList({
     try {
       await onDelete(playlist);
     } catch (err) {
-      console.error("Failed to delete playlist:", err);
+      reportPlaylistFailure(`Couldn't delete ${playlist.name}`, err);
     } finally {
       setConfirmDeleteId(null);
     }
@@ -199,7 +205,7 @@ export function PlaylistList({
     if (!file || !onSetCustomCover || !targetId) return;
     fileToScaledDataUri(file)
       .then((dataUri) => onSetCustomCover(targetId, dataUri))
-      .catch((err) => console.error("Failed to set playlist cover:", err));
+      .catch((err) => reportPlaylistFailure("Couldn't set the playlist cover", err));
   }
 
   useEffect(() => {
@@ -216,7 +222,7 @@ export function PlaylistList({
       setNewName("");
       setCreating(false);
     } catch (err) {
-      console.error("Failed to create playlist:", err);
+      reportPlaylistFailure(`Couldn't create ${name}`, err);
     } finally {
       setSaving(false);
     }
@@ -270,7 +276,10 @@ export function PlaylistList({
           label="Loading playlists"
         />
       )}
-      {!isLoading && playlists.length === 0 && !creating && (
+      {loadError !== null && playlists.length === 0 && (
+        <LoadError title="Couldn't read your playlists" error={loadError} onRetry={() => onRetry?.()} />
+      )}
+      {!isLoading && loadError === null && playlists.length === 0 && !creating && (
         <div className="empty-state">
           <p className="empty-state-title">No playlists yet</p>
           <p className="empty-state-hint">

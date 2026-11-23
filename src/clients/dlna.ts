@@ -74,6 +74,33 @@ function xmlTextContent(xml: string, tag: string): string | null {
 
 // ── DIDL metadata ──────────────────────────────────────────────────────────
 
+/** Cover size a renderer is handed: sharp on a TV, light enough for a weak speaker. */
+export const CAST_COVER_SIZE = 600;
+
+const STREAM_AUTH_PARAMS = ["u", "t", "s", "apiKey", "v", "c"];
+
+/** A cover the renderer can fetch itself, on the same address and login as the stream it was
+ * handed; Canon's own `cover://` URLs resolve nowhere else on the network. Built per load, never stored. */
+export function castCoverArtUrl(streamUrl: string, coverArtId: string | null | undefined): string | null {
+  if (!coverArtId) return null;
+  let stream: URL;
+  try {
+    stream = new URL(streamUrl);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(stream.protocol) || !stream.pathname.endsWith("/rest/stream")) return null;
+  const params = new URLSearchParams();
+  for (const key of STREAM_AUTH_PARAMS) {
+    const value = stream.searchParams.get(key);
+    if (value !== null) params.set(key, value);
+  }
+  params.set("id", coverArtId);
+  params.set("size", String(CAST_COVER_SIZE));
+  const base = stream.pathname.slice(0, -"/rest/stream".length);
+  return `${stream.origin}${base}/rest/getCoverArt?${params.toString()}`;
+}
+
 export function buildDidlMetadata(
   track: CurrentTrack,
   streamUrl: string,
@@ -84,10 +111,11 @@ export function buildDidlMetadata(
   const artist = escapeXml(track.artist ?? "");
   const album = escapeXml(track.album ?? "");
   const duration = track.duration ? secsToTime(track.duration) : "0:00:00";
-  // Canon's own "cover://" URLs resolve nowhere else on the network, and some renderers
-  // reject the whole DIDL document over one unreachable albumArtURI.
-  const artIsFetchable = !!coverArtUrl && /^https?:\/\//i.test(coverArtUrl);
-  const artUri = artIsFetchable ? `<upnp:albumArtURI>${escapeXml(coverArtUrl!)}</upnp:albumArtURI>` : "";
+  // Some renderers reject the whole DIDL document over one unreachable albumArtURI.
+  const artUri =
+    coverArtUrl && /^https?:\/\//i.test(coverArtUrl)
+      ? `<upnp:albumArtURI>${escapeXml(coverArtUrl)}</upnp:albumArtURI>`
+      : "";
   // Claiming audio/mpeg for a raw stream is a lie whenever the server holds FLAC, and a
   // renderer that trusts protocolInfo over sniffing then refuses the track. "*" tells it
   // to work the type out from the response instead.

@@ -12,16 +12,19 @@ vi.mock("../../clients/navidromePlaylists", async () => {
     addTrackToNavidromePlaylist: vi.fn(),
     addTracksToNavidromePlaylist: vi.fn(),
     createNavidromePlaylist: vi.fn(),
+    deleteNavidromePlaylist: vi.fn(),
   };
 });
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { createNavidromePlaylist } from "../../clients/navidromePlaylists";
+import { addTracksToNavidromePlaylist, createNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { useDismissibleNoticeStore } from "../../store/dismissibleNotice";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { createMigratedTestDb } from "../../test/sqlite";
+import { DEFAULT_SMART_FILTERS } from "./smartPlaylist";
 import { createPlaylist, type PlaylistRow, usePlaylists } from "./usePlaylists";
 
 function playlist(id: string): PlaylistRow {
@@ -42,6 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetTauriMocks();
   usePlaylistSessionStore.setState({ playlistsTick: 0, rows: undefined, cachedTick: -1 });
+  useDismissibleNoticeStore.setState({ notice: null });
 });
 
 afterEach(() => {
@@ -54,6 +58,47 @@ describe("usePlaylists", () => {
     const { result } = renderHook(() => usePlaylists());
     expect(result.current.isLoading).toBe(true);
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data).toEqual([playlist("p1")]);
+  });
+
+  // A failed read left the list undefined, which the page shows as loading, so it loaded forever.
+  it("reports a failed read and reads again on retry", async () => {
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.error).toBe("database is locked"));
+    expect(result.current.isLoading).toBe(false);
+
+    onInvoke("get_playlists", () => [playlist("p1")]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.data).toEqual([playlist("p1")]));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("shows loading, not the old error, while a retry reads again", async () => {
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.error).toBe("database is locked"));
+
+    onInvoke("get_playlists", () => new Promise(() => {}));
+    act(() => result.current.retry());
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it("says so when a refresh fails with playlists already on screen", async () => {
+    onInvoke("get_playlists", () => [playlist("p1")]);
+    const { result } = renderHook(() => usePlaylists());
+    await waitFor(() => expect(result.current.data).toEqual([playlist("p1")]));
+
+    onInvoke("get_playlists", () => Promise.reject(new Error("database is locked")));
+    act(() => usePlaylistSessionStore.getState().bumpPlaylists());
+
+    await waitFor(() =>
+      expect(useDismissibleNoticeStore.getState().notice).toEqual({
+        message: "Couldn't refresh your playlists: database is locked",
+      }),
+    );
     expect(result.current.data).toEqual([playlist("p1")]);
   });
 
@@ -135,5 +180,43 @@ describe("adding to a playlist", () => {
       "SELECT track_id FROM playlist_tracks WHERE playlist_id = 's1:q' ORDER BY position",
     );
     expect(rows.map((r) => r.track_id)).toEqual(["s1:t2", "s1:t1"]);
+  });
+
+  // Created empty, then filled by a second request: a refused fill left an empty playlist on the
+  // server that the next sync brought in as a plain one, and saving again made a second.
+  it("creates a smart playlist with its tracks in the one creating request", async () => {
+    vi.mocked(createNavidromePlaylist).mockResolvedValue({ id: "sm", name: "All", songCount: 2 } as never);
+    const { result } = renderHook(() => usePlaylists());
+    await act(() => result.current.createSmartPlaylist({ ...DEFAULT_SMART_FILTERS, name: "All", sort: "+title" }, swc));
+
+    expect(createNavidromePlaylist).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(createNavidromePlaylist).mock.calls[0]?.[4]).toEqual(["t1", "t2"]);
+    expect(addTracksToNavidromePlaylist).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleting a playlist", () => {
+  // The resume row outlived its playlist: sync prunes only playlists it still has locally.
+  it("removes its resume point with it", async () => {
+    onInvoke("get_playlists", () => []);
+    const db = await createMigratedTestDb();
+    db.raw.exec(`INSERT INTO playlists (id, server_id, name, track_count) VALUES ('s1:p', 's1', 'p', 0);
+      INSERT INTO playlist_resume (playlist_id, last_track_id, track_position) VALUES ('s1:p', 's1:t1', 0);`);
+    vi.mocked(getDb).mockResolvedValue(db as never);
+    const swc: ServerWithCredential = {
+      server: {
+        id: "s1",
+        type: "navidrome",
+        url: "https://music.example",
+        alt_url: null,
+        display_name: "Home",
+        username: "marcel",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      credential: { type: "md5", token: "tok", salt: "salt" },
+    };
+    const { result } = renderHook(() => usePlaylists());
+    await act(() => result.current.deletePlaylist(playlist("s1:p"), swc));
+    expect(await db.select("SELECT playlist_id FROM playlist_resume")).toEqual([]);
   });
 });

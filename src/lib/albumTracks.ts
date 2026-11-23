@@ -1,7 +1,7 @@
 import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { getDb } from "../db";
 import { syncAlbumTracks } from "../features/sync/syncTracks";
-import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import { useDismissibleNoticeStore } from "../store/dismissibleNotice";
 import type { Server } from "../types/server";
 import { errorMessage } from "./errorMessage";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "./replayGainRow";
@@ -75,7 +75,7 @@ export async function loadAlbumTracksForPlay(
   credential: NavidromeCredential,
   album: { id: string; name: string },
 ): Promise<AlbumTrackRow[]> {
-  const { report } = useAlbumTracksNoticeStore.getState();
+  const { report } = useDismissibleNoticeStore.getState();
   try {
     const tracks = await loadAlbumTracks(server, credential, album.id);
     if (tracks.length === 0) report(`The server lists no tracks for ${album.name}`);

@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { useDismissibleNoticeStore } from "../../store/dismissibleNotice";
 import { PlaylistList } from "./PlaylistList";
 import type { PlaylistRow } from "./usePlaylists";
 
@@ -88,6 +89,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   width = 900;
+  useDismissibleNoticeStore.setState({ notice: null });
 });
 
 function renderList(count = 12) {
@@ -190,5 +192,87 @@ describe("PlaylistList", () => {
       fireEvent.blur(input);
       expect(onRename).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // A refused rename, delete or create used to go only to the console: the name snapped back,
+  // the menu closed and the playlist stayed, with nothing saying why.
+  describe("a change the server refuses", () => {
+    const refusal = async () => {
+      throw new Error("Navidrome is offline");
+    };
+
+    function openMenu(props: Partial<Parameters<typeof PlaylistList>[0]>) {
+      render(
+        <PlaylistList
+          playlists={[playlist(0)]}
+          serverWithCredential={SRV}
+          onSelect={() => {}}
+          onCreatePlaylist={async () => {}}
+          onCreateSmartPlaylist={async () => {}}
+          {...props}
+        />,
+      );
+      const card = document.querySelector<HTMLElement>("[data-index] button");
+      if (!card) throw new Error("no playlist card");
+      fireEvent.contextMenu(card);
+    }
+
+    it("says why a rename failed", async () => {
+      openMenu({ onRename: refusal });
+      fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+      const input = document.querySelector<HTMLInputElement>(".playlist-card-info input");
+      if (!input) throw new Error("no rename field");
+      fireEvent.change(input, { target: { value: "Road trip" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() =>
+        expect(useDismissibleNoticeStore.getState().notice?.message).toBe(
+          "Couldn't rename Playlist 0: Navidrome is offline",
+        ),
+      );
+    });
+
+    it("says why a delete failed", async () => {
+      openMenu({ onDelete: refusal });
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete for real?" }));
+      await waitFor(() =>
+        expect(useDismissibleNoticeStore.getState().notice?.message).toBe(
+          "Couldn't delete Playlist 0: Navidrome is offline",
+        ),
+      );
+    });
+
+    it("says why a create failed and keeps the name typed", async () => {
+      openMenu({ onCreatePlaylist: refusal });
+      fireEvent.click(screen.getByRole("button", { name: /New Playlist/ }));
+      const input = screen.getByPlaceholderText("Playlist name…");
+      fireEvent.change(input, { target: { value: "Road trip" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create" }));
+      await waitFor(() =>
+        expect(useDismissibleNoticeStore.getState().notice?.message).toBe(
+          "Couldn't create Road trip: Navidrome is offline",
+        ),
+      );
+      expect(screen.getByPlaceholderText("Playlist name…")).toHaveProperty("value", "Road trip");
+    });
+  });
+
+  it("says a failed read failed, with a way to read again, instead of loading forever", () => {
+    const onRetry = vi.fn();
+    render(
+      <PlaylistList
+        playlists={undefined}
+        loadError="database is locked"
+        onRetry={onRetry}
+        serverWithCredential={SRV}
+        onSelect={() => {}}
+        onCreatePlaylist={async () => {}}
+        onCreateSmartPlaylist={async () => {}}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("database is locked");
+    expect(screen.queryByLabelText("Loading playlists")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

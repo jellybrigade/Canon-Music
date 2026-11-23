@@ -14,16 +14,25 @@ const BRACKETED = /\(([^)]*)\)|\[([^\]]*)\]/g;
 // Keeps a bracket-only exact match (100) under the lowest plain score, an artist substring (180).
 const BRACKETED_DIVISOR = 10;
 
+// Reads text the way the index's unicode61 tokenizer does: accents folded, and anything that
+// is not a letter or digit (any hyphen, apostrophe or punctuation) a word break.
+function toIndexWords(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
 // Text in brackets ("(Expanded Edition)", "[Live]") still matches, but ranks below any match
 // in the rest of the field.
 function scoreMatch(field: string | null, query: string): number {
   if (!field || !query) return 0;
-  const f = field.toLowerCase();
-  const q = query.toLowerCase();
-  const plain = f.replace(BRACKETED, " ").replace(/\s+/g, " ").trim();
-  const bracketed = Array.from(f.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "")
-    .join(" ")
-    .trim();
+  const q = toIndexWords(query);
+  if (!q) return 0;
+  const plain = toIndexWords(field.replace(BRACKETED, " "));
+  const bracketed = toIndexWords(Array.from(field.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "").join(" "));
   if (!plain) return scoreTier(bracketed, q);
   const plainScore = scoreTier(plain, q);
   if (plainScore > 0) return plainScore;

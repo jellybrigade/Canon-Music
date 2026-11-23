@@ -3,6 +3,11 @@ import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { VISUALIZER_ENABLED_KEY } from "../../playback/lib/visualizerSettings";
 import { usePlayerStore } from "../../playback/store/player";
+import {
+  applyCastMaxBitrate,
+  CAST_MAX_BITRATE_DEFAULT,
+  CAST_MAX_BITRATE_SETTING,
+} from "../../playback/store/playerCast";
 import { RADIO_START_ACTION_SETTING } from "../../radio/hooks/useStartRadio";
 import { SegToggle } from "../../tags/components/TagsViewHelpers";
 import { useReplayGainCoverage } from "../hooks/useReplayGainCoverage";
@@ -56,7 +61,7 @@ export function PlaybackTab({ searchQuery, serverId, serverWithCredential }: Pro
 
   const [autoSyncIntervalMin, setAutoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const [streamMaxBitrate, setStreamMaxBitrate] = useSetting("stream.max_bitrate", "0");
-  const [castMaxBitrate, setCastMaxBitrate] = useSetting("cast.max_bitrate", "320");
+  const [castMaxBitrate, setCastMaxBitrate] = useSetting(CAST_MAX_BITRATE_SETTING, String(CAST_MAX_BITRATE_DEFAULT));
 
   const replayGainMode = usePlayerStore((s) => s.replayGainMode);
   const setReplayGainMode = usePlayerStore((s) => s.setReplayGainMode);
@@ -411,7 +416,10 @@ export function PlaybackTab({ searchQuery, serverId, serverWithCredential }: Pro
           >
             <select
               value={castMaxBitrate}
-              onChange={(e) => void setCastMaxBitrate(e.target.value)}
+              onChange={(e) => {
+                applyCastMaxBitrate(e.target.value);
+                void setCastMaxBitrate(e.target.value);
+              }}
               className="settings-select"
             >
               <option value="0">Raw (original)</option>

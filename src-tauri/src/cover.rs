@@ -1,5 +1,6 @@
 use crate::cover_override::{read_override, CoverOverrides};
 use crate::stream_classify::is_image_response;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -128,8 +129,12 @@ pub(crate) struct CoverState {
 pub(crate) static COVER_CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> =
     std::sync::OnceLock::new();
 
+// Filesystems cap a name at 255 bytes; this leaves room for the `.ct` and `.part` suffixes.
+pub(crate) const MAX_CACHE_FILE_NAME_BYTES: usize = 200;
+
 /// Cache keys can contain filename-unsafe characters; replace anything outside a safe set
-/// (not hash) so files stay debuggable. `kind` namespaces keys so a collision can't cross types.
+/// (not hash) so files stay debuggable; only a name past the budget ends in a hash.
+/// `kind` namespaces keys so a collision can't cross types.
 pub(crate) fn sanitize_cache_key(kind: &str, key: &str) -> String {
     let safe: String = key
         .chars()
@@ -141,7 +146,15 @@ pub(crate) fn sanitize_cache_key(kind: &str, key: &str) -> String {
             }
         })
         .collect();
-    format!("{kind}-{safe}")
+    let name = format!("{kind}-{safe}");
+    if name.len() <= MAX_CACHE_FILE_NAME_BYTES {
+        return name;
+    }
+    // Sanitizing never emits `~`, so an overflow name can't equal any in-budget one.
+    let digest = Sha256::digest(key.as_bytes());
+    let tag: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
+    let prefix_len = MAX_CACHE_FILE_NAME_BYTES - 1 - tag.len();
+    format!("{}~{tag}", &name[..prefix_len])
 }
 
 pub(crate) fn disk_cache_read(
@@ -523,7 +536,7 @@ mod tests {
         cover_routes, disk_cache_read, disk_cache_write, evict_disk_cache_if_needed,
         handle_cover_request, is_cached_cover_size, parse_cover_path, percent_decode,
         promote_route, sanitize_cache_key, serve_cover_request, CoverProxyConfig, CoverState,
-        NeedsProxyConfig, ProxyConfigs, MAX_DISK_CACHE_ENTRIES,
+        NeedsProxyConfig, ProxyConfigs, MAX_CACHE_FILE_NAME_BYTES, MAX_DISK_CACHE_ENTRIES,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -818,14 +831,41 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_cache_key_does_not_cap_length_so_the_output_tracks_the_input_char_count() {
-        // Documents current behaviour: there is no truncation, so a pathological key
-        // is passed through to the filesystem at full length. If a cap is ever added,
-        // this assertion is the one that should be updated deliberately.
+    fn a_long_key_round_trips_through_the_disk_cache() {
+        let scratch = ScratchDir::new("long-key");
         let long = "a".repeat(5000);
-        let safe = sanitize_cache_key("cover", &long);
-        assert_eq!(safe.len(), "cover-".len() + 5000);
-        assert!(safe.starts_with("cover-a"));
+        disk_cache_write(scratch.path(), "cover", &long, b"img", "image/png");
+        assert_eq!(
+            disk_cache_read(scratch.path(), "cover", &long),
+            Some((b"img".to_vec(), "image/png".to_string()))
+        );
+    }
+
+    #[test]
+    fn long_keys_differing_only_at_the_end_get_distinct_names_within_the_budget() {
+        let first = format!("{}1", "a".repeat(5000));
+        let second = format!("{}2", "a".repeat(5000));
+        let first_name = sanitize_cache_key("cover", &first);
+        let second_name = sanitize_cache_key("cover", &second);
+        assert_ne!(first_name, second_name);
+        for name in [&first_name, &second_name] {
+            assert!(name.starts_with("cover-aaa"));
+            assert!(format!("{name}.ct").len() <= 255);
+        }
+    }
+
+    #[test]
+    fn a_key_at_the_budget_keeps_its_readable_name() {
+        let at_budget = "a".repeat(MAX_CACHE_FILE_NAME_BYTES - "cover-".len());
+        assert_eq!(
+            sanitize_cache_key("cover", &at_budget),
+            format!("cover-{at_budget}")
+        );
+        let over_budget = format!("{at_budget}a");
+        assert_eq!(
+            sanitize_cache_key("cover", &over_budget).len(),
+            MAX_CACHE_FILE_NAME_BYTES
+        );
     }
 
     // ── percent_decode ────────────────────────────────────────────────────────

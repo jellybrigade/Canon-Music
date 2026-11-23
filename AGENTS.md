@@ -13,9 +13,11 @@ Desktop music player + tag manager for self-hosted Navidrome. Tauri (Rust: audio
 
 ## Docs
 
-`docs/ARCHITECTURE.md` file/data map, invariants, migrations · `docs/known-issues.md` shipped bug classes + greps, read the matching section before touching that area · `instructions/donow.md` work queue (untracked) · `instructions/what-to-do.md` backlog (untracked) · `README.md`.
+`docs/ARCHITECTURE.md` file/data map, invariants, migrations · `docs/known-issues.md` shipped bug classes + greps, read the matching section before touching that area · `docs/decisions.md` settled behavior choices, read before changing behavior · `instructions/donow.md` work queue (untracked) · `instructions/what-to-do.md` backlog (untracked) · `README.md`.
 
 - "donow" = work the top task of `instructions/donow.md`.
+- Behavior choice no doc settles (what the user sees, ordering, defaults, edge cases) → ask, never invent; the answer becomes a `docs/decisions.md` entry in the same commit as the code.
+- Every work item has 1-3 checkable `Done when` points; it is done only when each is proven.
 
 ## Commands
 

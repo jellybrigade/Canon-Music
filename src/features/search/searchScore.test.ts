@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickTopResult } from "./searchScore";
+import { pickTopResult, trackScore } from "./searchScore";
 import type { SearchAlbum, SearchArtist, SearchResults, SearchTrack } from "./useSearch";
 
 const artist = (name: string): SearchArtist => ({
@@ -70,5 +70,23 @@ describe("pickTopResult", () => {
   it("has no top result when nothing scores", () => {
     expect(pickTopResult(results({}), "abba")).toBeNull();
     expect(pickTopResult(results({ albums: [album("Gold")] }), "abba")).toBeNull();
+  });
+});
+
+describe("trackScore", () => {
+  it("splits words where the index does, so any hyphen or spacing between them still matches", () => {
+    const unicodeHyphen = track("Rose\u2010Colored Boy");
+    expect(trackScore(unicodeHyphen, "rose-")).toBeGreaterThan(0);
+    expect(trackScore(unicodeHyphen, "rose-colored boy")).toBe(1000);
+    expect(trackScore(track("Rose-Colored Boy"), "rose colored boy")).toBe(1000);
+  });
+
+  it("matches across apostrophe and accent variants the index folds together", () => {
+    expect(trackScore(track("Don\u2019t Stop"), "don't stop")).toBe(1000);
+    expect(trackScore(track("Déjà Vu"), "deja vu")).toBe(1000);
+  });
+
+  it("still scores nothing when the words differ", () => {
+    expect(trackScore(track("Rose\u2010Colored Boy"), "rosy")).toBe(0);
   });
 });

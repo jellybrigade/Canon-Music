@@ -16,7 +16,7 @@ vi.mock("../store/waveformBackfill", async (importOriginal) => ({
 import { act, fireEvent, render } from "@testing-library/react";
 import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
+import { useDismissibleNoticeStore } from "../../../store/dismissibleNotice";
 import { useTagsStore } from "../../tags/store/tags";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
@@ -34,7 +34,7 @@ function showError(cause: "stale-track-id" | null = null) {
 beforeEach(() => {
   usePlayerStore.setState({ currentTrack: track, error: null, elapsed: 0 });
   useTagsStore.setState({ pullProgress: null, enrichmentPending: null });
-  useAlbumTracksNoticeStore.setState({ notice: null });
+  useDismissibleNoticeStore.setState({ notice: null });
   useWaveformBackfillStore.setState({ progress: null });
 });
 
@@ -120,12 +120,12 @@ describe("BottomNotices", () => {
     expect(rows()).toHaveLength(1);
     expect(rows()[0]?.textContent).toContain("Fetching metadata");
 
-    act(() => useAlbumTracksNoticeStore.getState().report("Couldn't get the tracks for Blue Train"));
+    act(() => useDismissibleNoticeStore.getState().report("Couldn't get the tracks for Blue Train"));
     expect(rows()).toHaveLength(1);
     expect(rows()[0]?.textContent).toContain("Blue Train");
 
     act(() => {
-      useAlbumTracksNoticeStore.setState({ notice: null });
+      useDismissibleNoticeStore.setState({ notice: null });
       useTagsStore.setState({ pullProgress: null });
     });
     expect(rows()[0]?.textContent).toContain("Metadata not fetched for 5 albums");

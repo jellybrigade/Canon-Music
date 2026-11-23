@@ -189,6 +189,18 @@ describe("buildSmartQuery against the real schema", () => {
   it("honours the clamped limit", async () => {
     expect(await run(filters({ limit: 0, sort: "+title" }))).toHaveLength(1);
   });
+  it("puts undated tracks after dated ones, oldest first or newest first", async () => {
+    await db.execute(
+      `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count)
+       VALUES ('srv:undated', 'srv', 'navidrome', 'Undated', 'Radiohead', 'srv:al1', NULL, 0)`,
+    );
+    try {
+      expect(await run(filters({ sort: "+year" }))).toEqual(["srv:t3", "srv:t1", "srv:t2", "srv:undated"]);
+      expect(await run(filters({ sort: "-year" }))).toEqual(["srv:t1", "srv:t2", "srv:t3", "srv:undated"]);
+    } finally {
+      await db.execute("DELETE FROM tracks WHERE id = 'srv:undated'");
+    }
+  });
 });
 
 describe("buildSmartQuery on tied and album-less tracks", () => {
