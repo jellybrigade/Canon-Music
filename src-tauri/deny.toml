@@ -4,7 +4,10 @@ all-features = true
 [advisories]
 # Unmaintained crates only reached through tauri/gtk can't be replaced from here; flag direct deps only.
 unmaintained = "workspace"
-ignore = []
+ignore = [
+  # libsqlite3-sys is held at 0.30 by tauri-plugin-sql 2.x (sqlx 0.8); lift once a stable plugin ships sqlx 0.9.
+  { id = "RUSTSEC-2026-0459", reason = "patched libsqlite3-sys unreachable while tauri-plugin-sql 2.x pins sqlx 0.8; needs crafted db + wal in Canon's own data dir" },
+]
 
 [licenses]
 allow = [
